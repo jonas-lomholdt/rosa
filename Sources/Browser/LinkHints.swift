@@ -1,10 +1,12 @@
 import AppKit
 import WebKit
 
-/// Keyboard link hints (qutebrowser / Vimium style): press `f` to label every clickable
-/// element on screen, type a label to click it. `F` opens the link in the background
-/// (new tab or pane, per the link setting). Runs in an isolated content world so pages
-/// can neither see nor tamper with it.
+/// Keyboard navigation injected into pages, in an isolated content world so pages can
+/// neither see nor tamper with it:
+/// - Link hints (qutebrowser / Vimium style): `f` labels every clickable element on screen,
+///   typing a label clicks it; `F` opens the link in the background (tab or pane).
+/// - Vim-style scrolling: `j`/`k` scroll, `gg`/`G` jump to top/bottom.
+/// Both are ignored while typing in a field and can be turned off in Settings → Keyboard.
 @MainActor
 enum LinkHints {
     static let messageName = "browserLinkHints"
@@ -42,13 +44,15 @@ enum LinkHints {
     private static let controllersWithHandler = NSHashTable<WKUserContentController>.weakObjects()
 
     private static var configJSON: String {
-        #"{"enabled":\#(Settings.linkHintsEnabled),"color":"\#(Settings.linkHintColor)"}"#
+        #"{"enabled":\#(Settings.linkHintsEnabled),"color":"\#(Settings.linkHintColor)","vim":\#(Settings.vimKeysEnabled)}"#
     }
 
     private static let script = #"""
         (() => {
           if (window.__browserHints) return;
-          const config = { enabled: true, color: '#FFD60A' };
+          const config = { enabled: true, color: '#FFD60A', vim: true };
+          const SCROLL_STEP = 60;
+          let pendingG = 0;
           const ALPHABET = 'sadfjklewcmpgh';
           const CLICKABLE = 'a[href], area[href], button, input:not([type="hidden"]), select, textarea, summary, ' +
             '[role="button"], [role="link"], [role="tab"], [role="checkbox"], [role="menuitem"], [role="option"], ' +
@@ -59,6 +63,7 @@ enum LinkHints {
           function configure(next) {
             if (typeof next.enabled === 'boolean') config.enabled = next.enabled;
             if (/^#[0-9a-fA-F]{6}$/.test(next.color || '')) config.color = next.color;
+            if (typeof next.vim === 'boolean') config.vim = next.vim;
             if (!config.enabled) stop();
           }
 
@@ -170,6 +175,37 @@ enum LinkHints {
             el.click();
           }
 
+          // The element that actually scrolls: many sites scroll an inner panel, not the page.
+          function scrollTarget() {
+            let el = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+            while (el && el !== document.body && el !== document.documentElement) {
+              const overflow = getComputedStyle(el).overflowY;
+              if (/(auto|scroll|overlay)/.test(overflow) && el.scrollHeight > el.clientHeight + 1) return el;
+              el = el.parentElement;
+            }
+            return document.scrollingElement || document.documentElement;
+          }
+
+          // Returns true if the key was a vim command.
+          function vimKey(event) {
+            const target = scrollTarget();
+            switch (event.key) {
+              case 'j': target.scrollBy({ top: SCROLL_STEP, behavior: event.repeat ? 'auto' : 'smooth' }); return true;
+              case 'k': target.scrollBy({ top: -SCROLL_STEP, behavior: event.repeat ? 'auto' : 'smooth' }); return true;
+              case 'G': target.scrollTo({ top: target.scrollHeight, behavior: 'smooth' }); return true;
+              case 'g':
+                if (event.repeat) return true;
+                if (Date.now() - pendingG < 800) {
+                  pendingG = 0;
+                  target.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                  pendingG = Date.now();
+                }
+                return true;
+            }
+            return false;
+          }
+
           function swallow(event) {
             event.preventDefault();
             event.stopImmediatePropagation();
@@ -189,9 +225,11 @@ enum LinkHints {
               else if (matches === 1 && last.label === state.typed) activate(last);
               return;
             }
-            if (!config.enabled || event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
-            if (event.key !== 'f' && event.key !== 'F') return;
+            if (event.metaKey || event.ctrlKey || event.altKey) return;
             if (isEditable(document.activeElement) || isEditable(event.target)) return;
+            if (config.vim && vimKey(event)) { swallow(event); return; }
+            if (!config.enabled || event.repeat) return;
+            if (event.key !== 'f' && event.key !== 'F') return;
             swallow(event);
             start(event.shiftKey);
           }, true);

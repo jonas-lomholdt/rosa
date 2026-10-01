@@ -21,6 +21,7 @@ scripts/build.sh release --run   # builds build/Browser.app and opens it
 | ⌘L, ⌘R, ⌘[ / ⌘] | Address bar, reload, back / forward |
 | ⌘, | Settings (tab layout, address bar, search engine) |
 | f / ⇧F | Link hints: label clickable elements, type a label to click / open in background (`LinkHints.swift`) |
+| j / k, gg / G | Vim-style scrolling (same injected script as link hints) |
 | F12 / ⌘⌥I | Toggle Web Inspector (also right-click → Inspect Element) |
 
 Settings (⌘,) and the View menu toggle **Vertical Tabs** and **Shared Address Bar** (default: slim bar per pane).

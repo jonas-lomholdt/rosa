@@ -19,6 +19,9 @@ final class SettingsModel: ObservableObject {
     @Published var linkHintColor: String {
         didSet { if Settings.linkHintColor != linkHintColor { Settings.linkHintColor = linkHintColor } }
     }
+    @Published var vimKeysEnabled: Bool {
+        didSet { if Settings.vimKeysEnabled != vimKeysEnabled { Settings.vimKeysEnabled = vimKeysEnabled } }
+    }
     @Published var linkTarget: LinkTarget {
         didSet { if Settings.linkTarget != linkTarget { Settings.linkTarget = linkTarget } }
     }
@@ -50,6 +53,7 @@ final class SettingsModel: ObservableObject {
         linkTarget = Settings.linkTarget
         linkHintsEnabled = Settings.linkHintsEnabled
         linkHintColor = Settings.linkHintColor
+        vimKeysEnabled = Settings.vimKeysEnabled
         historyEnabled = Settings.historyEnabled
         historyPageCount = HistoryStore.shared.pageCount
         adBlockEnabled = Settings.adBlockEnabled
@@ -81,6 +85,7 @@ final class SettingsModel: ObservableObject {
         linkTarget = Settings.linkTarget
         linkHintsEnabled = Settings.linkHintsEnabled
         linkHintColor = Settings.linkHintColor
+        vimKeysEnabled = Settings.vimKeysEnabled
         historyEnabled = Settings.historyEnabled
         adBlockEnabled = Settings.adBlockEnabled
         enabledFilterLists = Settings.enabledFilterLists
@@ -178,10 +183,11 @@ struct SettingsView: View {
                 Toggle("Link hints", isOn: $model.linkHintsEnabled)
                 ColorPicker("Hint colour", selection: model.linkHintColorBinding, supportsOpacity: false)
                     .disabled(!model.linkHintsEnabled)
+                Toggle("Vim-style scrolling", isOn: $model.vimKeysEnabled)
             } header: {
                 Text("Keyboard")
             } footer: {
-                Text("Press F on a page to label every link, then type a label to click it. Shift-F opens the link in the background (new tab or pane). Esc cancels.")
+                Text("Link hints: press F on a page, then type a label to click it (Shift-F opens in the background, Esc cancels). Vim-style scrolling: J/K scroll, GG jumps to the top, Shift-G to the bottom. Keys are ignored while typing in a field.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

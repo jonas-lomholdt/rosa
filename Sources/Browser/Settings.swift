@@ -116,6 +116,12 @@ enum Settings {
         set { defaults.set(newValue, forKey: "linkHintColor"); notify() }
     }
 
+    /// j/k scroll, gg/G top/bottom.
+    static var vimKeysEnabled: Bool {
+        get { defaults.object(forKey: "vimKeysEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "vimKeysEnabled"); notify() }
+    }
+
     static var searchEngine: SearchEngine {
         get { defaults.string(forKey: "searchEngine").flatMap(SearchEngine.init) ?? .google }
         set { defaults.set(newValue.rawValue, forKey: "searchEngine"); notify() }

@@ -269,6 +269,33 @@ enum SelfTest {
             await press("f")
             print("f with hints disabled              hints=\(await hintLabels().count)")
             Settings.linkHintsEnabled = true
+
+            // Vim-style scrolling.
+            let tall = "<title>tall</title><div style='height:6000px'>top</div>"
+            pane.webView.loadHTMLString(tall, baseURL: URL(string: "https://example.com/"))
+            await pause(1.5)
+            window.makeFirstResponder(pane.webView)
+            func scrollY() async -> Int {
+                (try? await pane.webView.evaluateJavaScript("Math.round(scrollY)")) as? Int ?? -1
+            }
+            await press("jj")
+            await pause(0.5)
+            print("vim jj                             scrollY=\(await scrollY())")
+            await press("k")
+            await pause(0.5)
+            print("vim k                              scrollY=\(await scrollY())")
+            await press("g", shift: true)
+            await pause(1)
+            print("vim G                              scrollY=\(await scrollY())")
+            await press("gg")
+            await pause(1)
+            print("vim gg                             scrollY=\(await scrollY())")
+            Settings.vimKeysEnabled = false
+            await pause(0.3)
+            await press("j")
+            await pause(0.5)
+            print("vim j while disabled               scrollY=\(await scrollY())")
+            Settings.vimKeysEnabled = true
         }
 
         await step("⌘W in tab 1", [("w", 13, [.command])])
