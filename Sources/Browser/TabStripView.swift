@@ -36,6 +36,22 @@ final class TabStripView: ChromeView {
     private let scrollView = NSScrollView()
     private let documentView = TabListDocumentView()
     private let newTabButton: NSButton
+    /// Shown once there are downloads; opens the downloads popover.
+    let downloadsButton = NSButton()
+    var onDownloadsClick: (() -> Void)?
+
+    var showsDownloadsButton = false {
+        didSet { downloadsButton.isHidden = !showsDownloadsButton; needsLayout = true }
+    }
+
+    /// Accent tint while downloads are in progress.
+    var downloadsActive = false {
+        didSet {
+            downloadsButton.contentTintColor = downloadsActive ? .controlAccentColor : .secondaryLabelColor
+            let symbol = downloadsActive ? "arrow.down.circle.fill" : "arrow.down.circle"
+            downloadsButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Downloads")
+        }
+    }
     private var itemViews: [TabItemView] = []
     private var selectedIndex = 0
     /// Where each tab sits, in document-view coordinates, in display order.
@@ -65,6 +81,14 @@ final class TabStripView: ChromeView {
 
         addSubview(scrollView)
         addSubview(newTabButton)
+
+        downloadsButton.isBordered = false
+        downloadsButton.target = self
+        downloadsButton.action = #selector(downloadsClicked(_:))
+        downloadsButton.toolTip = "Downloads (⌥⌘L)"
+        downloadsButton.isHidden = true
+        downloadsActive = false
+        addSubview(downloadsButton)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -109,9 +133,11 @@ final class TabStripView: ChromeView {
                 x: bounds.width - buttonSize - 8, y: (bounds.height - buttonSize) / 2,
                 width: buttonSize, height: buttonSize
             )
+            downloadsButton.frame = newTabButton.frame.offsetBy(dx: -(buttonSize + 2), dy: 0)
+            let buttonsMinX = showsDownloadsButton ? downloadsButton.frame.minX : newTabButton.frame.minX
             scrollView.frame = NSRect(
                 x: trafficLightInset, y: 0,
-                width: max(0, newTabButton.frame.minX - 4 - Self.reservedDragSpace - trafficLightInset), height: bounds.height - 1
+                width: max(0, buttonsMinX - 4 - Self.reservedDragSpace - trafficLightInset), height: bounds.height - 1
             )
             let available = scrollView.frame.width
             let count = CGFloat(max(itemViews.count, 1))
@@ -128,6 +154,7 @@ final class TabStripView: ChromeView {
                 x: bounds.width - buttonSize - 8, y: (top - buttonSize) / 2,
                 width: buttonSize, height: buttonSize
             )
+            downloadsButton.frame = newTabButton.frame.offsetBy(dx: -(buttonSize + 2), dy: 0)
             scrollView.frame = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
             let rowHeight: CGFloat = 30
             let width = scrollView.frame.width
@@ -217,6 +244,10 @@ final class TabStripView: ChromeView {
     /// Tab centres in window coordinates, for the self-test.
     var debugTabCenters: [NSPoint] {
         itemViews.map { $0.convert(NSPoint(x: $0.bounds.midX, y: $0.bounds.midY), to: nil) }
+    }
+
+    @objc private func downloadsClicked(_ sender: Any?) {
+        onDownloadsClick?()
     }
 
     @objc private func newTabClicked(_ sender: Any?) {

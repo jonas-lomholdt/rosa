@@ -24,6 +24,7 @@ scripts/build.sh release --run   # builds build/Browser.app and opens it
 | j / k, h / l, gg / G | Vim-style scrolling (same injected script as link hints) |
 | ⌘F, ⌘G / ⌘⇧G | Find in page (`FindBar.swift`), next / previous |
 | ⌃⌘S | Show/hide the auto-hiding vertical sidebar |
+| ⌥⌘L | Downloads popover (`DownloadManager`, `DownloadsView`) |
 | F12 / ⌘⌥I | Toggle Web Inspector (also right-click → Inspect Element) |
 
 Settings (⌘,) and the View menu toggle **Vertical Tabs** and **Shared Address Bar** (default: slim bar per pane).
@@ -48,8 +49,8 @@ swift scripts/make-icon.swift Resources/logo-source.png Resources/AppIcon.png
 
 ## Self-test
 
-`BROWSER_SELFTEST=<dir>` runs a scripted sequence of real key events, prints the split tree after each step, and writes snapshots to `<dir>`. Set `BROWSER_HISTORY_DB` to keep test visits out of your real history:
+`BROWSER_SELFTEST=<dir>` runs a scripted sequence of real key events, prints the split tree after each step, and writes snapshots to `<dir>`. Set `BROWSER_HISTORY_DB` and `BROWSER_DOWNLOADS_DIR` to keep test visits and files out of your real history and Downloads folder:
 
 ```bash
-open -W -n --env BROWSER_SELFTEST=/tmp/bt --env BROWSER_HISTORY_DB=/tmp/bt.sqlite --stdout /tmp/bt.log build/Browser.app; cat /tmp/bt.log
+open -W -n --env BROWSER_SELFTEST=/tmp/bt --env BROWSER_HISTORY_DB=/tmp/bt.sqlite --env BROWSER_DOWNLOADS_DIR=/tmp/bt-dl --stdout /tmp/bt.log build/Browser.app; cat /tmp/bt.log
 ```

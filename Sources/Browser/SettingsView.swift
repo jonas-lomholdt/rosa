@@ -28,6 +28,9 @@ final class SettingsModel: ObservableObject {
     @Published var vimKeysEnabled: Bool {
         didSet { if Settings.vimKeysEnabled != vimKeysEnabled { Settings.vimKeysEnabled = vimKeysEnabled } }
     }
+    @Published var askWhereToSaveDownloads: Bool {
+        didSet { if Settings.askWhereToSaveDownloads != askWhereToSaveDownloads { Settings.askWhereToSaveDownloads = askWhereToSaveDownloads } }
+    }
     @Published var sidebarAutoHide: Bool {
         didSet { if Settings.sidebarAutoHide != sidebarAutoHide { Settings.sidebarAutoHide = sidebarAutoHide } }
     }
@@ -61,6 +64,7 @@ final class SettingsModel: ObservableObject {
         searchEngine = Settings.searchEngine
         linkTarget = Settings.linkTarget
         sidebarAutoHide = Settings.sidebarAutoHide
+        askWhereToSaveDownloads = Settings.askWhereToSaveDownloads
         linkHintsEnabled = Settings.linkHintsEnabled
         linkHintColor = Settings.linkHintColor
         vimKeysEnabled = Settings.vimKeysEnabled
@@ -96,6 +100,7 @@ final class SettingsModel: ObservableObject {
         searchEngine = Settings.searchEngine
         linkTarget = Settings.linkTarget
         sidebarAutoHide = Settings.sidebarAutoHide
+        askWhereToSaveDownloads = Settings.askWhereToSaveDownloads
         linkHintsEnabled = Settings.linkHintsEnabled
         linkHintColor = Settings.linkHintColor
         vimKeysEnabled = Settings.vimKeysEnabled
@@ -268,6 +273,16 @@ struct SettingsView: View {
                         }
                     }
                 }
+            }
+
+            Section {
+                Toggle("Ask where to save each download", isOn: $model.askWhereToSaveDownloads)
+            } header: {
+                Text("Downloads")
+            } footer: {
+                Text("Otherwise files go straight to your Downloads folder. ⌥⌘L shows downloads.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Search") {

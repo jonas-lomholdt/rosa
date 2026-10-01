@@ -21,6 +21,7 @@
 - 🗂️ **Tabs** — horizontal, or a resizable vertical sidebar that can auto-hide
 - 🛡️ **Ad & tracker blocking** — on by default, one click to allow a site
 - 🔎 **Smart address bar** — autocompletes from your history as you type
+- ⬇️ **Downloads** — progress, cancel, show in Finder, right from the tab bar
 - 🎨 **Liquid Glass** look, light / dark / system theme
 - 🐞 **Web Inspector** — the same dev tools as Safari
 
@@ -39,6 +40,7 @@
 | `gg` / `G` | Jump to top / bottom |
 | `⌘F`, `⌘G` / `⌘⇧G` | Find in page, next / previous match |
 | `⌃⌘S` | Show sidebar (when auto-hiding) |
+| `⌥⌘L` | Downloads |
 | `⌘,` | Settings |
 | `F12` / `⌘⌥I` | Web Inspector |
 

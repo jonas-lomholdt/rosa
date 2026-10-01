@@ -24,6 +24,7 @@ protocol PaneViewDelegate: AnyObject {
     /// ⌘-click: open without taking focus.
     func pane(_ pane: PaneView, openLinkInBackground request: URLRequest)
     func pane(_ pane: PaneView, createWebViewWith configuration: WKWebViewConfiguration) -> WKWebView?
+    func pane(_ pane: PaneView, didStartDownload download: WKDownload)
     func paneRequestedHintsInAllPanes(_ pane: PaneView, background: Bool)
     func pane(_ pane: PaneView, typedHintKey key: String)
     func paneCancelledHints(_ pane: PaneView)
@@ -387,6 +388,9 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
             NSWorkspace.shared.open(url)
             return .cancel
         }
+        if navigationAction.shouldPerformDownload {
+            return .download
+        }
         if navigationAction.navigationType == .linkActivated,
            navigationAction.modifierFlags.contains(.command) {
             delegate?.pane(self, openLinkInBackground: navigationAction.request)
@@ -397,6 +401,24 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
             ContentBlocker.shared.apply(to: webView.configuration.userContentController, host: navigationAction.request.url?.host())
         }
         return .allow
+    }
+
+    /// Files WebKit can't display, or that the server marks as attachments, are downloaded.
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse) async -> WKNavigationResponsePolicy {
+        if let response = navigationResponse.response as? HTTPURLResponse,
+           let disposition = response.value(forHTTPHeaderField: "Content-Disposition"),
+           disposition.lowercased().hasPrefix("attachment") {
+            return .download
+        }
+        return navigationResponse.canShowMIMEType ? .allow : .download
+    }
+
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        delegate?.pane(self, didStartDownload: download)
+    }
+
+    func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        delegate?.pane(self, didStartDownload: download)
     }
 
     // MARK: - WKUIDelegate

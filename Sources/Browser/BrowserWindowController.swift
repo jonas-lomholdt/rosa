@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import WebKit
 
 /// One browser window: a list of tabs, each holding a split tree of panes.
@@ -13,6 +14,13 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     private var tabs: [Tab] = []
     private var selectedIndex = 0
     private var settingsObserver: NSObjectProtocol?
+    private var downloadsObserver: NSObjectProtocol?
+    private lazy var downloadsPopover: NSPopover = {
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = NSHostingController(rootView: DownloadsView(manager: DownloadManager.shared))
+        return popover
+    }()
     private static var focusCounter = 0
 
     private var selectedTab: Tab? { tabs.indices.contains(selectedIndex) ? tabs[selectedIndex] : nil }
@@ -42,6 +50,13 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         window.contentView = contentRoot
         contentRoot.tabStrip.delegate = self
         contentRoot.onSidebarResized = { width in Settings.sidebarWidth = width }
+        contentRoot.tabStrip.onDownloadsClick = { [weak self] in self?.toggleDownloads(nil) }
+        downloadsObserver = NotificationCenter.default.addObserver(
+            forName: DownloadManager.didChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateDownloadsButton() }
+        }
+        updateDownloadsButton()
 
         let sharedField = contentRoot.header.addressField
         sharedField.onSubmit = { [weak self] text in
@@ -330,6 +345,30 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     @objc func toggleWebInspector(_ sender: Any?) { focusedPane?.toggleWebInspector() }
     @objc func showLinkHints(_ sender: Any?) { focusedPane?.showLinkHints() }
     @objc func toggleSidebar(_ sender: Any?) { contentRoot.toggleSidebar() }
+
+    @objc func toggleDownloads(_ sender: Any?) {
+        if downloadsPopover.isShown {
+            downloadsPopover.performClose(nil)
+        } else {
+            showDownloads()
+        }
+    }
+
+    private func showDownloads() {
+        let strip = contentRoot.tabStrip
+        strip.showsDownloadsButton = true
+        strip.layoutSubtreeIfNeeded()
+        let anchor = strip.downloadsButton
+        downloadsPopover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY)
+    }
+
+    private func updateDownloadsButton() {
+        let manager = DownloadManager.shared
+        contentRoot.tabStrip.showsDownloadsButton = !manager.items.isEmpty
+        contentRoot.tabStrip.downloadsActive = manager.activeCount > 0
+    }
+
+    var isDownloadsPopoverShown: Bool { downloadsPopover.isShown }
     /// For the self-test.
     var debugContentRoot: BrowserContentView { contentRoot }
     @objc func showFindBar(_ sender: Any?) { focusedPane?.showFindBar() }
@@ -392,6 +431,17 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     private var hintSession: HintSession?
     private var hintOperations: [() async -> Void] = []
     private var runningHintOperations = false
+
+    func pane(_ pane: PaneView, didStartDownload download: WKDownload) {
+        DownloadManager.shared.track(download)
+        // A pane opened only to fetch a file (e.g. a link that opened a new tab) has nothing to show.
+        if pane.webView.url == nil || pane.webView.url?.absoluteString == "about:blank",
+           pane.webView.backForwardList.currentItem == nil,
+           tabs.count > 1 || (selectedTab?.panes.count ?? 0) > 1 {
+            close(pane)
+        }
+        if window?.isKeyWindow == true { showDownloads() }
+    }
 
     func paneRequestedHintsInAllPanes(_ pane: PaneView, background: Bool) {
         enqueueHintOperation { [weak self] in await self?.startHintSession(from: pane, background: background) }
@@ -504,6 +554,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         }
         tabs.removeAll()
         if let settingsObserver { NotificationCenter.default.removeObserver(settingsObserver) }
+        if let downloadsObserver { NotificationCenter.default.removeObserver(downloadsObserver) }
         onClose?(self)
     }
 }

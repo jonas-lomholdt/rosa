@@ -146,6 +146,12 @@ enum Settings {
         set { defaults.set(newValue, forKey: "findHighlightColor"); notify() }
     }
 
+    /// Show a save panel for each download instead of saving straight to Downloads.
+    static var askWhereToSaveDownloads: Bool {
+        get { defaults.bool(forKey: "askWhereToSaveDownloads") }
+        set { defaults.set(newValue, forKey: "askWhereToSaveDownloads"); notify() }
+    }
+
     static var searchEngine: SearchEngine {
         get { defaults.string(forKey: "searchEngine").flatMap(SearchEngine.init) ?? .google }
         set { defaults.set(newValue.rawValue, forKey: "searchEngine"); notify() }

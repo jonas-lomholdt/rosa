@@ -430,6 +430,33 @@ enum SelfTest {
             Settings.tabLayout = .horizontal
         }
 
+        // Downloads (into BROWSER_DOWNLOADS_DIR): a download-attribute link twice, then a zip attachment.
+        if let pane = controller.focusedPane {
+            let manager = DownloadManager.shared
+            func latest() -> String {
+                guard let item = manager.items.first else { return "none" }
+                let content = item.destination.flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+                return "\(item.filename) state=\(item.state) bytes=\(item.receivedBytes) text=\(content.map { $0.count < 20 ? $0 : "…" } ?? "-")"
+            }
+            pane.webView.loadHTMLString(
+                ##"<title>dl</title><a id="d" href="data:text/plain;base64,aGVsbG8=" download="hello.txt">get</a>"##,
+                baseURL: URL(string: "https://example.com/")
+            )
+            await pause(1.5)
+            for label in ["download link", "download link again"] {
+                _ = try? await pane.webView.evaluateJavaScript("document.getElementById('d').click()")
+                await pause(2)
+                print("\(label.padding(toLength: 34, withPad: " ", startingAt: 0)) \(latest()) popover=\(controller.isDownloadsPopoverShown)")
+            }
+            pane.webView.load(URLRequest(url: URL(string: "https://github.com/github/gitignore/archive/refs/heads/main.zip")!))
+            for _ in 0..<40 {
+                await pause(0.5)
+                if manager.items.first?.filename.hasSuffix(".zip") == true, manager.items.first?.state != .downloading { break }
+            }
+            print("zip attachment                     \(latest())")
+            print("downloads folder                   \(manager.downloadsFolder.path)")
+        }
+
         // Settings window opens centred over the browser window.
         if let app = NSApp.delegate as? AppDelegate, let browser = controller.window {
             app.showSettings(nil)
