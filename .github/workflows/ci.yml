@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: Build Rosa.app
+    # Rosa needs the macOS 26 SDK (Liquid Glass, WebKit 26 APIs).
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          swift --version
+          xcrun --show-sdk-version
+
+      - name: Build
+        run: scripts/build.sh release
+
+      - name: Package
+        run: ditto -c -k --keepParent build/Rosa.app build/Rosa.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Rosa
+          path: build/Rosa.zip
+          retention-days: 14

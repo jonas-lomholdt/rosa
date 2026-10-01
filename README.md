@@ -52,6 +52,8 @@ Needs **macOS 26**. No Xcode required — the Command Line Tools are enough.
 scripts/build.sh release --run
 ```
 
+Or grab `Rosa-vX.Y.Z.zip` from [Releases](https://github.com/jonas-lomholdt/rosa/releases). It isn't notarised yet, so on first launch right-click **Rosa.app → Open** (or run `xattr -dr com.apple.quarantine Rosa.app`).
+
 ---
 
 <p align="center"><sub>Developer notes live in <a href="docs/DEVELOPMENT.md">docs/DEVELOPMENT.md</a>.</sub></p>

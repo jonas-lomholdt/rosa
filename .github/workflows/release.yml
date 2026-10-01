@@ -1,0 +1,33 @@
+name: Release
+
+# Push a tag like v0.2.0 to build Rosa.app and attach it to a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GITHUB_RUN_NUMBER" Resources/Info.plist
+
+      - name: Build
+        run: scripts/build.sh release
+
+      - name: Package
+        run: ditto -c -k --keepParent build/Rosa.app "build/Rosa-${GITHUB_REF_NAME}.zip"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "build/Rosa-${GITHUB_REF_NAME}.zip" --generate-notes --title "Rosa $GITHUB_REF_NAME"
