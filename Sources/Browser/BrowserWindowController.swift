@@ -141,16 +141,36 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     }
 
     private func split(_ axis: SplitView.Axis) {
-        guard let pane = focusedPane, let parent = pane.superview as? PaneParent else { return }
-        let newPane = makePane()
+        guard let pane = focusedPane else { return }
+        split(pane, axis: axis)
+    }
+
+    /// Splits `pane`, putting a new pane after it. `configuration` is passed when WebKit asks
+    /// for a new web view (window.open); `focusNew: false` keeps focus where it is (⌘-click).
+    @discardableResult
+    private func split(
+        _ pane: PaneView,
+        axis: SplitView.Axis,
+        configuration: WKWebViewConfiguration? = nil,
+        request: URLRequest? = nil,
+        focusNew: Bool = true
+    ) -> PaneView? {
+        guard let parent = pane.superview as? PaneParent else { return nil }
+        let newPane = makePane(configuration: configuration)
         let frame = pane.frame
         // Creating the split reparents `pane`; the parent then takes the split in its place.
         let split = SplitView(axis: axis, first: pane, second: newPane)
         split.frame = frame
         parent.replaceChild(pane, with: split)
         split.layoutSubtreeIfNeeded()
-        focus(newPane, editAddress: true)
+        if let request { newPane.webView.load(request) }
+        if focusNew {
+            focus(newPane, editAddress: request == nil && configuration == nil)
+        } else {
+            refreshPaneHighlights()
+        }
         reloadTabStrip()
+        return newPane
     }
 
     private func close(_ pane: PaneView) {
@@ -336,12 +356,18 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         }
     }
 
-    func pane(_ pane: PaneView, openInNewTab request: URLRequest) {
-        addTab(request: request, nextToCurrent: true, select: false)
+    func pane(_ pane: PaneView, openLinkInBackground request: URLRequest) {
+        switch Settings.linkTarget {
+        case .tab: addTab(request: request, nextToCurrent: true, select: false)
+        case .pane: split(pane, axis: .horizontal, request: request, focusNew: false)
+        }
     }
 
     func pane(_ pane: PaneView, createWebViewWith configuration: WKWebViewConfiguration) -> WKWebView? {
-        addTab(configuration: configuration, nextToCurrent: true).webView
+        switch Settings.linkTarget {
+        case .tab: return addTab(configuration: configuration, nextToCurrent: true).webView
+        case .pane: return split(pane, axis: .horizontal, configuration: configuration)?.webView
+        }
     }
 
     // MARK: - TabStripDelegate

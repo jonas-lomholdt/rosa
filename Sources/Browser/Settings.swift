@@ -25,6 +25,13 @@ enum AppearanceMode: String, CaseIterable {
     }
 }
 
+/// Where links that would open a new window (target=_blank, window.open, ⌘-click) go.
+enum LinkTarget: String, CaseIterable {
+    case tab
+    /// Split the pane the link was clicked in, to the right.
+    case pane
+}
+
 enum SearchEngine: String, CaseIterable {
     case google, duckDuckGo, bing, kagi, ecosia
 
@@ -91,6 +98,11 @@ enum Settings {
     static var adBlockAllowlist: [String] {
         get { defaults.stringArray(forKey: "adBlockAllowlist") ?? [] }
         set { defaults.set(newValue, forKey: "adBlockAllowlist"); notify() }
+    }
+
+    static var linkTarget: LinkTarget {
+        get { defaults.string(forKey: "linkTarget").flatMap(LinkTarget.init) ?? .tab }
+        set { defaults.set(newValue.rawValue, forKey: "linkTarget"); notify() }
     }
 
     static var searchEngine: SearchEngine {

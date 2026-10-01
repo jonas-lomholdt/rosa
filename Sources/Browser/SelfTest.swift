@@ -197,6 +197,23 @@ enum SelfTest {
         print("vertical: drag 4 → 0               \(controller.debugTabTitles) selected=\(controller.debugTabTitles[controller.selectedTabIndex])")
         Settings.tabLayout = .horizontal
 
+        // Link target setting: background links and window.open, as tab vs pane.
+        if let pane = controller.focusedPane {
+            let request = URLRequest(url: URL(string: "https://example.com/")!)
+            Settings.linkTarget = .tab
+            controller.pane(pane, openLinkInBackground: request)
+            await pause(1)
+            print("link → tab (⌘-click)               \(controller.debugDescriptionOfState)")
+            Settings.linkTarget = .pane
+            controller.pane(pane, openLinkInBackground: request)
+            await pause(1.5)
+            print("link → pane (⌘-click)              \(controller.debugDescriptionOfState)")
+            _ = controller.pane(pane, createWebViewWith: WebKitSupport.makeConfiguration())
+            await pause(0.5)
+            print("window.open → pane                 \(controller.debugDescriptionOfState)")
+            Settings.linkTarget = .tab
+        }
+
         await step("⌘W in tab 1", [("w", 13, [.command])])
     }
 

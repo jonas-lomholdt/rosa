@@ -13,6 +13,9 @@ final class SettingsModel: ObservableObject {
     @Published var appearance: AppearanceMode {
         didSet { if Settings.appearance != appearance { Settings.appearance = appearance } }
     }
+    @Published var linkTarget: LinkTarget {
+        didSet { if Settings.linkTarget != linkTarget { Settings.linkTarget = linkTarget } }
+    }
     @Published var searchEngine: SearchEngine {
         didSet { if Settings.searchEngine != searchEngine { Settings.searchEngine = searchEngine } }
     }
@@ -38,6 +41,7 @@ final class SettingsModel: ObservableObject {
         addressBarMode = Settings.addressBarMode
         appearance = Settings.appearance
         searchEngine = Settings.searchEngine
+        linkTarget = Settings.linkTarget
         historyEnabled = Settings.historyEnabled
         historyPageCount = HistoryStore.shared.pageCount
         adBlockEnabled = Settings.adBlockEnabled
@@ -66,6 +70,7 @@ final class SettingsModel: ObservableObject {
         addressBarMode = Settings.addressBarMode
         appearance = Settings.appearance
         searchEngine = Settings.searchEngine
+        linkTarget = Settings.linkTarget
         historyEnabled = Settings.historyEnabled
         adBlockEnabled = Settings.adBlockEnabled
         enabledFilterLists = Settings.enabledFilterLists
@@ -117,12 +122,23 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
             }
 
-            Section("Tabs") {
+            Section {
                 Picker("Tab layout", selection: $model.tabLayout) {
                     Text("Horizontal").tag(TabLayout.horizontal)
                     Text("Vertical sidebar").tag(TabLayout.vertical)
                 }
                 .pickerStyle(.segmented)
+                Picker("Open links in", selection: $model.linkTarget) {
+                    Text("New tab").tag(LinkTarget.tab)
+                    Text("New pane").tag(LinkTarget.pane)
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("Tabs & Links")
+            } footer: {
+                Text("Applies to links that open a new window, and to ⌘-click (which opens in the background).")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section {

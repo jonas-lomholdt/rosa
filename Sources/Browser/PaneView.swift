@@ -21,7 +21,8 @@ enum WebKitSupport {
 protocol PaneViewDelegate: AnyObject {
     func paneDidBecomeFocused(_ pane: PaneView)
     func paneDidChangeState(_ pane: PaneView)
-    func pane(_ pane: PaneView, openInNewTab request: URLRequest)
+    /// ⌘-click: open without taking focus.
+    func pane(_ pane: PaneView, openLinkInBackground request: URLRequest)
     func pane(_ pane: PaneView, createWebViewWith configuration: WKWebViewConfiguration) -> WKWebView?
 }
 
@@ -281,7 +282,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         }
         if navigationAction.navigationType == .linkActivated,
            navigationAction.modifierFlags.contains(.command) {
-            delegate?.pane(self, openInNewTab: navigationAction.request)
+            delegate?.pane(self, openLinkInBackground: navigationAction.request)
             return .cancel
         }
         if navigationAction.targetFrame?.isMainFrame == true {
