@@ -19,7 +19,7 @@ final class TabStripView: ChromeView {
     static let horizontalHeight: CGFloat = 38
     static let verticalWidth: CGFloat = 220
     /// Empty space always kept before the + button so the window can be dragged with many tabs open.
-    static let reservedDragSpace: CGFloat = 60
+    static let reservedDragSpace: CGFloat = 50
 
     weak var delegate: TabStripDelegate?
 
