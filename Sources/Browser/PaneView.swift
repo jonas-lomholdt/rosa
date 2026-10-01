@@ -80,8 +80,6 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     private let progressLine = ProgressLineView()
     private let overlay = FocusOverlayView()
     let findBar = FindBar()
-    private var findCount = 0
-    private var findIndex = 0
     /// Bumped per search so a slow result can't overwrite a newer one.
     private var findGeneration = 0
     private var observations: [NSKeyValueObservation] = []
@@ -237,7 +235,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         guard !findBar.isHidden else { return }
         findBar.isHidden = true
         findGeneration += 1
-        Task { _ = try? await webView.evaluateJavaScript("getSelection().removeAllRanges()") }
+        Task { await FindInPage.clear(in: webView) }
         focusWebView()
     }
 
@@ -251,60 +249,17 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         find(findBar.field.stringValue, fresh: false, backwards: true)
     }
 
-    /// WebKit's find highlights and scrolls to the match; it doesn't report a count, so
-    /// matches are counted with a script (text nodes only, case-insensitive).
     private func find(_ query: String, fresh: Bool, backwards: Bool = false) {
         findGeneration += 1
         let generation = findGeneration
         Task {
-            guard !query.isEmpty else {
-                _ = try? await webView.evaluateJavaScript("getSelection().removeAllRanges()")
-                findCount = 0
-                findIndex = 0
-                findBar.setStatus(index: 0, count: 0, query: "")
-                return
-            }
-            if fresh {
-                // Start from the top rather than after the previous match.
-                _ = try? await webView.evaluateJavaScript("getSelection().removeAllRanges()")
-            }
-            let configuration = WKFindConfiguration()
-            configuration.backwards = backwards
-            configuration.caseSensitive = false
-            configuration.wraps = true
-            let result = try? await webView.find(query, configuration: configuration)
-            let count = (try? await webView.callAsyncJavaScript(
-                Self.countMatchesScript, arguments: ["query": query], in: nil, contentWorld: .defaultClient
-            )) as? Int ?? 0
+            let result = fresh
+                ? await FindInPage.start(query, in: webView)
+                : await FindInPage.step(backwards ? -1 : 1, in: webView)
             guard generation == findGeneration else { return }
-
-            findCount = count
-            if result?.matchFound != true || count == 0 {
-                findIndex = 0
-            } else if fresh || findIndex == 0 {
-                findIndex = 1
-            } else if backwards {
-                findIndex = (findIndex - 2 + count) % count + 1
-            } else {
-                findIndex = findIndex % count + 1
-            }
-            findBar.setStatus(index: findIndex, count: findCount, query: query)
+            findBar.setStatus(index: result.index, count: result.count, query: query)
         }
     }
-
-    private static let countMatchesScript = """
-        const needle = query.toLowerCase();
-        let count = 0;
-        const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT, {
-          acceptNode: node => node.parentElement && !node.parentElement.closest('script,style,noscript,template,head')
-            ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
-        });
-        while (walker.nextNode()) {
-          const text = walker.currentNode.data.toLowerCase();
-          for (let i = text.indexOf(needle); i !== -1; i = text.indexOf(needle, i + needle.length)) count++;
-        }
-        return count;
-        """
 
     // MARK: - Link hints
 

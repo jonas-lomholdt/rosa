@@ -33,6 +33,7 @@ enum SelfTest {
 
         func step(_ label: String, _ keys: [(String, UInt16, NSEvent.ModifierFlags)] = []) async {
             for (characters, keyCode, modifiers) in keys {
+                await ensureActive(controller.window)
                 post(characters, keyCode: keyCode, modifiers: modifiers, window: controller.window)
                 await pause(0.3)
             }
@@ -156,6 +157,7 @@ enum SelfTest {
         }
         // Web Inspector via F12, twice (open, then close).
         for label in ["F12 (open inspector)", "F12 (close inspector)"] {
+            await ensureActive(controller.window)
             post(arrow(NSF12FunctionKey), keyCode: 111, modifiers: [.function], window: controller.window)
             await pause(2)
             print("\(label.padding(toLength: 34, withPad: " ", startingAt: 0)) visible=\(controller.focusedPane?.isWebInspectorVisible ?? false)")
@@ -309,6 +311,7 @@ enum SelfTest {
             pane.webView.loadHTMLString(text, baseURL: URL(string: "https://example.com/"))
             await pause(1.5)
             window.makeFirstResponder(pane.webView)
+            await ensureActive(window)
             post("f", keyCode: 3, modifiers: [.command], window: window)
             await pause(0.5)
             let fieldFocused = (window.firstResponder as? NSTextView)?.delegate === pane.findBar.field
@@ -323,6 +326,10 @@ enum SelfTest {
             pane.findPrevious()
             await pause(0.7)
             print("previous                           \(pane.findBar.statusText)")
+            let painted = (try? await pane.webView.evaluateJavaScript(
+                "[CSS.highlights.get('browser-find')?.size ?? 0, CSS.highlights.get('browser-find-current')?.size ?? 0].join('/')"
+            )) as? String ?? "-"
+            print("highlights (all/current)           \(painted)")
             pane.findBar.field.stringValue = "zzz"
             pane.findBar.onChange?("zzz")
             await pause(1)
@@ -381,6 +388,17 @@ enum SelfTest {
         }
 
         await step("⌘W in tab 1", [("w", 13, [.command])])
+    }
+
+    /// ⌘-shortcuts only reach the app while it is active; the user may switch apps mid-run.
+    private static func ensureActive(_ window: NSWindow?) async {
+        guard !NSApp.isActive || NSApp.keyWindow == nil else { return }
+        print("(app was not active — re-activating)")
+        for _ in 0..<20 where !NSApp.isActive || NSApp.keyWindow == nil {
+            NSApp.activate(ignoringOtherApps: true)
+            window?.makeKeyAndOrderFront(nil)
+            await pause(0.25)
+        }
     }
 
     private static func arrow(_ key: Int) -> String { String(Character(UnicodeScalar(key)!)) }

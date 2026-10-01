@@ -22,6 +22,9 @@ final class SettingsModel: ObservableObject {
     @Published var linkHintsAllPanes: Bool {
         didSet { if Settings.linkHintsAllPanes != linkHintsAllPanes { Settings.linkHintsAllPanes = linkHintsAllPanes } }
     }
+    @Published var findHighlightColor: String {
+        didSet { if Settings.findHighlightColor != findHighlightColor { Settings.findHighlightColor = findHighlightColor } }
+    }
     @Published var vimKeysEnabled: Bool {
         didSet { if Settings.vimKeysEnabled != vimKeysEnabled { Settings.vimKeysEnabled = vimKeysEnabled } }
     }
@@ -57,6 +60,7 @@ final class SettingsModel: ObservableObject {
         linkHintsEnabled = Settings.linkHintsEnabled
         linkHintColor = Settings.linkHintColor
         vimKeysEnabled = Settings.vimKeysEnabled
+        findHighlightColor = Settings.findHighlightColor
         linkHintsAllPanes = Settings.linkHintsAllPanes
         historyEnabled = Settings.historyEnabled
         historyPageCount = HistoryStore.shared.pageCount
@@ -90,6 +94,7 @@ final class SettingsModel: ObservableObject {
         linkHintsEnabled = Settings.linkHintsEnabled
         linkHintColor = Settings.linkHintColor
         vimKeysEnabled = Settings.vimKeysEnabled
+        findHighlightColor = Settings.findHighlightColor
         linkHintsAllPanes = Settings.linkHintsAllPanes
         historyEnabled = Settings.historyEnabled
         adBlockEnabled = Settings.adBlockEnabled
@@ -110,6 +115,13 @@ final class SettingsModel: ObservableObject {
                 if enabled { lists.insert(list.id) } else { lists.remove(list.id) }
                 Settings.enabledFilterLists = lists
             }
+        )
+    }
+
+    var findHighlightColorBinding: Binding<Color> {
+        Binding(
+            get: { Color(nsColor: NSColor(hex: self.findHighlightColor) ?? .systemGreen) },
+            set: { self.findHighlightColor = NSColor($0).hexString }
         )
     }
 
@@ -147,6 +159,7 @@ struct SettingsView: View {
                     Text("Dark").tag(AppearanceMode.dark)
                 }
                 .pickerStyle(.segmented)
+                ColorPicker("Find highlight colour", selection: model.findHighlightColorBinding, supportsOpacity: false)
             }
 
             Section {

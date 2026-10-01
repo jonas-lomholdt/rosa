@@ -128,6 +128,12 @@ enum Settings {
         set { defaults.set(newValue, forKey: "vimKeysEnabled"); notify() }
     }
 
+    /// "#RRGGBB" — find-in-page matches (current match solid, others tinted).
+    static var findHighlightColor: String {
+        get { defaults.string(forKey: "findHighlightColor") ?? "#32D74B" }
+        set { defaults.set(newValue, forKey: "findHighlightColor"); notify() }
+    }
+
     static var searchEngine: SearchEngine {
         get { defaults.string(forKey: "searchEngine").flatMap(SearchEngine.init) ?? .google }
         set { defaults.set(newValue.rawValue, forKey: "searchEngine"); notify() }
