@@ -23,17 +23,45 @@ final class GlassAddressBar: NSView {
     static let height: CGFloat = 28
 
     let field = AddressField()
+    var onShieldClick: (() -> Void)?
     private let iconView = FaviconView()
+    private let shieldButton = NSButton()
     private let glass = NSGlassEffectView()
     private let content = NSView()
+
+    var shieldState: ShieldState = .hidden {
+        didSet { updateShield() }
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         glass.cornerRadius = Self.height / 2
         glass.contentView = content
+        shieldButton.isBordered = false
+        shieldButton.target = self
+        shieldButton.action = #selector(shieldClicked(_:))
         content.addSubview(iconView)
         content.addSubview(field)
+        content.addSubview(shieldButton)
         addSubview(glass)
+        updateShield()
+    }
+
+    private func updateShield() {
+        shieldButton.isHidden = shieldState == .hidden
+        let blocking = shieldState == .blocking
+        let symbol = blocking ? "shield.lefthalf.filled" : "shield.slash"
+        shieldButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Content blocking")?
+            .withSymbolConfiguration(.init(pointSize: 12, weight: .regular))
+        shieldButton.contentTintColor = blocking ? .controlAccentColor : .secondaryLabelColor
+        shieldButton.toolTip = blocking
+            ? "Ads and trackers are blocked on this site. Click to allow them."
+            : "Blocking is off for this site. Click to turn it back on."
+        needsLayout = true
+    }
+
+    @objc private func shieldClicked(_ sender: Any?) {
+        onShieldClick?()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -49,9 +77,11 @@ final class GlassAddressBar: NSView {
         content.frame = glass.bounds
         let fieldHeight = field.intrinsicContentSize.height
         iconView.frame = NSRect(x: 10, y: ((bounds.height - 16) / 2).rounded(), width: 16, height: 16)
+        let shieldWidth: CGFloat = shieldButton.isHidden ? 0 : 24
+        shieldButton.frame = NSRect(x: bounds.width - 8 - 20, y: ((bounds.height - 20) / 2).rounded(), width: 20, height: 20)
         field.frame = NSRect(
             x: 32, y: ((bounds.height - fieldHeight) / 2).rounded(),
-            width: max(0, bounds.width - 44), height: fieldHeight
+            width: max(0, bounds.width - 44 - shieldWidth), height: fieldHeight
         )
     }
 }

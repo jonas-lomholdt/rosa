@@ -112,6 +112,35 @@ enum SelfTest {
         print("loaded: \(controller.focusedPane?.webView.url?.absoluteString ?? "-")")
         HistoryStore.shared.clear(since: Date().addingTimeInterval(-3600))
         print("after clearing last hour: \(HistoryStore.shared.pageCount) pages")
+
+        // Content blocking: wait for lists, then probe a known tracker script from a page on example.com.
+        for _ in 0..<240 {
+            if case .ready = ContentBlocker.shared.status { break }
+            if case .failed = ContentBlocker.shared.status { break }
+            await pause(0.5)
+        }
+        print("adblock: \(ContentBlocker.shared.statusDescription)")
+        func probe(_ label: String) async {
+            guard let pane = controller.focusedPane else { return }
+            let html = """
+                <script src="https://www.google-analytics.com/analytics.js"
+                    onload="document.title='tracker loaded'" onerror="document.title='tracker blocked'"></script>
+                <div class="adsbygoogle-box" style="height:50px">ad</div>
+                <script>setTimeout(() => document.title += ' · banner ' +
+                    (getComputedStyle(document.querySelector('.adsbygoogle-box')).display === 'none' ? 'hidden' : 'visible'), 800)</script>
+                """
+            pane.webView.loadHTMLString(html, baseURL: URL(string: "https://example.com/"))
+            await pause(3)
+            print("\(label.padding(toLength: 34, withPad: " ", startingAt: 0)) \(pane.webView.title ?? "-") · shield=\(pane.shieldState)")
+        }
+        await probe("blocking on")
+        Settings.adBlockEnabled = false
+        await probe("blocking off (global toggle)")
+        Settings.adBlockEnabled = true
+        ContentBlocker.shared.setAllowed(true, host: "example.com")
+        await probe("example.com allowed")
+        ContentBlocker.shared.setAllowed(false, host: "example.com")
+        await probe("example.com blocked again")
         await step("⌘W in tab 1", [("w", 13, [.command])])
     }
 

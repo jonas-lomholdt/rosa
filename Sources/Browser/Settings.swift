@@ -74,6 +74,25 @@ enum Settings {
         set { defaults.set(newValue, forKey: "historyEnabled"); notify() }
     }
 
+    static var adBlockEnabled: Bool {
+        get { defaults.object(forKey: "adBlockEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "adBlockEnabled"); notify() }
+    }
+
+    static var enabledFilterLists: Set<String> {
+        get {
+            (defaults.array(forKey: "enabledFilterLists") as? [String]).map(Set.init)
+                ?? Set(FilterList.all.filter(\.enabledByDefault).map(\.id))
+        }
+        set { defaults.set(newValue.sorted(), forKey: "enabledFilterLists"); notify() }
+    }
+
+    /// Sites (normalized hosts, subdomains included) where content blocking is off.
+    static var adBlockAllowlist: [String] {
+        get { defaults.stringArray(forKey: "adBlockAllowlist") ?? [] }
+        set { defaults.set(newValue, forKey: "adBlockAllowlist"); notify() }
+    }
+
     static var searchEngine: SearchEngine {
         get { defaults.string(forKey: "searchEngine").flatMap(SearchEngine.init) ?? .google }
         set { defaults.set(newValue.rawValue, forKey: "searchEngine"); notify() }

@@ -45,6 +45,9 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
             pane.load(text)
             pane.focusWebView()
         }
+        contentRoot.header.onShieldClick = { [weak self] in
+            self?.focusedPane?.toggleContentBlockingForSite()
+        }
         sharedField.onCancel = { [weak self] in
             guard let self else { return }
             contentRoot.header.addressField.stringValue = focusedPane?.displayURL ?? ""
@@ -261,6 +264,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     private func syncSharedAddressField() {
         let field = contentRoot.header.addressField
         contentRoot.header.icon = focusedPane?.favicon
+        contentRoot.header.shieldState = focusedPane?.shieldState ?? .hidden
         if field.currentEditor() == nil {
             field.stringValue = focusedPane?.displayURL ?? ""
         }

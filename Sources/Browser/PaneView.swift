@@ -59,6 +59,9 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
     /// Bumped on every navigation so a slow favicon fetch can't overwrite a newer page's icon.
     private var faviconGeneration = 0
+    private var blockerObservers: [NSObjectProtocol] = []
+
+    var shieldState: ShieldState { ContentBlocker.shared.shieldState(forHost: webView.url?.host()) }
 
     var highlight: Highlight = .none {
         didSet { overlay.highlight = highlight }
@@ -104,6 +107,14 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
             addSubview(view)
         }
         observeWebView()
+
+        addressBar.onShieldClick = { [weak self] in self?.toggleContentBlockingForSite() }
+        for name in [ContentBlocker.didChange, Settings.didChange] {
+            blockerObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshContentBlocking() }
+            })
+        }
+        refreshContentBlocking()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -151,6 +162,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
 
     /// Stops the page and breaks references before the pane is discarded.
     func teardown() {
+        blockerObservers.forEach(NotificationCenter.default.removeObserver)
+        blockerObservers.removeAll()
         observations.removeAll()
         webView.stopLoading()
         webView.pauseAllMediaPlayback(completionHandler: nil)
@@ -160,6 +173,28 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         addressField.onFocus = nil
         addressField.onSubmit = nil
         addressField.onCancel = nil
+    }
+
+    // MARK: - Content blocking
+
+    /// Re-attaches rule lists for the current site (used when settings or lists change).
+    private func refreshContentBlocking() {
+        ContentBlocker.shared.apply(to: webView.configuration.userContentController, host: webView.url?.host())
+        updateShield()
+    }
+
+    private func updateShield() {
+        let state = shieldState
+        guard addressBar.shieldState != state else { return }
+        addressBar.shieldState = state
+        delegate?.paneDidChangeState(self)
+    }
+
+    /// Shield button: allow or block ads on the current site, then reload so it takes effect.
+    func toggleContentBlockingForSite() {
+        let host = webView.url?.host()
+        ContentBlocker.shared.setAllowed(shieldState == .blocking, host: host)
+        webView.reload()
     }
 
     // MARK: - Web view state
@@ -174,6 +209,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
 
     private func pageStateChanged() {
+        addressBar.shieldState = shieldState
         if addressField.currentEditor() == nil {
             addressField.stringValue = displayURL
         }
@@ -222,6 +258,10 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
            navigationAction.modifierFlags.contains(.command) {
             delegate?.pane(self, openInNewTab: navigationAction.request)
             return .cancel
+        }
+        if navigationAction.targetFrame?.isMainFrame == true {
+            // Rules must match the site we're going to before its subresources start loading.
+            ContentBlocker.shared.apply(to: webView.configuration.userContentController, host: navigationAction.request.url?.host())
         }
         return .allow
     }

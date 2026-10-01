@@ -21,9 +21,17 @@ final class SettingsModel: ObservableObject {
     }
     @Published private(set) var historyPageCount = 0
     @Published var confirmingClear = false
+    @Published var adBlockEnabled: Bool {
+        didSet { if Settings.adBlockEnabled != adBlockEnabled { Settings.adBlockEnabled = adBlockEnabled } }
+    }
+    @Published private(set) var enabledFilterLists: Set<String>
+    @Published private(set) var allowlist: [String]
+    @Published private(set) var blockerStatus = ""
+    @Published private(set) var blockerUpdating = false
 
     private var observer: NSObjectProtocol?
     private var historyObserver: NSObjectProtocol?
+    private var blockerObserver: NSObjectProtocol?
 
     init() {
         tabLayout = Settings.tabLayout
@@ -32,6 +40,15 @@ final class SettingsModel: ObservableObject {
         searchEngine = Settings.searchEngine
         historyEnabled = Settings.historyEnabled
         historyPageCount = HistoryStore.shared.pageCount
+        adBlockEnabled = Settings.adBlockEnabled
+        enabledFilterLists = Settings.enabledFilterLists
+        allowlist = Settings.adBlockAllowlist
+        refreshBlockerStatus()
+        blockerObserver = NotificationCenter.default.addObserver(
+            forName: ContentBlocker.didChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshBlockerStatus() }
+        }
         historyObserver = NotificationCenter.default.addObserver(
             forName: HistoryStore.didChange, object: nil, queue: .main
         ) { [weak self] _ in
@@ -50,6 +67,33 @@ final class SettingsModel: ObservableObject {
         appearance = Settings.appearance
         searchEngine = Settings.searchEngine
         historyEnabled = Settings.historyEnabled
+        adBlockEnabled = Settings.adBlockEnabled
+        enabledFilterLists = Settings.enabledFilterLists
+        allowlist = Settings.adBlockAllowlist
+    }
+
+    private func refreshBlockerStatus() {
+        blockerStatus = ContentBlocker.shared.statusDescription
+        blockerUpdating = ContentBlocker.shared.isUpdating
+    }
+
+    func isListEnabled(_ list: FilterList) -> Binding<Bool> {
+        Binding(
+            get: { self.enabledFilterLists.contains(list.id) },
+            set: { enabled in
+                var lists = Settings.enabledFilterLists
+                if enabled { lists.insert(list.id) } else { lists.remove(list.id) }
+                Settings.enabledFilterLists = lists
+            }
+        )
+    }
+
+    func updateFilterLists() {
+        ContentBlocker.shared.reload(forceDownload: true)
+    }
+
+    func removeFromAllowlist(_ host: String) {
+        Settings.adBlockAllowlist = Settings.adBlockAllowlist.filter { $0 != host }
     }
 
     func clearHistory(since date: Date?) {
@@ -117,6 +161,37 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             }
 
+            Section {
+                Toggle("Block ads and trackers", isOn: $model.adBlockEnabled)
+                ForEach(FilterList.all) { list in
+                    Toggle(isOn: model.isListEnabled(list)) {
+                        Text(list.name)
+                        Text(list.detail)
+                    }
+                    .disabled(!model.adBlockEnabled)
+                }
+                LabeledContent(model.blockerStatus) {
+                    Button("Update Now") { model.updateFilterLists() }
+                        .disabled(model.blockerUpdating || !model.adBlockEnabled)
+                }
+            } header: {
+                Text("Content Blocking")
+            } footer: {
+                Text("Filter lists are downloaded from EasyList and refreshed weekly. Use the shield in the address bar to turn blocking off for a single site.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !model.allowlist.isEmpty {
+                Section("Sites Without Blocking") {
+                    ForEach(model.allowlist, id: \.self) { host in
+                        LabeledContent(host) {
+                            Button("Remove") { model.removeFromAllowlist(host) }
+                        }
+                    }
+                }
+            }
+
             Section("Search") {
                 Picker("Search engine", selection: $model.searchEngine) {
                     ForEach(SearchEngine.allCases, id: \.self) { engine in
@@ -126,6 +201,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 520)
+        .frame(width: 500, height: 640)
     }
 }

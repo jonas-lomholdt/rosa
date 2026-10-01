@@ -15,6 +15,16 @@ final class HeaderView: ChromeView {
         set { addressBar.icon = newValue }
     }
 
+    var shieldState: ShieldState {
+        get { addressBar.shieldState }
+        set { addressBar.shieldState = newValue }
+    }
+
+    var onShieldClick: (() -> Void)? {
+        get { addressBar.onShieldClick }
+        set { addressBar.onShieldClick = newValue }
+    }
+
     var showsAddressField = false {
         didSet {
             addressBar.isHidden = !showsAddressField

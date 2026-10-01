@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = buildMainMenu()
         applyAppearance()
+        ContentBlocker.shared.start()
         settingsObserver = NotificationCenter.default.addObserver(
             forName: Settings.didChange, object: nil, queue: .main
         ) { [weak self] _ in
@@ -63,10 +64,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             window.title = "Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
-            window.center()
             settingsWindow = window
         }
-        settingsWindow?.makeKeyAndOrderFront(nil)
+        guard let settingsWindow else { return }
+        if !settingsWindow.isVisible {
+            // Open centred over the browser window it was invoked from.
+            if let parent = NSApp.keyWindow ?? NSApp.mainWindow, parent !== settingsWindow {
+                let frame = settingsWindow.frame
+                settingsWindow.setFrameOrigin(NSPoint(x: parent.frame.midX - frame.width / 2,
+                                                      y: parent.frame.midY - frame.height / 2))
+            } else {
+                settingsWindow.center()
+            }
+        }
+        settingsWindow.makeKeyAndOrderFront(nil)
     }
 
     @objc func toggleVerticalTabs(_ sender: Any?) {
