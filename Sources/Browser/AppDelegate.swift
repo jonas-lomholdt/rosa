@@ -68,16 +68,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         guard let settingsWindow else { return }
         if !settingsWindow.isVisible {
-            // Open centred over the browser window it was invoked from.
-            if let parent = NSApp.keyWindow ?? NSApp.mainWindow, parent !== settingsWindow {
-                let frame = settingsWindow.frame
-                settingsWindow.setFrameOrigin(NSPoint(x: parent.frame.midX - frame.width / 2,
-                                                      y: parent.frame.midY - frame.height / 2))
-            } else {
-                settingsWindow.center()
-            }
+            centre(settingsWindow, over: frontmostBrowserWindow)
         }
         settingsWindow.makeKeyAndOrderFront(nil)
+    }
+
+    /// The browser window the user was last in (Settings itself excluded).
+    var frontmostBrowserWindow: NSWindow? {
+        NSApp.orderedWindows.first { $0.windowController is BrowserWindowController && $0.isVisible }
+    }
+
+    /// Centres `window` over `parent` (or the screen), kept fully on screen. The SwiftUI content
+    /// is laid out first: before that the hosting window doesn't know its final size.
+    private func centre(_ window: NSWindow, over parent: NSWindow?) {
+        if let content = window.contentViewController?.view {
+            content.layoutSubtreeIfNeeded()
+            let size = content.fittingSize
+            if size.width > 0, size.height > 0 { window.setContentSize(size) }
+        }
+        guard let parent else { return window.center() }
+        let size = window.frame.size
+        var frame = NSRect(
+            x: (parent.frame.midX - size.width / 2).rounded(),
+            y: (parent.frame.midY - size.height / 2).rounded(),
+            width: size.width, height: size.height
+        )
+        if let visible = (parent.screen ?? NSScreen.main)?.visibleFrame {
+            frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
+            frame.origin.y = min(max(frame.minY, visible.minY), visible.maxY - frame.height)
+        }
+        window.setFrame(frame, display: false)
     }
 
     @objc func toggleVerticalTabs(_ sender: Any?) {

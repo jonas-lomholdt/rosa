@@ -387,6 +387,19 @@ enum SelfTest {
             }
         }
 
+        // Settings window opens centred over the browser window.
+        if let app = NSApp.delegate as? AppDelegate, let browser = controller.window {
+            app.showSettings(nil)
+            await pause(1)
+            if let settings = NSApp.windows.first(where: { $0.title == "Settings" && $0.isVisible }) {
+                let dx = Int(settings.frame.midX - browser.frame.midX), dy = Int(settings.frame.midY - browser.frame.midY)
+                print("settings centre offset             dx=\(dx) dy=\(dy) size=\(Int(settings.frame.width))x\(Int(settings.frame.height))")
+                settings.close()
+            } else {
+                print("settings centre offset             settings window not found")
+            }
+        }
+
         await step("⌘W in tab 1", [("w", 13, [.command])])
     }
 
