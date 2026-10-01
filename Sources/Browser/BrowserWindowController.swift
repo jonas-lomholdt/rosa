@@ -110,7 +110,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSTex
     }
 
     private func reloadTabStrip() {
-        let items = tabs.map { TabItem(title: $0.title, paneCount: $0.panes.count) }
+        let items = tabs.map { TabItem(title: $0.title, paneCount: $0.panes.count, favicon: $0.favicon) }
         contentRoot.tabStrip.update(items: items, selectedIndex: selectedIndex)
     }
 
@@ -253,6 +253,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSTex
 
     private func syncSharedAddressField() {
         let field = contentRoot.header.addressField
+        contentRoot.header.icon = focusedPane?.favicon
         if field.currentEditor() == nil {
             field.stringValue = focusedPane?.displayURL ?? ""
         }

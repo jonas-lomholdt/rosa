@@ -10,6 +10,7 @@ protocol TabStripDelegate: AnyObject {
 struct TabItem {
     var title: String
     var paneCount: Int
+    var favicon: NSImage?
 }
 
 /// The tab list. Lays out as a row in the title bar (horizontal) or as a sidebar (vertical).
@@ -153,6 +154,7 @@ private final class TabItemView: NSView {
     var onSelect: (() -> Void)?
     var onClose: (() -> Void)?
 
+    private let iconView = FaviconView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let paneBadge = NSTextField(labelWithString: "")
     private let closeButton: NSButton
@@ -184,6 +186,7 @@ private final class TabItemView: NSView {
         selectionGlass.isHidden = true
 
         addSubview(selectionGlass)
+        addSubview(iconView)
         addSubview(titleLabel)
         addSubview(paneBadge)
         addSubview(closeButton)
@@ -196,6 +199,7 @@ private final class TabItemView: NSView {
 
     func configure(_ item: TabItem, selected: Bool) {
         titleLabel.stringValue = item.title
+        if iconView.favicon !== item.favicon { iconView.favicon = item.favicon }
         toolTip = item.title
         paneBadge.stringValue = item.paneCount > 1 ? "▦ \(item.paneCount)" : ""
         paneBadge.isHidden = item.paneCount <= 1
@@ -228,10 +232,11 @@ private final class TabItemView: NSView {
             )
             trailing = paneBadge.frame.minX - 4
         }
+        iconView.frame = NSRect(x: 10, y: ((bounds.height - 16) / 2).rounded(), width: 16, height: 16)
         let titleHeight = titleLabel.intrinsicContentSize.height
         titleLabel.frame = NSRect(
-            x: 10, y: (bounds.height - titleHeight) / 2,
-            width: max(0, trailing - 10), height: titleHeight
+            x: 32, y: (bounds.height - titleHeight) / 2,
+            width: max(0, trailing - 32), height: titleHeight
         )
     }
 

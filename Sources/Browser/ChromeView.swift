@@ -51,6 +51,7 @@ final class GlassAddressBar: NSView {
     static let height: CGFloat = 28
 
     let field = AddressField()
+    private let iconView = FaviconView()
     private let glass = NSGlassEffectView()
     private let content = NSView()
 
@@ -58,20 +59,49 @@ final class GlassAddressBar: NSView {
         super.init(frame: frameRect)
         glass.cornerRadius = Self.height / 2
         glass.contentView = content
+        content.addSubview(iconView)
         content.addSubview(field)
         addSubview(glass)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
+    var icon: NSImage? {
+        get { iconView.favicon }
+        set { iconView.favicon = newValue }
+    }
+
     override func layout() {
         super.layout()
         glass.frame = bounds
         content.frame = glass.bounds
         let fieldHeight = field.intrinsicContentSize.height
+        iconView.frame = NSRect(x: 10, y: ((bounds.height - 16) / 2).rounded(), width: 16, height: 16)
         field.frame = NSRect(
-            x: 12, y: ((bounds.height - fieldHeight) / 2).rounded(),
-            width: max(0, bounds.width - 24), height: fieldHeight
+            x: 32, y: ((bounds.height - fieldHeight) / 2).rounded(),
+            width: max(0, bounds.width - 44), height: fieldHeight
         )
     }
+}
+
+/// 16pt image view showing a favicon, or a tinted globe placeholder.
+final class FaviconView: NSImageView {
+    var favicon: NSImage? {
+        didSet { showFavicon() }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        imageScaling = .scaleProportionallyUpOrDown
+        showFavicon()
+    }
+
+    private func showFavicon() {
+        image = favicon ?? FaviconStore.placeholder
+        contentTintColor = favicon == nil ? .secondaryLabelColor : nil
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

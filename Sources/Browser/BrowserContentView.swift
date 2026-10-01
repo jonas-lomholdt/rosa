@@ -10,6 +10,11 @@ final class HeaderView: ChromeView {
 
     var addressField: AddressField { addressBar.field }
 
+    var icon: NSImage? {
+        get { addressBar.icon }
+        set { addressBar.icon = newValue }
+    }
+
     var showsAddressField = false {
         didSet {
             addressBar.isHidden = !showsAddressField

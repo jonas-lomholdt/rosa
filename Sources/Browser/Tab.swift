@@ -13,5 +13,7 @@ final class Tab {
 
     var panes: [PaneView] { container.paneLeaves }
 
+    var favicon: NSImage? { (focusedPane ?? panes.first)?.favicon }
+
     var title: String { (focusedPane ?? panes.first)?.displayTitle ?? "New Tab" }
 }

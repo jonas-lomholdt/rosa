@@ -68,6 +68,15 @@ enum SelfTest {
         await step("horizontal + shared")
         snapshot(controller, to: outputDir.appendingPathComponent("4-horizontal-shared.png"))
         Settings.addressBarMode = .perPane
+        for site in ["https://github.com", "https://www.apple.com", "https://news.ycombinator.com"] {
+            controller.focusedPane?.load(site)
+            var icon: NSImage?
+            for _ in 0..<40 where icon == nil {
+                await pause(0.5)
+                icon = controller.focusedPane?.favicon
+            }
+            print("favicon \(site): \(icon.map { "ok \($0.representations.first.map { "\($0.pixelsWide)px" } ?? "")" } ?? "MISSING")")
+        }
         await step("⌘W in tab 1", [("w", 13, [.command])])
     }
 

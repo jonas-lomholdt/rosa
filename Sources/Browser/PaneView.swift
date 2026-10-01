@@ -50,6 +50,16 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate, NSTextFieldDel
         didSet { addressBar.isHidden = !showsAddressBar; needsLayout = true }
     }
 
+    private(set) var favicon: NSImage? {
+        didSet {
+            guard favicon !== oldValue else { return }
+            addressBar.icon = favicon
+            delegate?.paneDidChangeState(self)
+        }
+    }
+    /// Bumped on every navigation so a slow favicon fetch can't overwrite a newer page's icon.
+    private var faviconGeneration = 0
+
     var highlight: Highlight = .none {
         didSet { overlay.highlight = highlight }
     }
@@ -180,6 +190,20 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate, NSTextFieldDel
     }
 
     // MARK: - WKNavigationDelegate
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        faviconGeneration += 1
+        favicon = FaviconStore.shared.cachedIcon(forHost: webView.url?.host())
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        let generation = faviconGeneration
+        Task {
+            let icon = await FaviconStore.shared.icon(for: webView)
+            guard generation == faviconGeneration, let icon else { return }
+            favicon = icon
+        }
+    }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
         if let url = navigationAction.request.url,
