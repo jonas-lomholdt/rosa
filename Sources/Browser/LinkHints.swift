@@ -309,6 +309,19 @@ enum LinkHints {
               if (type === 'keyup') swallowed.delete(event.code);
             }, true);
           }
+          // Tell the app what's under the pointer, for the context menu's download items.
+          window.addEventListener('contextmenu', event => {
+            const el = event.target instanceof Element ? event.target : event.target.parentElement;
+            if (!el) return;
+            const image = el.closest('img'), link = el.closest('a[href]'), media = el.closest('video, audio');
+            post({
+              action: 'contextTarget',
+              image: image ? (image.currentSrc || image.src) : null,
+              link: link ? link.href : null,
+              media: media ? (media.currentSrc || media.src || (media.querySelector('source') || {}).src || null) : null,
+            });
+          }, true);
+
           for (const type of ['scroll', 'resize', 'blur', 'mousedown']) {
             window.addEventListener(type, () => {
               if (state && state.global) post({ action: 'cancel' });
@@ -352,6 +365,9 @@ final class LinkHintsRouter: NSObject, WKScriptMessageHandler {
             if let key = body["key"] as? String { pane.delegate?.pane(pane, typedHintKey: key) }
         case "cancel":
             pane.delegate?.paneCancelledHints(pane)
+        case "contextTarget":
+            func url(_ key: String) -> URL? { (body[key] as? String).flatMap(URL.init(string:)) }
+            pane.webView.contextTarget = .init(image: url("image"), link: url("link"), media: url("media"))
         default:
             break
         }

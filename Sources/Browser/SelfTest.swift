@@ -454,6 +454,32 @@ enum SelfTest {
                 if manager.items.first?.filename.hasSuffix(".zip") == true, manager.items.first?.state != .downloading { break }
             }
             print("zip attachment                     \(latest())")
+            // Context menu "Download Image": right-click target reported by the page script,
+            // then WebKit's menu item re-pointed by willOpenMenu.
+            pane.webView.loadHTMLString(
+                ##"<title>img</title><img id="i" src="https://github.com/favicon.ico" width="64" height="64">"##,
+                baseURL: URL(string: "https://example.com/")
+            )
+            await pause(2)
+            _ = try? await pane.webView.evaluateJavaScript(
+                "document.getElementById('i').dispatchEvent(new MouseEvent('contextmenu', {bubbles: true}))"
+            )
+            await pause(0.5)
+            let menu = NSMenu()
+            let item = NSMenuItem(title: "Download Image", action: nil, keyEquivalent: "")
+            item.identifier = NSUserInterfaceItemIdentifier("WKMenuItemIdentifierDownloadImage")
+            menu.addItem(item)
+            if let event = NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                              windowNumber: controller.window?.windowNumber ?? 0, context: nil,
+                                              eventNumber: 0, clickCount: 1, pressure: 1) {
+                pane.webView.willOpenMenu(menu, with: event)
+            }
+            if let action = item.action { NSApp.sendAction(action, to: item.target, from: item) }
+            for _ in 0..<20 {
+                await pause(0.5)
+                if manager.items.first?.filename == "favicon.ico", manager.items.first?.state != .downloading { break }
+            }
+            print("context menu Download Image        target=\(pane.webView.contextTarget.image?.absoluteString ?? "-") \(latest())")
             print("downloads folder                   \(manager.downloadsFolder.path)")
         }
 

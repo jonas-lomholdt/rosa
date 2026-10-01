@@ -33,11 +33,51 @@ protocol PaneViewDelegate: AnyObject {
 /// WKWebView that reports when it gains keyboard focus, so the window can track the focused pane.
 final class BrowserWebView: WKWebView {
     var onFocus: (() -> Void)?
+    /// Called with downloads started from the context menu.
+    var onDownload: ((WKDownload) -> Void)?
+
+    /// What was under the pointer at the last right-click (reported by the page script).
+    struct ContextTarget {
+        var image: URL?
+        var link: URL?
+        var media: URL?
+    }
+
+    var contextTarget = ContextTarget()
 
     override func becomeFirstResponder() -> Bool {
         let accepted = super.becomeFirstResponder()
         if accepted { onFocus?() }
         return accepted
+    }
+
+    // MARK: - Context menu downloads
+
+    /// WebKit's own "Download Image / Linked File / Video" items only work with a private
+    /// download delegate, so they're re-pointed to start a regular WKDownload.
+    override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        super.willOpenMenu(menu, with: event)
+        for item in menu.items {
+            guard let url = downloadURL(for: item) else { continue }
+            item.target = self
+            item.action = #selector(downloadContextItem(_:))
+            item.representedObject = url
+        }
+    }
+
+    private func downloadURL(for item: NSMenuItem) -> URL? {
+        let key = (item.identifier?.rawValue ?? "") + " " + item.title
+        if key.contains("DownloadImage") || item.title == "Download Image" { return contextTarget.image }
+        if key.contains("DownloadLinkedFile") || item.title == "Download Linked File" { return contextTarget.link }
+        if key.contains("DownloadMedia") || ["Download Video", "Download Audio"].contains(item.title) { return contextTarget.media }
+        return nil
+    }
+
+    @objc func downloadContextItem(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        startDownload(using: URLRequest(url: url)) { [weak self] download in
+            self?.onDownload?(download)
+        }
     }
 }
 
@@ -96,6 +136,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         // Enables Web Inspector ("Inspect Element" in the context menu, and Safari's Develop menu).
         webView.isInspectable = true
         webView.onFocus = { [weak self] in self.map { $0.delegate?.paneDidBecomeFocused($0) } }
+        webView.onDownload = { [weak self] download in self.map { $0.delegate?.pane($0, didStartDownload: download) } }
 
         addressField.onFocus = { [weak self] in self.map { $0.delegate?.paneDidBecomeFocused($0) } }
         addressField.onSubmit = { [weak self] text in
