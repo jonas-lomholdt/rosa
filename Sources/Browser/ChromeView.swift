@@ -31,7 +31,7 @@ final class GlassAddressBar: NSView {
     var onShieldClick: (() -> Void)?
     private let iconView = FaviconView()
     private let shieldButton = NSButton()
-    private let glass = BrowserGlassView()
+    private let glass = NSGlassEffectView()
     private let content = NSView()
 
     var shieldState: ShieldState = .hidden {
@@ -112,20 +112,4 @@ final class FaviconView: NSImageView {
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
     override var mouseDownCanMoveWindow: Bool { false }
-}
-
-/// Liquid Glass that follows Settings → Appearance → Glass (clear or regular), live.
-final class BrowserGlassView: NSGlassEffectView {
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        style = Settings.glassStyle.effectStyle
-        // Selector-based observers are removed automatically when the view is deallocated.
-        NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: Settings.didChange, object: nil)
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-    @objc private func settingsChanged() {
-        style = Settings.glassStyle.effectStyle
-    }
 }

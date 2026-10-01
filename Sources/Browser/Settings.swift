@@ -32,21 +32,6 @@ enum LinkTarget: String, CaseIterable {
     case pane
 }
 
-/// Liquid Glass style for chrome (address bars, sidebar, find bar, suggestions).
-enum GlassStyle: String, CaseIterable {
-    /// More transparent, less tint.
-    case clear
-    /// Frosted and tinted (system default).
-    case regular
-
-    var effectStyle: NSGlassEffectView.Style {
-        switch self {
-        case .clear: .clear
-        case .regular: .regular
-        }
-    }
-}
-
 enum SearchEngine: String, CaseIterable {
     case google, duckDuckGo, bing, kagi, ecosia
 
@@ -96,11 +81,6 @@ enum Settings {
     static var sidebarAutoHide: Bool {
         get { defaults.bool(forKey: "sidebarAutoHide") }
         set { defaults.set(newValue, forKey: "sidebarAutoHide"); notify() }
-    }
-
-    static var glassStyle: GlassStyle {
-        get { defaults.string(forKey: "glassStyle").flatMap(GlassStyle.init) ?? .clear }
-        set { defaults.set(newValue.rawValue, forKey: "glassStyle"); notify() }
     }
 
     static var appearance: AppearanceMode {

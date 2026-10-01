@@ -10,7 +10,7 @@ final class FindBar: NSView, NSTextFieldDelegate {
     var onClose: (() -> Void)?
 
     let field = NSTextField()
-    private let glass = BrowserGlassView()
+    private let glass = NSGlassEffectView()
     private let content = NSView()
     private let statusLabel = NSTextField(labelWithString: "")
     private lazy var previousButton = makeButton("chevron.up", "Previous match (⇧⌘G)", #selector(previousClicked))
