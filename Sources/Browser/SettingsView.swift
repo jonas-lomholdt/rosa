@@ -10,6 +10,9 @@ final class SettingsModel: ObservableObject {
     @Published var addressBarMode: AddressBarMode {
         didSet { if Settings.addressBarMode != addressBarMode { Settings.addressBarMode = addressBarMode } }
     }
+    @Published var glassStyle: GlassStyle {
+        didSet { if Settings.glassStyle != glassStyle { Settings.glassStyle = glassStyle } }
+    }
     @Published var appearance: AppearanceMode {
         didSet { if Settings.appearance != appearance { Settings.appearance = appearance } }
     }
@@ -61,6 +64,7 @@ final class SettingsModel: ObservableObject {
         tabLayout = Settings.tabLayout
         addressBarMode = Settings.addressBarMode
         appearance = Settings.appearance
+        glassStyle = Settings.glassStyle
         searchEngine = Settings.searchEngine
         linkTarget = Settings.linkTarget
         sidebarAutoHide = Settings.sidebarAutoHide
@@ -97,6 +101,7 @@ final class SettingsModel: ObservableObject {
         tabLayout = Settings.tabLayout
         addressBarMode = Settings.addressBarMode
         appearance = Settings.appearance
+        glassStyle = Settings.glassStyle
         searchEngine = Settings.searchEngine
         linkTarget = Settings.linkTarget
         sidebarAutoHide = Settings.sidebarAutoHide
@@ -167,6 +172,11 @@ struct SettingsView: View {
                     Text("System").tag(AppearanceMode.system)
                     Text("Light").tag(AppearanceMode.light)
                     Text("Dark").tag(AppearanceMode.dark)
+                }
+                .pickerStyle(.segmented)
+                Picker("Glass", selection: $model.glassStyle) {
+                    Text("Clear").tag(GlassStyle.clear)
+                    Text("Regular").tag(GlassStyle.regular)
                 }
                 .pickerStyle(.segmented)
                 ColorPicker("Find highlight colour", selection: model.findHighlightColorBinding, supportsOpacity: false)

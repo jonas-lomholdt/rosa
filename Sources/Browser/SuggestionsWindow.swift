@@ -18,7 +18,7 @@ final class SuggestionsWindow {
     var isVisible: Bool { panel.isVisible }
 
     private let panel: NSPanel
-    private let glass = NSGlassEffectView()
+    private let glass = BrowserGlassView()
     private let content = FlippedView()
     private var rows: [SuggestionRowView] = []
 

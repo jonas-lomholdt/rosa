@@ -288,7 +288,6 @@ private final class TabItemView: NSView {
     private let titleLabel = NonDraggingLabel(labelWithString: "")
     private let paneBadge = NonDraggingLabel(labelWithString: "")
     private let closeButton: NSButton
-    private let selectionGlass = NonDraggingGlassView()
     private var isSelected = false
     private var isHovered = false { didSet { updateAppearance() } }
     private var trackingArea: NSTrackingArea?
@@ -312,10 +311,7 @@ private final class TabItemView: NSView {
         closeButton.target = self
         closeButton.action = #selector(closeClicked(_:))
 
-        selectionGlass.cornerRadius = 10
-        selectionGlass.isHidden = true
 
-        addSubview(selectionGlass)
         addSubview(iconView)
         addSubview(titleLabel)
         addSubview(paneBadge)
@@ -349,13 +345,11 @@ private final class TabItemView: NSView {
     private func updateAppearance() {
         titleLabel.textColor = isSelected ? .labelColor : .secondaryLabelColor
         closeButton.isHidden = !(isHovered || isSelected)
-        selectionGlass.isHidden = !isSelected
         needsDisplay = true
     }
 
     override func layout() {
         super.layout()
-        selectionGlass.frame = bounds
         let closeSize: CGFloat = 16
         closeButton.frame = NSRect(
             x: bounds.width - closeSize - 6, y: (bounds.height - closeSize) / 2,
@@ -378,10 +372,31 @@ private final class TabItemView: NSView {
         )
     }
 
+    private static func isDark(_ appearance: NSAppearance) -> Bool {
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    }
+
+    private static let selectedFill = NSColor(name: nil) { appearance in
+        isDark(appearance) ? NSColor.white.withAlphaComponent(0.14) : NSColor.white.withAlphaComponent(0.75)
+    }
+
+    private static let selectedBorder = NSColor(name: nil) { appearance in
+        isDark(appearance) ? NSColor.white.withAlphaComponent(0.08) : NSColor.black.withAlphaComponent(0.06)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
-        guard isHovered, !isSelected else { return }
-        NSColor.labelColor.withAlphaComponent(0.06).setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 10, yRadius: 10).fill()
+        // Drawn rather than glass: glass casts a shadow that the tab list's clip view cuts off.
+        let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 10, yRadius: 10)
+        if isSelected {
+            Self.selectedFill.setFill()
+            shape.fill()
+            Self.selectedBorder.setStroke()
+            shape.lineWidth = 1
+            shape.stroke()
+        } else if isHovered {
+            NSColor.labelColor.withAlphaComponent(0.06).setFill()
+            shape.fill()
+        }
     }
 
     override func updateTrackingAreas() {
@@ -410,9 +425,5 @@ private final class TabItemView: NSView {
 }
 
 private final class NonDraggingLabel: NSTextField {
-    override var mouseDownCanMoveWindow: Bool { false }
-}
-
-private final class NonDraggingGlassView: NSGlassEffectView {
     override var mouseDownCanMoveWindow: Bool { false }
 }

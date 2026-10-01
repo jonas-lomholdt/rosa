@@ -84,7 +84,7 @@ final class BrowserContentView: NSView {
     var onSidebarResized: ((CGFloat) -> Void)?
 
     private let background = NSVisualEffectView()
-    private let sidebarGlass = NSGlassEffectView()
+    private let sidebarGlass = BrowserGlassView()
     private let resizeHandle = SidebarResizeHandle()
     private let edgeHotZone = HoverZoneView()
     private let sidebarHoverZone = HoverZoneView()
