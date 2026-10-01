@@ -292,6 +292,11 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            Section("About") {
+                LabeledContent("Rosa", value: AppInfo.version)
+                Link("github.com/jonas-lomholdt/rosa", destination: AppInfo.repositoryURL)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 500, height: 640)

@@ -11,7 +11,7 @@ jobs:
     # Rosa needs the macOS 26 SDK (Liquid Glass, WebKit 26 APIs).
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Toolchain
         run: |
@@ -24,7 +24,7 @@ jobs:
       - name: Package
         run: ditto -c -k --keepParent build/Rosa.app build/Rosa.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: Rosa
           path: build/Rosa.zip

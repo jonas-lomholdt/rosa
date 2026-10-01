@@ -58,6 +58,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         NSApp.appearance = Settings.appearance.nsAppearance
     }
 
+    @objc func showAbout(_ sender: Any?) {
+        let credits = NSMutableAttributedString(
+            string: "Tiny, keyboard-first browser with split panes.\n",
+            attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]
+        )
+        credits.append(NSAttributedString(
+            string: "github.com/jonas-lomholdt/rosa",
+            attributes: [.font: NSFont.systemFont(ofSize: 11), .link: AppInfo.repositoryURL]
+        ))
+        let centred = NSMutableParagraphStyle()
+        centred.alignment = .center
+        credits.addAttribute(.paragraphStyle, value: centred, range: NSRange(location: 0, length: credits.length))
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+        NSApp.activate()
+    }
+
     @objc func showSettings(_ sender: Any?) {
         if settingsWindow == nil {
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
@@ -141,7 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let main = NSMenu()
 
         let appMenu = submenu("Rosa", in: main)
-        appMenu.addItem(item("About Rosa", #selector(NSApplication.orderFrontStandardAboutPanel(_:))))
+        appMenu.addItem(item("About Rosa", #selector(showAbout(_:))))
         appMenu.addItem(.separator())
         appMenu.addItem(item("Settings…", #selector(showSettings(_:)), ","))
         appMenu.addItem(.separator())

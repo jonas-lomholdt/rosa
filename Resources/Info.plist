@@ -22,6 +22,8 @@
     <string>26.0</string>
     <key>LSFileQuarantineEnabled</key>
     <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>© 2026 Jonas Lomholdt · MIT License</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSHighResolutionCapable</key>

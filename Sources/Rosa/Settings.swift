@@ -56,6 +56,18 @@ enum SearchEngine: String, CaseIterable {
     }
 }
 
+enum AppInfo {
+    static let repositoryURL = URL(string: "https://github.com/jonas-lomholdt/rosa")!
+
+    /// "0.1.0 (12)" — marketing version and build number from Info.plist (set from the git tag on release).
+    static var version: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(short) (\(build))"
+    }
+}
+
 enum Settings {
     static let didChange = Notification.Name("BrowserSettingsDidChange")
 
