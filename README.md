@@ -44,15 +44,23 @@
 | `⌘,` | Settings |
 | `F12` / `⌘⌥I` | Web Inspector |
 
-## 🚀 Run it
+## 📦 Install
 
-Needs **macOS 26**. No Xcode required — the Command Line Tools are enough.
+```bash
+curl -fsSL https://raw.githubusercontent.com/jonas-lomholdt/rosa/main/scripts/install.sh | bash
+```
+
+Downloads the latest release into `/Applications` and opens it. Needs **macOS 26**.
+
+## 🚀 Build it yourself
+
+No Xcode required — the Command Line Tools are enough.
 
 ```bash
 scripts/build.sh release --run
 ```
 
-Or grab `Rosa-vX.Y.Z.zip` from [Releases](https://github.com/jonas-lomholdt/rosa/releases). It isn't notarised yet, so on first launch right-click **Rosa.app → Open** (or run `xattr -dr com.apple.quarantine Rosa.app`).
+Or grab `Rosa-vX.Y.Z.zip` from [Releases](https://github.com/jonas-lomholdt/rosa/releases) by hand. It isn't notarised yet, so on first launch right-click **Rosa.app → Open** (the install script handles this for you).
 
 ---
 
