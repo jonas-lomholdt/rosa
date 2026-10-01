@@ -34,7 +34,7 @@ final class BrowserWebView: WKWebView {
 }
 
 /// A leaf in the split tree: one web view plus its optional slim address bar.
-final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate, NSTextFieldDelegate {
+final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     enum Highlight { case none, focused, unfocused }
 
     static let cornerRadius: CGFloat = 10
@@ -82,9 +82,15 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate, NSTextFieldDel
         webView.onFocus = { [weak self] in self.map { $0.delegate?.paneDidBecomeFocused($0) } }
 
         addressField.onFocus = { [weak self] in self.map { $0.delegate?.paneDidBecomeFocused($0) } }
-        addressField.target = self
-        addressField.action = #selector(addressSubmitted(_:))
-        addressField.delegate = self
+        addressField.onSubmit = { [weak self] text in
+            self?.load(text)
+            self?.focusWebView()
+        }
+        addressField.onCancel = { [weak self] in
+            guard let self else { return }
+            addressField.stringValue = displayURL
+            focusWebView()
+        }
         progressLine.isHidden = true
 
         card.wantsLayer = true
@@ -152,18 +158,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate, NSTextFieldDel
         webView.uiDelegate = nil
         webView.onFocus = nil
         addressField.onFocus = nil
-    }
-
-    @objc private func addressSubmitted(_ sender: Any?) {
-        load(addressField.stringValue)
-        focusWebView()
-    }
-
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        guard commandSelector == #selector(NSResponder.cancelOperation(_:)) else { return false }
-        addressField.stringValue = displayURL
-        focusWebView()
-        return true
+        addressField.onSubmit = nil
+        addressField.onCancel = nil
     }
 
     // MARK: - Web view state
@@ -171,7 +167,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate, NSTextFieldDel
     private func observeWebView() {
         observations = [
             webView.observe(\.url) { [weak self] _, _ in MainActor.assumeIsolated { self?.pageStateChanged() } },
-            webView.observe(\.title) { [weak self] _, _ in MainActor.assumeIsolated { self?.pageStateChanged() } },
+            webView.observe(\.title) { [weak self] _, _ in MainActor.assumeIsolated { self?.titleChanged() } },
             webView.observe(\.estimatedProgress) { [weak self] _, _ in MainActor.assumeIsolated { self?.progressChanged() } },
             webView.observe(\.isLoading) { [weak self] _, _ in MainActor.assumeIsolated { self?.progressChanged() } },
         ]
@@ -184,6 +180,13 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate, NSTextFieldDel
         delegate?.paneDidChangeState(self)
     }
 
+    private func titleChanged() {
+        if let url = webView.url, let title = webView.title {
+            HistoryStore.shared.updateTitle(url: url, title: title)
+        }
+        pageStateChanged()
+    }
+
     private func progressChanged() {
         progressLine.isHidden = !webView.isLoading
         needsLayout = true
@@ -192,6 +195,9 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate, NSTextFieldDel
     // MARK: - WKNavigationDelegate
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        if let url = webView.url {
+            HistoryStore.shared.recordVisit(url: url, title: webView.title ?? "")
+        }
         faviconGeneration += 1
         favicon = FaviconStore.shared.cachedIcon(forHost: webView.url?.host())
     }

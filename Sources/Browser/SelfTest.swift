@@ -70,13 +70,48 @@ enum SelfTest {
         Settings.addressBarMode = .perPane
         for site in ["https://github.com", "https://www.apple.com", "https://news.ycombinator.com"] {
             controller.focusedPane?.load(site)
+            // Wait for this site's page to finish and its own icon to arrive (not the previous page's).
+            let host = URL(string: site)?.host()
             var icon: NSImage?
             for _ in 0..<40 where icon == nil {
                 await pause(0.5)
-                icon = controller.focusedPane?.favicon
+                guard let pane = controller.focusedPane, pane.webView.url?.host() == host, !pane.webView.isLoading else { continue }
+                icon = pane.favicon
             }
             print("favicon \(site): \(icon.map { "ok \($0.representations.first.map { "\($0.pixelsWide)px" } ?? "")" } ?? "MISSING")")
         }
+
+        // History + autocomplete. Run with BROWSER_HISTORY_DB set to a scratch database.
+        print("history: \(HistoryStore.shared.search("o", limit: 10).map(\.displayURL))")
+        func fieldState() -> String {
+            guard let field = controller.focusedPane?.addressField, let editor = field.currentEditor() else {
+                return "not editing"
+            }
+            let selected = (editor.string as NSString).substring(with: editor.selectedRange)
+            return "text=\"\(editor.string)\" selected=\"\(selected)\" suggestions=\(field.debugSuggestions)"
+        }
+        func type(_ label: String, _ keys: [(String, UInt16, NSEvent.ModifierFlags)]) async {
+            for (characters, keyCode, modifiers) in keys {
+                post(characters, keyCode: keyCode, modifiers: modifiers, window: controller.window)
+                await pause(0.2)
+            }
+            await pause(0.3)
+            print("\(label.padding(toLength: 34, withPad: " ", startingAt: 0)) \(fieldState())")
+        }
+        let arrowFlags: NSEvent.ModifierFlags = [.function, .numericPad]
+        controller.openLocation(nil)
+        await type("focus address bar", [])
+        await type("type 'gi'", [("g", 5, []), ("i", 34, [])])
+        await type("↓", [(arrow(NSDownArrowFunctionKey), 125, arrowFlags)])
+        await type("↑", [(up, 126, arrowFlags)])
+        await type("type 't'", [("t", 17, [])])
+        await type("⌫ (drops completion)", [("\u{7f}", 51, [])])
+        await type("type 'h'", [("h", 4, [])])
+        await type("↩", [("\r", 36, [])])
+        await pause(2)
+        print("loaded: \(controller.focusedPane?.webView.url?.absoluteString ?? "-")")
+        HistoryStore.shared.clear(since: Date().addingTimeInterval(-3600))
+        print("after clearing last hour: \(HistoryStore.shared.pageCount) pages")
         await step("⌘W in tab 1", [("w", 13, [.command])])
     }
 
@@ -92,7 +127,12 @@ enum SelfTest {
             windowNumber: window?.windowNumber ?? 0, context: nil, characters: characters,
             charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode
         ) else { return }
-        NSApp.postEvent(event, atStart: false)
+        if modifiers.intersection([.command, .control]).isEmpty {
+            // Plain typing goes straight to the window, so it works even when another app is active.
+            window?.sendEvent(event)
+        } else {
+            NSApp.postEvent(event, atStart: false)
+        }
     }
 
     private static func snapshot(_ controller: BrowserWindowController, to url: URL) {

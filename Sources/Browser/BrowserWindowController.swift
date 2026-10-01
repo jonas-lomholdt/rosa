@@ -2,7 +2,7 @@ import AppKit
 import WebKit
 
 /// One browser window: a list of tabs, each holding a split tree of panes.
-final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSTextFieldDelegate,
+final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     PaneViewDelegate, TabStripDelegate {
 
     enum Direction { case left, right, up, down }
@@ -40,9 +40,16 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSTex
         contentRoot.tabStrip.delegate = self
 
         let sharedField = contentRoot.header.addressField
-        sharedField.target = self
-        sharedField.action = #selector(sharedAddressSubmitted(_:))
-        sharedField.delegate = self
+        sharedField.onSubmit = { [weak self] text in
+            guard let pane = self?.focusedPane else { return }
+            pane.load(text)
+            pane.focusWebView()
+        }
+        sharedField.onCancel = { [weak self] in
+            guard let self else { return }
+            contentRoot.header.addressField.stringValue = focusedPane?.displayURL ?? ""
+            focusedPane?.focusWebView()
+        }
 
         settingsObserver = NotificationCenter.default.addObserver(
             forName: Settings.didChange, object: nil, queue: .main
@@ -273,19 +280,6 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSTex
         contentRoot.tabLayout = Settings.tabLayout
         contentRoot.showsSharedAddressBar = !perPane
         syncSharedAddressField()
-    }
-
-    @objc private func sharedAddressSubmitted(_ sender: Any?) {
-        guard let pane = focusedPane else { return }
-        pane.load(contentRoot.header.addressField.stringValue)
-        pane.focusWebView()
-    }
-
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        guard commandSelector == #selector(NSResponder.cancelOperation(_:)) else { return false }
-        contentRoot.header.addressField.stringValue = focusedPane?.displayURL ?? ""
-        focusedPane?.focusWebView()
-        return true
     }
 
     // MARK: - Menu actions

@@ -16,14 +16,27 @@ final class SettingsModel: ObservableObject {
     @Published var searchEngine: SearchEngine {
         didSet { if Settings.searchEngine != searchEngine { Settings.searchEngine = searchEngine } }
     }
+    @Published var historyEnabled: Bool {
+        didSet { if Settings.historyEnabled != historyEnabled { Settings.historyEnabled = historyEnabled } }
+    }
+    @Published private(set) var historyPageCount = 0
+    @Published var confirmingClear = false
 
     private var observer: NSObjectProtocol?
+    private var historyObserver: NSObjectProtocol?
 
     init() {
         tabLayout = Settings.tabLayout
         addressBarMode = Settings.addressBarMode
         appearance = Settings.appearance
         searchEngine = Settings.searchEngine
+        historyEnabled = Settings.historyEnabled
+        historyPageCount = HistoryStore.shared.pageCount
+        historyObserver = NotificationCenter.default.addObserver(
+            forName: HistoryStore.didChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.historyPageCount = HistoryStore.shared.pageCount }
+        }
         observer = NotificationCenter.default.addObserver(
             forName: Settings.didChange, object: nil, queue: .main
         ) { [weak self] _ in
@@ -36,10 +49,17 @@ final class SettingsModel: ObservableObject {
         addressBarMode = Settings.addressBarMode
         appearance = Settings.appearance
         searchEngine = Settings.searchEngine
+        historyEnabled = Settings.historyEnabled
+    }
+
+    func clearHistory(since date: Date?) {
+        HistoryStore.shared.clear(since: date)
     }
 }
 
 struct SettingsView: View {
+    // Note: avoid @State and other macro-based SwiftUI APIs; the Command Line Tools ship
+    // without SwiftUI's macro plugins. Keep view state in SettingsModel instead.
     @StateObject private var model = SettingsModel()
 
     var body: some View {
@@ -77,6 +97,26 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section {
+                Toggle("Remember browsing history", isOn: $model.historyEnabled)
+                LabeledContent("\(model.historyPageCount) pages in history") {
+                    Button("Clear History…") { model.confirmingClear = true }
+                        .disabled(model.historyPageCount == 0)
+                }
+            } header: {
+                Text("History")
+            } footer: {
+                Text("History powers address bar suggestions. It never leaves this Mac.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .confirmationDialog("Clear browsing history?", isPresented: $model.confirmingClear) {
+                Button("Last Hour", role: .destructive) { model.clearHistory(since: Date().addingTimeInterval(-3600)) }
+                Button("Today", role: .destructive) { model.clearHistory(since: Calendar.current.startOfDay(for: Date())) }
+                Button("All History", role: .destructive) { model.clearHistory(since: nil) }
+                Button("Cancel", role: .cancel) {}
+            }
+
             Section("Search") {
                 Picker("Search engine", selection: $model.searchEngine) {
                     ForEach(SearchEngine.allCases, id: \.self) { engine in
@@ -86,6 +126,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 400)
+        .frame(width: 480, height: 520)
     }
 }

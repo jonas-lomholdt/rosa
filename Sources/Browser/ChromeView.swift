@@ -18,34 +18,6 @@ class ChromeView: NSView {
     }
 }
 
-/// Borderless text field used inside a `GlassAddressBar`.
-final class AddressField: NSTextField {
-    var onFocus: (() -> Void)?
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        placeholderString = "Search or enter address"
-        isBezeled = false
-        isBordered = false
-        drawsBackground = false
-        focusRingType = .none
-        font = .systemFont(ofSize: 13)
-        lineBreakMode = .byTruncatingTail
-        usesSingleLineMode = true
-        cell?.isScrollable = true
-        cell?.wraps = false
-        cell?.sendsActionOnEndEditing = false
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-    override func becomeFirstResponder() -> Bool {
-        let accepted = super.becomeFirstResponder()
-        if accepted { onFocus?() }
-        return accepted
-    }
-}
-
 /// A Liquid Glass capsule holding an address field.
 final class GlassAddressBar: NSView {
     static let height: CGFloat = 28
