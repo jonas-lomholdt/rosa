@@ -402,6 +402,10 @@ enum SelfTest {
                     pressure: type == .leftMouseUp ? 0 : 1
                 )
             }
+            if let pane = controller.focusedPane {
+                let paneFrame = pane.convert(pane.bounds, to: root), side = root.debugSidebarFrame
+                print("sidebar vs pane (top/bottom)       sidebar=\(Int(side.minY))/\(Int(side.maxY)) pane=\(Int(paneFrame.minY))/\(Int(paneFrame.maxY))")
+            }
             let handleX = root.debugSidebarFrame.maxX + 2
             print("sidebar width before               \(Int(Settings.sidebarWidth))")
             for event in [mouse(.leftMouseDown, x: handleX), mouse(.leftMouseDragged, x: 280), mouse(.leftMouseDragged, x: 300),

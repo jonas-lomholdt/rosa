@@ -222,17 +222,21 @@ final class BrowserContentView: NSView {
             let sidebarX = autoHide && !isSidebarRevealed ? -width : margin
 
             sidebarGlass.isHidden = false
-            sidebarGlass.frame = NSRect(x: sidebarX, y: margin, width: width - margin, height: bounds.height - margin * 2)
-            tabStrip.frame = sidebarGlass.frame
+            // The glass panel lines up with the panes (top of their address bars to their bottom);
+            // the strip's top row (+ and downloads) sits above it, beside the traffic lights.
+            let paneTop = HeaderView.height
+            sidebarGlass.frame = NSRect(x: sidebarX, y: paneTop, width: width - margin,
+                                        height: max(0, bounds.height - paneTop - margin))
+            tabStrip.frame = NSRect(x: sidebarX, y: 0, width: width - margin, height: bounds.height - margin)
             sidebarGlass.shadow = autoHide ? Self.floatingShadow : nil
 
             resizeHandle.isHidden = autoHide && !isSidebarRevealed
-            resizeHandle.frame = NSRect(x: sidebarGlass.frame.maxX - 2, y: margin, width: 8, height: sidebarGlass.frame.height)
+            resizeHandle.frame = NSRect(x: sidebarGlass.frame.maxX - 2, y: sidebarGlass.frame.minY, width: 8, height: sidebarGlass.frame.height)
 
             edgeHotZone.isHidden = !autoHide || isSidebarRevealed
             edgeHotZone.frame = NSRect(x: 0, y: HeaderView.height, width: 6, height: max(0, bounds.height - HeaderView.height))
             sidebarHoverZone.isHidden = !autoHide || !isSidebarRevealed
-            sidebarHoverZone.frame = sidebarGlass.frame.insetBy(dx: -margin, dy: -margin)
+            sidebarHoverZone.frame = tabStrip.frame.insetBy(dx: -margin, dy: -margin)
 
             header.isHidden = false
             header.leadingInset = autoHide ? Self.trafficLightInset : 0
