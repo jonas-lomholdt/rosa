@@ -64,4 +64,10 @@ Or grab `Rosa-vX.Y.Z.zip` from [Releases](https://github.com/jonas-lomholdt/rosa
 
 ---
 
+## 📄 License
+
+[MIT](LICENSE) — free to use, change and share, as long as you keep the copyright notice and credit **Jonas Lomholdt**.
+
+---
+
 <p align="center"><sub>Developer notes live in <a href="docs/DEVELOPMENT.md">docs/DEVELOPMENT.md</a>.</sub></p>
