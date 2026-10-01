@@ -165,7 +165,7 @@ enum SelfTest {
             controller.addTab().webView.loadHTMLString("<title>\(name)</title>", baseURL: nil)
         }
         await pause(1.5)
-        print("tabs before drag:                  \(controller.debugTabTitles)")
+        print("tabs before drag:                  \(controller.debugTabTitles) selected=\(controller.debugTabTitles[controller.selectedTabIndex])")
         func drag(from source: Int, to destination: Int) async {
             let centers = controller.debugTabCenters
             guard let window = controller.window, centers.indices.contains(source), centers.indices.contains(destination) else {
@@ -190,11 +190,11 @@ enum SelfTest {
             await pause(0.5)
         }
         await drag(from: 2, to: 4)
-        print("horizontal: drag 2 → 4             \(controller.debugTabTitles)")
+        print("horizontal: drag 2 → 4             \(controller.debugTabTitles) selected=\(controller.debugTabTitles[controller.selectedTabIndex])")
         Settings.tabLayout = .vertical
         await pause(0.5)
         await drag(from: 4, to: 0)
-        print("vertical: drag 4 → 0               \(controller.debugTabTitles)")
+        print("vertical: drag 4 → 0               \(controller.debugTabTitles) selected=\(controller.debugTabTitles[controller.selectedTabIndex])")
         Settings.tabLayout = .horizontal
 
         await step("⌘W in tab 1", [("w", 13, [.command])])

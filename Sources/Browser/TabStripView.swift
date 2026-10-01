@@ -70,11 +70,7 @@ final class TabStripView: ChromeView {
     func update(items: [TabItem], selectedIndex: Int) {
         while itemViews.count < items.count {
             let view = TabItemView()
-            view.onSelect = { [weak self, weak view] in
-                guard let self, let view, let index = self.itemViews.firstIndex(where: { $0 === view }) else { return }
-                self.delegate?.tabStrip(self, didSelectTabAt: index)
-            }
-            view.onDragStart = { [weak self, weak view] event in
+            view.onPress = { [weak self, weak view] event in
                 guard let self, let view else { return }
                 self.trackDrag(of: view, from: event)
             }
@@ -199,7 +195,13 @@ final class TabStripView: ChromeView {
             place(order, animated: true)
         }
 
-        guard dragging else { return }
+        guard dragging else {
+            // A plain click (no movement) selects; dragging leaves the selection alone.
+            if let index = itemViews.firstIndex(where: { $0 === view }) {
+                delegate?.tabStrip(self, didSelectTabAt: index)
+            }
+            return
+        }
         draggedView = nil
         dragOrder = nil
         view.isDragging = false
@@ -231,9 +233,9 @@ private final class TabListDocumentView: NSView {
 }
 
 private final class TabItemView: NSView {
-    var onSelect: (() -> Void)?
     var onClose: (() -> Void)?
-    var onDragStart: ((NSEvent) -> Void)?
+    /// Mouse-down on the tab; the strip decides whether it becomes a click or a drag.
+    var onPress: ((NSEvent) -> Void)?
 
     var isDragging = false {
         didSet {
@@ -363,8 +365,7 @@ private final class TabItemView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) {
-        onSelect?()
-        onDragStart?(event)
+        onPress?(event)
     }
 
     override func otherMouseUp(with event: NSEvent) {

@@ -32,6 +32,9 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         window.tabbingMode = .disallowed
         window.minSize = NSSize(width: 480, height: 320)
         window.isReleasedWhenClosed = false
+        // No automatic window dragging: macOS would otherwise grab clicks on tabs in the
+        // title-bar area before we see them. Empty chrome starts drags itself (ChromeView).
+        window.isMovable = false
         window.title = "New Tab"
         super.init(window: window)
 
