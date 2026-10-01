@@ -1,0 +1,34 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# App bundle produced by scripts/build.sh
+build/
+
+# Xcode (if the package is opened in Xcode)
+DerivedData/
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Local environment / secrets
+.env
+.env.*
