@@ -160,6 +160,43 @@ enum SelfTest {
             await pause(2)
             print("\(label.padding(toLength: 34, withPad: " ", startingAt: 0)) visible=\(controller.focusedPane?.isWebInspectorVisible ?? false)")
         }
+        // Tab reordering by dragging: horizontal strip, then vertical sidebar.
+        for name in ["T1", "T2", "T3"] {
+            controller.addTab().webView.loadHTMLString("<title>\(name)</title>", baseURL: nil)
+        }
+        await pause(1.5)
+        print("tabs before drag:                  \(controller.debugTabTitles)")
+        func drag(from source: Int, to destination: Int) async {
+            let centers = controller.debugTabCenters
+            guard let window = controller.window, centers.indices.contains(source), centers.indices.contains(destination) else {
+                return print("drag: bad indices")
+            }
+            let start = centers[source], end = centers[destination]
+            func mouse(_ type: NSEvent.EventType, _ point: NSPoint) -> NSEvent? {
+                NSEvent.mouseEvent(
+                    with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                    pressure: type == .leftMouseUp ? 0 : 1
+                )
+            }
+            // The tracking loop pulls drags/up from the queue, so queue them before the mouse-down.
+            for step in 1...10 {
+                let t = CGFloat(step) / 10
+                let point = NSPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t)
+                if let event = mouse(.leftMouseDragged, point) { NSApp.postEvent(event, atStart: false) }
+            }
+            if let up = mouse(.leftMouseUp, end) { NSApp.postEvent(up, atStart: false) }
+            if let down = mouse(.leftMouseDown, start) { window.sendEvent(down) }
+            await pause(0.5)
+        }
+        await drag(from: 2, to: 4)
+        print("horizontal: drag 2 → 4             \(controller.debugTabTitles)")
+        Settings.tabLayout = .vertical
+        await pause(0.5)
+        await drag(from: 4, to: 0)
+        print("vertical: drag 4 → 0               \(controller.debugTabTitles)")
+        Settings.tabLayout = .horizontal
+
         await step("⌘W in tab 1", [("w", 13, [.command])])
     }
 

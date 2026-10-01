@@ -5,6 +5,7 @@ protocol TabStripDelegate: AnyObject {
     func tabStrip(_ strip: TabStripView, didSelectTabAt index: Int)
     func tabStrip(_ strip: TabStripView, didCloseTabAt index: Int)
     func tabStripDidRequestNewTab(_ strip: TabStripView)
+    func tabStrip(_ strip: TabStripView, didMoveTabFrom source: Int, to destination: Int)
 }
 
 struct TabItem {
@@ -35,6 +36,11 @@ final class TabStripView: ChromeView {
     private let newTabButton: NSButton
     private var itemViews: [TabItemView] = []
     private var selectedIndex = 0
+    /// Where each tab sits, in document-view coordinates, in display order.
+    private var slots: [NSRect] = []
+    /// Visual order while a tab is being dragged (nil otherwise).
+    private var dragOrder: [TabItemView]?
+    private weak var draggedView: TabItemView?
 
     override init(frame frameRect: NSRect) {
         let plus = NSImage(systemSymbolName: "plus", accessibilityDescription: "New Tab") ?? NSImage()
@@ -67,6 +73,10 @@ final class TabStripView: ChromeView {
             view.onSelect = { [weak self, weak view] in
                 guard let self, let view, let index = self.itemViews.firstIndex(where: { $0 === view }) else { return }
                 self.delegate?.tabStrip(self, didSelectTabAt: index)
+            }
+            view.onDragStart = { [weak self, weak view] event in
+                guard let self, let view else { return }
+                self.trackDrag(of: view, from: event)
             }
             view.onClose = { [weak self, weak view] in
                 guard let self, let view, let index = self.itemViews.firstIndex(where: { $0 === view }) else { return }
@@ -108,12 +118,11 @@ final class TabStripView: ChromeView {
             let available = scrollView.frame.width
             let count = CGFloat(max(itemViews.count, 1))
             let width = min(240, max(110, ((available - spacing * (count - 1)) / count).rounded(.down)))
-            var x: CGFloat = 0
-            for view in itemViews {
-                view.frame = NSRect(x: x, y: 5, width: width, height: scrollView.frame.height - 10)
-                x += width + spacing
+            let height = scrollView.frame.height
+            slots = itemViews.indices.map { index in
+                NSRect(x: CGFloat(index) * (width + spacing), y: 5, width: width, height: height - 10)
             }
-            documentView.frame = NSRect(x: 0, y: 0, width: max(available, x - spacing), height: scrollView.frame.height)
+            documentView.frame = NSRect(x: 0, y: 0, width: max(available, (slots.last?.maxX ?? 0)), height: height)
 
         case .vertical:
             let top = Self.horizontalHeight
@@ -123,16 +132,87 @@ final class TabStripView: ChromeView {
             )
             scrollView.frame = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
             let rowHeight: CGFloat = 30
-            var y: CGFloat = 4
-            for view in itemViews {
-                view.frame = NSRect(x: 8, y: y, width: scrollView.frame.width - 16, height: rowHeight)
-                y += rowHeight + 2
+            let width = scrollView.frame.width
+            slots = itemViews.indices.map { index in
+                NSRect(x: 8, y: 4 + CGFloat(index) * (rowHeight + 2), width: width - 16, height: rowHeight)
             }
             documentView.frame = NSRect(
-                x: 0, y: 0, width: scrollView.frame.width,
-                height: max(scrollView.contentSize.height, y + 4)
+                x: 0, y: 0, width: width,
+                height: max(scrollView.contentSize.height, (slots.last?.maxY ?? 0) + 4)
             )
         }
+        place(dragOrder ?? itemViews)
+    }
+
+    /// Puts tabs into their slots in the given order. The dragged tab follows the mouse instead.
+    private func place(_ order: [TabItemView], animated: Bool = false) {
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = animated ? 0.15 : 0
+            context.allowsImplicitAnimation = animated
+            for (view, slot) in zip(order, slots) where view !== draggedView {
+                if animated { view.animator().frame = slot } else { view.frame = slot }
+            }
+        }
+    }
+
+    // MARK: - Reordering
+
+    /// Runs a mouse-tracking loop after a tab is pressed. Moving more than a few points
+    /// starts a drag: the tab follows the mouse along the strip and the others make room.
+    private func trackDrag(of view: TabItemView, from mouseDown: NSEvent) {
+        guard let window, let startIndex = itemViews.firstIndex(where: { $0 === view }),
+              slots.indices.contains(startIndex) else { return }
+        let horizontal = tabLayout == .horizontal
+        let start = documentView.convert(mouseDown.locationInWindow, from: nil)
+        let origin = slots[startIndex]
+        var target = startIndex
+        var dragging = false
+
+        while let event = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]),
+              event.type == .leftMouseDragged {
+            let point = documentView.convert(event.locationInWindow, from: nil)
+            let delta = horizontal ? point.x - start.x : point.y - start.y
+            if !dragging {
+                guard abs(delta) > 4 else { continue }
+                dragging = true
+                draggedView = view
+                view.isDragging = true
+                documentView.addSubview(view, positioned: .above, relativeTo: nil)
+            }
+
+            var frame = origin
+            if horizontal {
+                frame.origin.x = min(max(origin.minX + delta, slots[0].minX), slots[slots.count - 1].minX)
+            } else {
+                frame.origin.y = min(max(origin.minY + delta, slots[0].minY), slots[slots.count - 1].minY)
+            }
+            view.frame = frame
+
+            let center = horizontal ? frame.midX : frame.midY
+            target = slots.indices.min {
+                abs(center - (horizontal ? slots[$0].midX : slots[$0].midY))
+                    < abs(center - (horizontal ? slots[$1].midX : slots[$1].midY))
+            } ?? startIndex
+            var order = itemViews.filter { $0 !== view }
+            order.insert(view, at: target)
+            dragOrder = order
+            place(order, animated: true)
+        }
+
+        guard dragging else { return }
+        draggedView = nil
+        dragOrder = nil
+        view.isDragging = false
+        itemViews.insert(itemViews.remove(at: startIndex), at: target)
+        place(itemViews, animated: true)
+        if target != startIndex {
+            delegate?.tabStrip(self, didMoveTabFrom: startIndex, to: target)
+        }
+    }
+
+    /// Tab centres in window coordinates, for the self-test.
+    var debugTabCenters: [NSPoint] {
+        itemViews.map { $0.convert(NSPoint(x: $0.bounds.midX, y: $0.bounds.midY), to: nil) }
     }
 
     @objc private func newTabClicked(_ sender: Any?) {
@@ -153,6 +233,19 @@ private final class TabListDocumentView: NSView {
 private final class TabItemView: NSView {
     var onSelect: (() -> Void)?
     var onClose: (() -> Void)?
+    var onDragStart: ((NSEvent) -> Void)?
+
+    var isDragging = false {
+        didSet {
+            alphaValue = isDragging ? 0.85 : 1
+            shadow = isDragging ? {
+                let shadow = NSShadow()
+                shadow.shadowBlurRadius = 8
+                shadow.shadowColor = NSColor.black.withAlphaComponent(0.25)
+                return shadow
+            }() : nil
+        }
+    }
 
     private let iconView = FaviconView()
     private let titleLabel = NSTextField(labelWithString: "")
@@ -257,7 +350,12 @@ private final class TabItemView: NSView {
     override func mouseEntered(with event: NSEvent) { isHovered = true }
     override func mouseExited(with event: NSEvent) { isHovered = false }
 
-    override func mouseDown(with event: NSEvent) { onSelect?() }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        onSelect?()
+        onDragStart?(event)
+    }
 
     override func otherMouseUp(with event: NSEvent) {
         // Middle-click closes, like other browsers.

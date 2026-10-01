@@ -347,6 +347,20 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     func tabStrip(_ strip: TabStripView, didCloseTabAt index: Int) { closeTab(at: index) }
     func tabStripDidRequestNewTab(_ strip: TabStripView) { addTab() }
 
+    func tabStrip(_ strip: TabStripView, didMoveTabFrom source: Int, to destination: Int) {
+        guard tabs.indices.contains(source), tabs.indices.contains(destination) else { return }
+        let selected = selectedTab
+        tabs.insert(tabs.remove(at: source), at: destination)
+        if let selected, let index = tabs.firstIndex(where: { $0 === selected }) {
+            selectedIndex = index
+        }
+        reloadTabStrip()
+    }
+
+    /// For the self-test.
+    var debugTabTitles: [String] { tabs.map(\.title) }
+    var debugTabCenters: [NSPoint] { contentRoot.tabStrip.debugTabCenters }
+
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
