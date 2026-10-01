@@ -120,7 +120,7 @@ final class TabStripView: ChromeView {
             let width = min(240, max(110, ((available - spacing * (count - 1)) / count).rounded(.down)))
             let height = scrollView.frame.height
             slots = itemViews.indices.map { index in
-                NSRect(x: CGFloat(index) * (width + spacing), y: 5, width: width, height: height - 10)
+                NSRect(x: CGFloat(index) * (width + spacing), y: 4, width: width, height: height - 8)
             }
             documentView.frame = NSRect(x: 0, y: 0, width: max(available, (slots.last?.maxX ?? 0)), height: height)
 
@@ -247,11 +247,13 @@ private final class TabItemView: NSView {
         }
     }
 
+    // Every subview opts out of window dragging: macOS builds the title-bar drag region from
+    // each view's `mouseDownCanMoveWindow`, so a plain label would make the tab drag the window.
     private let iconView = FaviconView()
-    private let titleLabel = NSTextField(labelWithString: "")
-    private let paneBadge = NSTextField(labelWithString: "")
+    private let titleLabel = NonDraggingLabel(labelWithString: "")
+    private let paneBadge = NonDraggingLabel(labelWithString: "")
     private let closeButton: NSButton
-    private let selectionGlass = NSGlassEffectView()
+    private let selectionGlass = NonDraggingGlassView()
     private var isSelected = false
     private var isHovered = false { didSet { updateAppearance() } }
     private var trackingArea: NSTrackingArea?
@@ -289,6 +291,14 @@ private final class TabItemView: NSView {
 
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
+
+    /// The whole tab handles clicks itself (except the close button), whatever is under the pointer.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = convert(point, from: superview)
+        guard bounds.contains(local) else { return nil }
+        if !closeButton.isHidden, closeButton.frame.contains(local) { return closeButton }
+        return self
+    }
 
     func configure(_ item: TabItem, selected: Bool) {
         titleLabel.stringValue = item.title
@@ -363,4 +373,12 @@ private final class TabItemView: NSView {
     }
 
     @objc private func closeClicked(_ sender: Any?) { onClose?() }
+}
+
+private final class NonDraggingLabel: NSTextField {
+    override var mouseDownCanMoveWindow: Bool { false }
+}
+
+private final class NonDraggingGlassView: NSGlassEffectView {
+    override var mouseDownCanMoveWindow: Bool { false }
 }

@@ -11,7 +11,12 @@ class ChromeView: NSView {
     override func mouseDown(with event: NSEvent) {
         guard dragsWindow, let window else { return super.mouseDown(with: event) }
         if event.clickCount == 2 {
-            window.performZoom(nil)
+            // Honour System Settings → Desktop & Dock → "Double-click a window's title bar to".
+            switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
+            case "Minimize": window.performMiniaturize(nil)
+            case "None": break
+            default: window.performZoom(nil)
+            }
         } else {
             window.performDrag(with: event)
         }
@@ -106,4 +111,5 @@ final class FaviconView: NSImageView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override var mouseDownCanMoveWindow: Bool { false }
 }
