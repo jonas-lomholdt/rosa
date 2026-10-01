@@ -19,6 +19,9 @@ final class SettingsModel: ObservableObject {
     @Published var linkHintColor: String {
         didSet { if Settings.linkHintColor != linkHintColor { Settings.linkHintColor = linkHintColor } }
     }
+    @Published var linkHintsAllPanes: Bool {
+        didSet { if Settings.linkHintsAllPanes != linkHintsAllPanes { Settings.linkHintsAllPanes = linkHintsAllPanes } }
+    }
     @Published var vimKeysEnabled: Bool {
         didSet { if Settings.vimKeysEnabled != vimKeysEnabled { Settings.vimKeysEnabled = vimKeysEnabled } }
     }
@@ -54,6 +57,7 @@ final class SettingsModel: ObservableObject {
         linkHintsEnabled = Settings.linkHintsEnabled
         linkHintColor = Settings.linkHintColor
         vimKeysEnabled = Settings.vimKeysEnabled
+        linkHintsAllPanes = Settings.linkHintsAllPanes
         historyEnabled = Settings.historyEnabled
         historyPageCount = HistoryStore.shared.pageCount
         adBlockEnabled = Settings.adBlockEnabled
@@ -86,6 +90,7 @@ final class SettingsModel: ObservableObject {
         linkHintsEnabled = Settings.linkHintsEnabled
         linkHintColor = Settings.linkHintColor
         vimKeysEnabled = Settings.vimKeysEnabled
+        linkHintsAllPanes = Settings.linkHintsAllPanes
         historyEnabled = Settings.historyEnabled
         adBlockEnabled = Settings.adBlockEnabled
         enabledFilterLists = Settings.enabledFilterLists
@@ -181,6 +186,8 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Link hints", isOn: $model.linkHintsEnabled)
+                Toggle("Show hints in all panes", isOn: $model.linkHintsAllPanes)
+                    .disabled(!model.linkHintsEnabled)
                 ColorPicker("Hint colour", selection: model.linkHintColorBinding, supportsOpacity: false)
                     .disabled(!model.linkHintsEnabled)
                 Toggle("Vim-style scrolling", isOn: $model.vimKeysEnabled)

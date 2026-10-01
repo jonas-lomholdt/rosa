@@ -20,7 +20,7 @@ scripts/build.sh release --run   # builds build/Browser.app and opens it
 | ⌃⇥ / ⌃⇧⇥, ⌘1–9 | Switch tabs |
 | ⌘L, ⌘R, ⌘[ / ⌘] | Address bar, reload, back / forward |
 | ⌘, | Settings (tab layout, address bar, search engine) |
-| f / ⇧F | Link hints: label clickable elements, type a label to click / open in background (`LinkHints.swift`) |
+| f / ⇧F | Link hints: label clickable elements, type a label to click / open in background (`LinkHints.swift`). With "all panes" on, `BrowserWindowController` runs one session across every pane in the tab |
 | j / k, h / l, gg / G | Vim-style scrolling (same injected script as link hints) |
 | ⌘F, ⌘G / ⌘⇧G | Find in page (`FindBar.swift`), next / previous |
 | F12 / ⌘⌥I | Toggle Web Inspector (also right-click → Inspect Element) |

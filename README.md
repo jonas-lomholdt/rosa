@@ -15,7 +15,7 @@
 
 - 🪟 **Split panes** — split any tab right or down, as many times as you like
 - 🧭 **Keyboard-first** — move between panes with arrow keys, like a terminal
-- 🔤 **Link hints** — press `f`, type the yellow label, and the link is clicked
+- 🔤 **Link hints** — press `f`, type the yellow label, and the link is clicked — across all panes at once
 - ⌨️ **Vim keys** — `hjkl` to scroll, `gg`/`G` for top and bottom (optional)
 - 🔍 **Find in page** — with a live match count
 - 🗂️ **Tabs** — horizontal, or a vertical sidebar

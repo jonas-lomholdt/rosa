@@ -110,6 +110,12 @@ enum Settings {
         set { defaults.set(newValue, forKey: "linkHintsEnabled"); notify() }
     }
 
+    /// `f` labels links in every pane of the tab, not just the focused one.
+    static var linkHintsAllPanes: Bool {
+        get { defaults.object(forKey: "linkHintsAllPanes") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "linkHintsAllPanes"); notify() }
+    }
+
     /// "#RRGGBB"
     static var linkHintColor: String {
         get { defaults.string(forKey: "linkHintColor") ?? "#FFD60A" }

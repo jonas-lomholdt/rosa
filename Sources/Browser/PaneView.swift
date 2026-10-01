@@ -24,6 +24,9 @@ protocol PaneViewDelegate: AnyObject {
     /// ⌘-click: open without taking focus.
     func pane(_ pane: PaneView, openLinkInBackground request: URLRequest)
     func pane(_ pane: PaneView, createWebViewWith configuration: WKWebViewConfiguration) -> WKWebView?
+    func paneRequestedHintsInAllPanes(_ pane: PaneView, background: Bool)
+    func pane(_ pane: PaneView, typedHintKey key: String)
+    func paneCancelledHints(_ pane: PaneView)
 }
 
 /// WKWebView that reports when it gains keyboard focus, so the window can track the focused pane.
@@ -313,6 +316,35 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     func showLinkHints(background: Bool = false) {
         focusWebView()
         LinkHints.start(in: webView, background: background)
+    }
+
+    // All-panes hint session (driven by BrowserWindowController).
+
+    func collectHintTargets() async -> Int {
+        await callHints("return window.__browserHints ? window.__browserHints.collect() : 0") as? Int ?? 0
+    }
+
+    func showHints(_ labels: [String], background: Bool) async {
+        _ = await callHints("window.__browserHints && window.__browserHints.show(labels, background)",
+                            ["labels": labels, "background": background])
+    }
+
+    func filterHints(_ typed: String) async -> (matches: Int, exact: Bool) {
+        let result = await callHints("return window.__browserHints ? window.__browserHints.filter(typed) : null",
+                                     ["typed": typed]) as? [String: Any]
+        return (result?["matches"] as? Int ?? 0, result?["exact"] as? Bool ?? false)
+    }
+
+    func activateHint(_ label: String) async {
+        _ = await callHints("window.__browserHints && window.__browserHints.activateLabel(label)", ["label": label])
+    }
+
+    func stopHints() async {
+        _ = await callHints("window.__browserHints && window.__browserHints.stop()")
+    }
+
+    private func callHints(_ body: String, _ arguments: [String: Any] = [:]) async -> Any? {
+        try? await webView.callAsyncJavaScript(body, arguments: arguments, in: nil, contentWorld: LinkHints.contentWorld)
     }
 
     func openLinkInBackground(_ url: URL) {

@@ -335,6 +335,49 @@ enum SelfTest {
             await pause(0.5)
             print("vim j while disabled               scrollY=\(await scrollY())")
             Settings.vimKeysEnabled = true
+
+            // Hints across panes: one session over a left and a right pane.
+            func paneLabels(of target: PaneView) async -> [String] {
+                await withCheckedContinuation { continuation in
+                    target.webView.evaluateJavaScript("window.__browserHints.debugLabels()", in: nil, in: LinkHints.contentWorld) {
+                        continuation.resume(returning: (try? $0.get()) as? [String] ?? [])
+                    }
+                }
+            }
+            let example = URL(string: "https://example.com/")
+            let left = controller.addTab()
+            left.webView.loadHTMLString(
+                ##"<title>left</title><a id="l1" href="#" onclick="document.title='left clicked';return false">L1</a> "##
+                    + ##"<a id="l2" href="#" onclick="return false">L2</a>"##,
+                baseURL: example
+            )
+            controller.splitRight(nil)
+            if let right = controller.focusedPane, right !== left {
+                right.webView.loadHTMLString(
+                    ##"<title>right</title><a id="r1" href="#" onclick="document.title='right clicked';return false">R1</a>"##,
+                    baseURL: example
+                )
+                await pause(1.5)
+                controller.focus(left)
+                await pause(0.3)
+                await press("f")
+                await pause(0.5)
+                let leftLabels = await paneLabels(of: left), rightLabels = await paneLabels(of: right)
+                print("all panes: f in left               left=\(leftLabels) right=\(rightLabels)")
+                if let r1 = rightLabels.first(where: { $0.hasSuffix(":r1") })?.split(separator: ":").first {
+                    await press(String(r1))
+                    await pause(0.5)
+                    print("all panes: typed '\(r1)'              right=\(right.webView.title ?? "-") focus moved right=\(controller.focusedPane === right)")
+                }
+                Settings.linkHintsAllPanes = false
+                controller.focus(left)
+                await pause(0.3)
+                await press("f")
+                await pause(0.5)
+                print("all panes off: f in left           left=\(await paneLabels(of: left).count) right=\(await paneLabels(of: right).count)")
+                post("\u{1b}", keyCode: 53, modifiers: [], window: window)
+                Settings.linkHintsAllPanes = true
+            }
         }
 
         await step("⌘W in tab 1", [("w", 13, [.command])])

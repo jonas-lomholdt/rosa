@@ -93,6 +93,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
 
     func selectTab(at index: Int, editAddress: Bool = false) {
         guard tabs.indices.contains(index) else { return }
+        if hintSession != nil { enqueueHintOperation { [weak self] in await self?.endHintSession() } }
         selectedIndex = index
         let tab = tabs[index]
         contentRoot.tabContent = tab.container
@@ -372,6 +373,101 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         case .tab: return addTab(configuration: configuration, nextToCurrent: true).webView
         case .pane: return split(pane, axis: .horizontal, configuration: configuration)?.webView
         }
+    }
+
+    // MARK: - Link hints across panes
+
+    private struct HintSession {
+        var panes: [PaneView]
+        var typed = ""
+        var background: Bool
+    }
+
+    private var hintSession: HintSession?
+    private var hintOperations: [() async -> Void] = []
+    private var runningHintOperations = false
+
+    func paneRequestedHintsInAllPanes(_ pane: PaneView, background: Bool) {
+        enqueueHintOperation { [weak self] in await self?.startHintSession(from: pane, background: background) }
+    }
+
+    func pane(_ pane: PaneView, typedHintKey key: String) {
+        enqueueHintOperation { [weak self] in await self?.handleHintKey(key) }
+    }
+
+    func paneCancelledHints(_ pane: PaneView) {
+        enqueueHintOperation { [weak self] in await self?.endHintSession() }
+    }
+
+    /// Hint operations talk to several web views asynchronously; run them one at a time, in order,
+    /// so fast typing can't interleave.
+    private func enqueueHintOperation(_ operation: @escaping () async -> Void) {
+        hintOperations.append(operation)
+        guard !runningHintOperations else { return }
+        runningHintOperations = true
+        Task {
+            while !hintOperations.isEmpty {
+                await hintOperations.removeFirst()()
+            }
+            runningHintOperations = false
+        }
+    }
+
+    /// Collects targets from every pane in the tab and hands out labels unique across all of them.
+    private func startHintSession(from source: PaneView, background: Bool) async {
+        await endHintSession()
+        guard let tab = tab(containing: source) else { return }
+        let panes = tab.panes
+        var counts: [Int] = []
+        for pane in panes {
+            counts.append(await pane.collectHintTargets())
+        }
+        let labels = LinkHints.labels(count: counts.reduce(0, +))
+        guard !labels.isEmpty else { return await endHintSession(panes) }
+        var offset = 0
+        for (pane, count) in zip(panes, counts) {
+            await pane.showHints(Array(labels[offset..<(offset + count)]), background: background)
+            offset += count
+        }
+        hintSession = HintSession(panes: panes, background: background)
+    }
+
+    private func handleHintKey(_ key: String) async {
+        guard var session = hintSession else { return }
+        switch key {
+        case "Escape":
+            return await endHintSession()
+        case "Backspace":
+            if !session.typed.isEmpty { session.typed.removeLast() }
+        default:
+            session.typed += key
+        }
+
+        var results: [(pane: PaneView, matches: Int, exact: Bool)] = []
+        for pane in session.panes {
+            let result = await pane.filterHints(session.typed)
+            results.append((pane, result.matches, result.exact))
+        }
+        let total = results.reduce(0) { $0 + $1.matches }
+
+        if total == 0, !session.typed.isEmpty {
+            // A key that matches nothing is ignored.
+            session.typed.removeLast()
+            for pane in session.panes { _ = await pane.filterHints(session.typed) }
+        } else if total == 1, let winner = results.first(where: \.exact)?.pane {
+            hintSession = nil
+            for pane in session.panes where pane !== winner { await pane.stopHints() }
+            if !session.background { focus(winner) }
+            await winner.activateHint(session.typed)
+            return
+        }
+        hintSession = session
+    }
+
+    private func endHintSession(_ panes: [PaneView]? = nil) async {
+        let targets = panes ?? hintSession?.panes ?? selectedTab?.panes ?? []
+        hintSession = nil
+        for pane in targets { await pane.stopHints() }
     }
 
     // MARK: - TabStripDelegate
