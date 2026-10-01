@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="Resources/AppIcon.png" alt="Browser icon" width="180">
+  <img src="Resources/AppIcon.png" alt="Rosa icon" width="180">
 </p>
 
-<h1 align="center">Browser</h1>
+<h1 align="center">Rosa</h1>
 
 <p align="center">
   A tiny, fast macOS browser with <b>terminal-style split panes</b>.<br>

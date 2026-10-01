@@ -5,7 +5,7 @@ A tiny macOS browser built on the system WebKit, with terminal-style split panes
 Requires macOS 26 (Liquid Glass). Builds with the Command Line Tools — full Xcode is not needed.
 
 ```bash
-scripts/build.sh release --run   # builds build/Browser.app and opens it
+scripts/build.sh release --run   # builds build/Rosa.app and opens it
 ```
 
 ## Shortcuts
@@ -52,5 +52,5 @@ swift scripts/make-icon.swift Resources/logo-source.png Resources/AppIcon.png
 `BROWSER_SELFTEST=<dir>` runs a scripted sequence of real key events, prints the split tree after each step, and writes snapshots to `<dir>`. Set `BROWSER_HISTORY_DB` and `BROWSER_DOWNLOADS_DIR` to keep test visits and files out of your real history and Downloads folder:
 
 ```bash
-open -W -n --env BROWSER_SELFTEST=/tmp/bt --env BROWSER_HISTORY_DB=/tmp/bt.sqlite --env BROWSER_DOWNLOADS_DIR=/tmp/bt-dl --stdout /tmp/bt.log build/Browser.app; cat /tmp/bt.log
+open -W -n --env BROWSER_SELFTEST=/tmp/bt --env BROWSER_HISTORY_DB=/tmp/bt.sqlite --env BROWSER_DOWNLOADS_DIR=/tmp/bt-dl --stdout /tmp/bt.log build/Rosa.app; cat /tmp/bt.log
 ```

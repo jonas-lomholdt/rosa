@@ -62,7 +62,7 @@ final class ContentBlocker {
 
     private let directory: URL = {
         let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "Browser", isDirectory: true)
+            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "Rosa", isDirectory: true)
             .appendingPathComponent("FilterLists", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url

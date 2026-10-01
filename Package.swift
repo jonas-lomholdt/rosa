@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "Browser",
+    name: "Rosa",
     platforms: [.macOS("26.0")],
     targets: [
-        .executableTarget(name: "Browser", path: "Sources/Browser")
+        .executableTarget(name: "Rosa", path: "Sources/Rosa")
     ]
 )

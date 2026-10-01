@@ -44,7 +44,7 @@ final class HistoryStore {
             path = override
         } else {
             let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent(Bundle.main.bundleIdentifier ?? "Browser", isDirectory: true)
+                .appendingPathComponent(Bundle.main.bundleIdentifier ?? "Rosa", isDirectory: true)
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             path = directory.appendingPathComponent("History.sqlite").path
         }

@@ -140,16 +140,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private func buildMainMenu() -> NSMenu {
         let main = NSMenu()
 
-        let appMenu = submenu("Browser", in: main)
-        appMenu.addItem(item("About Browser", #selector(NSApplication.orderFrontStandardAboutPanel(_:))))
+        let appMenu = submenu("Rosa", in: main)
+        appMenu.addItem(item("About Rosa", #selector(NSApplication.orderFrontStandardAboutPanel(_:))))
         appMenu.addItem(.separator())
         appMenu.addItem(item("Settings…", #selector(showSettings(_:)), ","))
         appMenu.addItem(.separator())
-        appMenu.addItem(item("Hide Browser", #selector(NSApplication.hide(_:)), "h"))
+        appMenu.addItem(item("Hide Rosa", #selector(NSApplication.hide(_:)), "h"))
         appMenu.addItem(item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]))
         appMenu.addItem(item("Show All", #selector(NSApplication.unhideAllApplications(_:))))
         appMenu.addItem(.separator())
-        appMenu.addItem(item("Quit Browser", #selector(NSApplication.terminate(_:)), "q"))
+        appMenu.addItem(item("Quit Rosa", #selector(NSApplication.terminate(_:)), "q"))
 
         let file = submenu("File", in: main)
         file.addItem(item("New Window", #selector(newWindow(_:)), "n"))

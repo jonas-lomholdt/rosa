@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds Browser.app into ./build. Usage: scripts/build.sh [debug|release] [--run]
+# Builds Rosa.app into ./build. Usage: scripts/build.sh [debug|release] [--run]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -7,13 +7,13 @@ CONFIG="${1:-release}"
 swift build -c "$CONFIG"
 BIN_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
 
-APP="build/Browser.app"
+APP="build/Rosa.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN_DIR/Browser" "$APP/Contents/MacOS/Browser"
+cp "$BIN_DIR/Rosa" "$APP/Contents/MacOS/Rosa"
 if [[ "$CONFIG" == "release" ]]; then
     # Drop local symbols (~45% of the binary); debug builds keep them for readable crash logs.
-    strip -x "$APP/Contents/MacOS/Browser"
+    strip -x "$APP/Contents/MacOS/Rosa"
 fi
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
