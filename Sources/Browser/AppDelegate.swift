@@ -180,6 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let view = submenu("View", in: main)
         view.addItem(item("Vertical Tabs", #selector(toggleVerticalTabs(_:))))
         view.addItem(item("Shared Address Bar", #selector(toggleSharedAddressBar(_:))))
+        view.addItem(item("Show Sidebar", #selector(BrowserWindowController.toggleSidebar(_:)), "s", [.command, .control]))
         view.addItem(.separator())
         view.addItem(item("Reload Page", #selector(BrowserWindowController.reloadPage(_:)), "r"))
         view.addItem(.separator())

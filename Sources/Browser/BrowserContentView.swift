@@ -32,6 +32,9 @@ final class HeaderView: ChromeView {
         }
     }
 
+    /// Extra space on the left (traffic lights when the sidebar is hidden).
+    var leadingInset: CGFloat = 0 { didSet { needsLayout = true } }
+
     var title: String {
         get { titleLabel.stringValue }
         set { titleLabel.stringValue = newValue }
@@ -55,26 +58,37 @@ final class HeaderView: ChromeView {
         super.layout()
         let inset = PaneContainerView.margin
         addressBar.frame = NSRect(
-            x: inset, y: ((bounds.height - GlassAddressBar.height) / 2).rounded(),
-            width: max(0, bounds.width - inset * 2), height: GlassAddressBar.height
+            x: leadingInset + inset, y: ((bounds.height - GlassAddressBar.height) / 2).rounded(),
+            width: max(0, bounds.width - leadingInset - inset * 2), height: GlassAddressBar.height
         )
         let titleHeight = titleLabel.intrinsicContentSize.height
         titleLabel.frame = NSRect(
-            x: 16, y: ((bounds.height - titleHeight) / 2).rounded(),
-            width: max(0, bounds.width - 32), height: titleHeight
+            x: leadingInset + 16, y: ((bounds.height - titleHeight) / 2).rounded(),
+            width: max(0, bounds.width - leadingInset - 32), height: titleHeight
         )
     }
 }
 
 /// Window content: translucent background, tab strip (top row or floating glass sidebar),
-/// optional header, and the selected tab's split tree.
+/// optional header, and the selected tab's split tree. The vertical sidebar can be resized
+/// by dragging its edge, and can auto-hide (revealed by hovering the window's left edge).
 final class BrowserContentView: NSView {
-    static let sidebarWidth: CGFloat = 220
+    static let defaultSidebarWidth: CGFloat = 220
+    static let sidebarWidthRange: ClosedRange<CGFloat> = 160...420
+    /// Room for the traffic-light buttons when the sidebar is hidden.
+    static let trafficLightInset: CGFloat = 78
 
     let tabStrip = TabStripView()
     let header = HeaderView()
+    /// Called when a sidebar resize finishes, with the new width.
+    var onSidebarResized: ((CGFloat) -> Void)?
+
     private let background = NSVisualEffectView()
     private let sidebarGlass = NSGlassEffectView()
+    private let resizeHandle = SidebarResizeHandle()
+    private let edgeHotZone = HoverZoneView()
+    private let sidebarHoverZone = HoverZoneView()
+    private var hideWorkItem: DispatchWorkItem?
 
     var tabLayout: TabLayout = .horizontal {
         didSet { tabStrip.tabLayout = tabLayout; needsLayout = true }
@@ -84,12 +98,29 @@ final class BrowserContentView: NSView {
         didSet { header.showsAddressField = showsSharedAddressBar; needsLayout = true }
     }
 
+    var sidebarWidth: CGFloat = BrowserContentView.defaultSidebarWidth {
+        didSet { needsLayout = true }
+    }
+
+    var sidebarAutoHide = false {
+        didSet {
+            guard sidebarAutoHide != oldValue else { return }
+            isSidebarRevealed = false
+            needsLayout = true
+        }
+    }
+
+    /// Auto-hide mode only: whether the sidebar is currently slid in over the page.
+    private(set) var isSidebarRevealed = false
+
+    private var isVerticalAutoHide: Bool { tabLayout == .vertical && sidebarAutoHide }
+
     /// The selected tab's pane container.
     var tabContent: NSView? {
         didSet {
             guard oldValue !== tabContent else { return }
             oldValue?.removeFromSuperview()
-            if let tabContent { addSubview(tabContent, positioned: .below, relativeTo: sidebarGlass) }
+            if let tabContent { addSubview(tabContent, positioned: .above, relativeTo: background) }
             needsLayout = true
         }
     }
@@ -101,49 +132,173 @@ final class BrowserContentView: NSView {
         background.state = .followsWindowActiveState
         sidebarGlass.cornerRadius = 16
 
-        addSubview(background)
-        addSubview(sidebarGlass)
-        addSubview(tabStrip)
-        addSubview(header)
+        resizeHandle.onDrag = { [weak self] x in self?.resizeSidebar(toWindowX: x) }
+        resizeHandle.onDragEnded = { [weak self] in
+            guard let self else { return }
+            onSidebarResized?(sidebarWidth)
+        }
+        resizeHandle.onDoubleClick = { [weak self] in
+            self?.onSidebarResized?(BrowserContentView.defaultSidebarWidth)
+        }
+        edgeHotZone.onEnter = { [weak self] in self?.setSidebarRevealed(true) }
+        sidebarHoverZone.onEnter = { [weak self] in self?.hideWorkItem?.cancel() }
+        sidebarHoverZone.onExit = { [weak self] in self?.scheduleHide() }
+
+        // Back to front: page content, header, then the sidebar (it floats over both when auto-hiding).
+        for view in [background, header, sidebarGlass, tabStrip, resizeHandle, edgeHotZone, sidebarHoverZone] {
+            addSubview(view)
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override var isFlipped: Bool { true }
 
+    // MARK: - Sidebar
+
+    func toggleSidebar() {
+        guard isVerticalAutoHide else { return }
+        setSidebarRevealed(!isSidebarRevealed)
+    }
+
+    private func setSidebarRevealed(_ revealed: Bool) {
+        hideWorkItem?.cancel()
+        guard isVerticalAutoHide, revealed != isSidebarRevealed else { return }
+        isSidebarRevealed = revealed
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            context.allowsImplicitAnimation = true
+            layoutSubtreeIfNeeded()
+            needsLayout = true
+            layoutSubtreeIfNeeded()
+        }
+    }
+
+    private func scheduleHide() {
+        hideWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in self?.setSidebarRevealed(false) }
+        hideWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: item)
+    }
+
+    private func resizeSidebar(toWindowX x: CGFloat) {
+        let local = convert(NSPoint(x: x, y: 0), from: nil).x
+        let range = Self.sidebarWidthRange
+        sidebarWidth = min(max(local, range.lowerBound), min(range.upperBound, bounds.width / 2))
+        layoutSubtreeIfNeeded()
+    }
+
+    // MARK: - Layout
+
     override func layout() {
         super.layout()
         background.frame = bounds
+        let margin = PaneContainerView.margin
         let contentRect: NSRect
 
         switch tabLayout {
         case .horizontal:
             sidebarGlass.isHidden = true
+            resizeHandle.isHidden = true
+            edgeHotZone.isHidden = true
+            sidebarHoverZone.isHidden = true
+            header.leadingInset = 0
             let stripHeight = TabStripView.horizontalHeight
             tabStrip.frame = NSRect(x: 0, y: 0, width: bounds.width, height: stripHeight)
             var top = stripHeight
             header.isHidden = !showsSharedAddressBar
             if showsSharedAddressBar {
                 header.frame = NSRect(x: 0, y: top, width: bounds.width, height: HeaderView.height)
-                top += HeaderView.height - PaneContainerView.margin
+                top += HeaderView.height - margin
             }
             contentRect = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
 
         case .vertical:
-            let margin = PaneContainerView.margin
-            let sidebarWidth = min(Self.sidebarWidth, bounds.width / 2)
+            let width = min(sidebarWidth, bounds.width / 2)
+            let autoHide = sidebarAutoHide
+            // When auto-hiding, the page takes the full width and the sidebar floats over it.
+            let contentX = autoHide ? 0 : width
+            let sidebarX = autoHide && !isSidebarRevealed ? -width : margin
+
             sidebarGlass.isHidden = false
-            sidebarGlass.frame = NSRect(x: margin, y: margin, width: sidebarWidth - margin, height: bounds.height - margin * 2)
+            sidebarGlass.frame = NSRect(x: sidebarX, y: margin, width: width - margin, height: bounds.height - margin * 2)
             tabStrip.frame = sidebarGlass.frame
+            sidebarGlass.shadow = autoHide ? Self.floatingShadow : nil
+
+            resizeHandle.isHidden = autoHide && !isSidebarRevealed
+            resizeHandle.frame = NSRect(x: sidebarGlass.frame.maxX - 2, y: margin, width: 8, height: sidebarGlass.frame.height)
+
+            edgeHotZone.isHidden = !autoHide || isSidebarRevealed
+            edgeHotZone.frame = NSRect(x: 0, y: HeaderView.height, width: 6, height: max(0, bounds.height - HeaderView.height))
+            sidebarHoverZone.isHidden = !autoHide || !isSidebarRevealed
+            sidebarHoverZone.frame = sidebarGlass.frame.insetBy(dx: -margin, dy: -margin)
+
             header.isHidden = false
-            header.frame = NSRect(x: sidebarWidth, y: 0, width: bounds.width - sidebarWidth, height: HeaderView.height)
+            header.leadingInset = autoHide ? Self.trafficLightInset : 0
+            header.frame = NSRect(x: contentX, y: 0, width: bounds.width - contentX, height: HeaderView.height)
             let top = HeaderView.height - margin
-            contentRect = NSRect(
-                x: sidebarWidth, y: top,
-                width: bounds.width - sidebarWidth, height: max(0, bounds.height - top)
-            )
+            contentRect = NSRect(x: contentX, y: top, width: bounds.width - contentX, height: max(0, bounds.height - top))
         }
 
         tabContent?.frame = contentRect
     }
+
+    private static let floatingShadow: NSShadow = {
+        let shadow = NSShadow()
+        shadow.shadowBlurRadius = 18
+        shadow.shadowOffset = NSSize(width: 0, height: -2)
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.25)
+        return shadow
+    }()
+
+    // MARK: - Testing
+
+    var debugSidebarFrame: NSRect { sidebarGlass.frame }
+}
+
+/// Invisible strip on the sidebar's right edge: drag to resize, double-click to reset.
+private final class SidebarResizeHandle: NSView {
+    var onDrag: ((CGFloat) -> Void)?
+    var onDragEnded: (() -> Void)?
+    var onDoubleClick: (() -> Void)?
+
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .resizeLeftRight)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 { onDoubleClick?() }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        onDrag?(event.locationInWindow.x)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if event.clickCount < 2 { onDragEnded?() }
+    }
+}
+
+/// Transparent region that reports the mouse entering/leaving, without taking clicks.
+private final class HoverZoneView: NSView {
+    var onEnter: (() -> Void)?
+    var onExit: (() -> Void)?
+    private var trackingArea: NSTrackingArea?
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { onEnter?() }
+    override func mouseExited(with event: NSEvent) { onExit?() }
 }

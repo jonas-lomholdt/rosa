@@ -18,7 +18,7 @@
 - 🔤 **Link hints** — press `f`, type the yellow label, and the link is clicked — across all panes at once
 - ⌨️ **Vim keys** — `hjkl` to scroll, `gg`/`G` for top and bottom (optional)
 - 🔍 **Find in page** — with a live match count
-- 🗂️ **Tabs** — horizontal, or a vertical sidebar
+- 🗂️ **Tabs** — horizontal, or a resizable vertical sidebar that can auto-hide
 - 🛡️ **Ad & tracker blocking** — on by default, one click to allow a site
 - 🔎 **Smart address bar** — autocompletes from your history as you type
 - 🎨 **Liquid Glass** look, light / dark / system theme
@@ -38,6 +38,7 @@
 | `j` / `k`, `h` / `l` | Scroll down / up, left / right |
 | `gg` / `G` | Jump to top / bottom |
 | `⌘F`, `⌘G` / `⌘⇧G` | Find in page, next / previous match |
+| `⌃⌘S` | Show sidebar (when auto-hiding) |
 | `⌘,` | Settings |
 | `F12` / `⌘⌥I` | Web Inspector |
 

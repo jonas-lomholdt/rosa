@@ -41,6 +41,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         window.delegate = self
         window.contentView = contentRoot
         contentRoot.tabStrip.delegate = self
+        contentRoot.onSidebarResized = { width in Settings.sidebarWidth = width }
 
         let sharedField = contentRoot.header.addressField
         sharedField.onSubmit = { [weak self] text in
@@ -306,6 +307,8 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
             tab.panes.forEach { $0.showsAddressBar = perPane }
         }
         contentRoot.tabLayout = Settings.tabLayout
+        contentRoot.sidebarWidth = Settings.sidebarWidth
+        contentRoot.sidebarAutoHide = Settings.sidebarAutoHide
         contentRoot.showsSharedAddressBar = !perPane
         syncSharedAddressField()
     }
@@ -326,6 +329,9 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     @objc func reloadPage(_ sender: Any?) { focusedPane?.webView.reload() }
     @objc func toggleWebInspector(_ sender: Any?) { focusedPane?.toggleWebInspector() }
     @objc func showLinkHints(_ sender: Any?) { focusedPane?.showLinkHints() }
+    @objc func toggleSidebar(_ sender: Any?) { contentRoot.toggleSidebar() }
+    /// For the self-test.
+    var debugContentRoot: BrowserContentView { contentRoot }
     @objc func showFindBar(_ sender: Any?) { focusedPane?.showFindBar() }
     @objc func findNextMatch(_ sender: Any?) { focusedPane?.findNext() }
     @objc func findPreviousMatch(_ sender: Any?) { focusedPane?.findPrevious() }

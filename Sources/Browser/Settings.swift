@@ -71,6 +71,18 @@ enum Settings {
         set { defaults.set(newValue.rawValue, forKey: "tabLayout"); notify() }
     }
 
+    /// Vertical sidebar width in points.
+    static var sidebarWidth: CGFloat {
+        get { (defaults.object(forKey: "sidebarWidth") as? Double).map { CGFloat($0) } ?? BrowserContentView.defaultSidebarWidth }
+        set { defaults.set(Double(newValue), forKey: "sidebarWidth"); notify() }
+    }
+
+    /// Vertical sidebar hides until the mouse reaches the window's left edge (or ⌃⌘S).
+    static var sidebarAutoHide: Bool {
+        get { defaults.bool(forKey: "sidebarAutoHide") }
+        set { defaults.set(newValue, forKey: "sidebarAutoHide"); notify() }
+    }
+
     static var appearance: AppearanceMode {
         get { defaults.string(forKey: "appearance").flatMap(AppearanceMode.init) ?? .system }
         set { defaults.set(newValue.rawValue, forKey: "appearance"); notify() }

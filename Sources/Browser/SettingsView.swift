@@ -28,6 +28,9 @@ final class SettingsModel: ObservableObject {
     @Published var vimKeysEnabled: Bool {
         didSet { if Settings.vimKeysEnabled != vimKeysEnabled { Settings.vimKeysEnabled = vimKeysEnabled } }
     }
+    @Published var sidebarAutoHide: Bool {
+        didSet { if Settings.sidebarAutoHide != sidebarAutoHide { Settings.sidebarAutoHide = sidebarAutoHide } }
+    }
     @Published var linkTarget: LinkTarget {
         didSet { if Settings.linkTarget != linkTarget { Settings.linkTarget = linkTarget } }
     }
@@ -57,6 +60,7 @@ final class SettingsModel: ObservableObject {
         appearance = Settings.appearance
         searchEngine = Settings.searchEngine
         linkTarget = Settings.linkTarget
+        sidebarAutoHide = Settings.sidebarAutoHide
         linkHintsEnabled = Settings.linkHintsEnabled
         linkHintColor = Settings.linkHintColor
         vimKeysEnabled = Settings.vimKeysEnabled
@@ -91,6 +95,7 @@ final class SettingsModel: ObservableObject {
         appearance = Settings.appearance
         searchEngine = Settings.searchEngine
         linkTarget = Settings.linkTarget
+        sidebarAutoHide = Settings.sidebarAutoHide
         linkHintsEnabled = Settings.linkHintsEnabled
         linkHintColor = Settings.linkHintColor
         vimKeysEnabled = Settings.vimKeysEnabled
@@ -168,6 +173,8 @@ struct SettingsView: View {
                     Text("Vertical sidebar").tag(TabLayout.vertical)
                 }
                 .pickerStyle(.segmented)
+                Toggle("Auto-hide sidebar", isOn: $model.sidebarAutoHide)
+                    .disabled(model.tabLayout != .vertical)
                 Picker("Open links in", selection: $model.linkTarget) {
                     Text("New tab").tag(LinkTarget.tab)
                     Text("New pane").tag(LinkTarget.pane)
@@ -176,7 +183,7 @@ struct SettingsView: View {
             } header: {
                 Text("Tabs & Links")
             } footer: {
-                Text("Applies to links that open a new window, and to ⌘-click (which opens in the background).")
+                Text("Drag the sidebar's edge to resize it. When auto-hiding, move the mouse to the window's left edge (or press ⌃⌘S) to show it. Open links in: applies to links that open a new window, and to ⌘-click (which opens in the background).")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

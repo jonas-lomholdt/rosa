@@ -387,6 +387,49 @@ enum SelfTest {
             }
         }
 
+        // Vertical sidebar: resize by dragging its edge, double-click resets, auto-hide + ⌃⌘S.
+        if let window = controller.window {
+            let root = controller.debugContentRoot
+            Settings.sidebarAutoHide = false
+            Settings.tabLayout = .vertical
+            await pause(0.5)
+            func mouse(_ type: NSEvent.EventType, x: CGFloat, clicks: Int = 1) -> NSEvent? {
+                let edge = root.debugSidebarFrame
+                let point = root.convert(NSPoint(x: x, y: edge.midY), to: nil)
+                return NSEvent.mouseEvent(
+                    with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: clicks,
+                    pressure: type == .leftMouseUp ? 0 : 1
+                )
+            }
+            let handleX = root.debugSidebarFrame.maxX + 2
+            print("sidebar width before               \(Int(Settings.sidebarWidth))")
+            for event in [mouse(.leftMouseDown, x: handleX), mouse(.leftMouseDragged, x: 280), mouse(.leftMouseDragged, x: 300),
+                          mouse(.leftMouseUp, x: 300)].compactMap({ $0 }) {
+                window.sendEvent(event)
+                await pause(0.05)
+            }
+            await pause(0.3)
+            print("sidebar dragged to 300             setting=\(Int(Settings.sidebarWidth)) frame=\(Int(root.debugSidebarFrame.maxX))")
+            let resetX = root.debugSidebarFrame.maxX + 2
+            for event in [mouse(.leftMouseDown, x: resetX, clicks: 2), mouse(.leftMouseUp, x: resetX, clicks: 2)].compactMap({ $0 }) {
+                window.sendEvent(event)
+            }
+            await pause(0.3)
+            print("sidebar double-click reset         setting=\(Int(Settings.sidebarWidth))")
+            Settings.sidebarAutoHide = true
+            await pause(0.5)
+            print("auto-hide on                       sidebar minX=\(Int(root.debugSidebarFrame.minX))")
+            controller.toggleSidebar(nil)
+            await pause(0.5)
+            print("⌃⌘S reveal                         sidebar minX=\(Int(root.debugSidebarFrame.minX)) revealed=\(root.isSidebarRevealed)")
+            controller.toggleSidebar(nil)
+            await pause(0.5)
+            print("⌃⌘S hide                           sidebar minX=\(Int(root.debugSidebarFrame.minX)) revealed=\(root.isSidebarRevealed)")
+            Settings.sidebarAutoHide = false
+            Settings.tabLayout = .horizontal
+        }
+
         // Settings window opens centred over the browser window.
         if let app = NSApp.delegate as? AppDelegate, let browser = controller.window {
             app.showSettings(nil)
