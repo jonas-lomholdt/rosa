@@ -187,7 +187,7 @@ struct SettingsView: View {
             } header: {
                 Text("Keyboard")
             } footer: {
-                Text("Link hints: press F on a page, then type a label to click it (Shift-F opens in the background, Esc cancels). Vim-style scrolling: J/K scroll, GG jumps to the top, Shift-G to the bottom. Keys are ignored while typing in a field.")
+                Text("Link hints: press F on a page, then type a label to click it (Shift-F opens in the background, Esc cancels). Vim-style scrolling: J/K scroll, H/L scroll sideways, GG jumps to the top, Shift-G to the bottom. Keys are ignored while typing in a field.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

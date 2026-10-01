@@ -5,7 +5,7 @@ import WebKit
 /// neither see nor tamper with it:
 /// - Link hints (qutebrowser / Vimium style): `f` labels every clickable element on screen,
 ///   typing a label clicks it; `F` opens the link in the background (tab or pane).
-/// - Vim-style scrolling: `j`/`k` scroll, `gg`/`G` jump to top/bottom.
+/// - Vim-style scrolling: `j`/`k` scroll, `h`/`l` scroll sideways, `gg`/`G` jump to top/bottom.
 /// Both are ignored while typing in a field and can be turned off in Settings → Keyboard.
 @MainActor
 enum LinkHints {
@@ -176,11 +176,13 @@ enum LinkHints {
           }
 
           // The element that actually scrolls: many sites scroll an inner panel, not the page.
-          function scrollTarget() {
+          function scrollTarget(horizontal) {
             let el = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
             while (el && el !== document.body && el !== document.documentElement) {
-              const overflow = getComputedStyle(el).overflowY;
-              if (/(auto|scroll|overlay)/.test(overflow) && el.scrollHeight > el.clientHeight + 1) return el;
+              const style = getComputedStyle(el);
+              const overflow = horizontal ? style.overflowX : style.overflowY;
+              const scrollable = horizontal ? el.scrollWidth > el.clientWidth + 1 : el.scrollHeight > el.clientHeight + 1;
+              if (/(auto|scroll|overlay)/.test(overflow) && scrollable) return el;
               el = el.parentElement;
             }
             return document.scrollingElement || document.documentElement;
@@ -188,8 +190,11 @@ enum LinkHints {
 
           // Returns true if the key was a vim command.
           function vimKey(event) {
-            const target = scrollTarget();
+            const target = scrollTarget(event.key === 'h' || event.key === 'l');
+            const behavior = event.repeat ? 'auto' : 'smooth';
             switch (event.key) {
+              case 'h': target.scrollBy({ left: -SCROLL_STEP, behavior }); return true;
+              case 'l': target.scrollBy({ left: SCROLL_STEP, behavior }); return true;
               case 'j': target.scrollBy({ top: SCROLL_STEP, behavior: event.repeat ? 'auto' : 'smooth' }); return true;
               case 'k': target.scrollBy({ top: -SCROLL_STEP, behavior: event.repeat ? 'auto' : 'smooth' }); return true;
               case 'G': target.scrollTo({ top: target.scrollHeight, behavior: 'smooth' }); return true;
