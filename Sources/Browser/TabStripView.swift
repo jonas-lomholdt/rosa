@@ -18,6 +18,8 @@ struct TabItem {
 final class TabStripView: ChromeView {
     static let horizontalHeight: CGFloat = 38
     static let verticalWidth: CGFloat = 220
+    /// Empty space always kept before the + button so the window can be dragged with many tabs open.
+    static let reservedDragSpace: CGFloat = 60
 
     weak var delegate: TabStripDelegate?
 
@@ -109,7 +111,7 @@ final class TabStripView: ChromeView {
             )
             scrollView.frame = NSRect(
                 x: trafficLightInset, y: 0,
-                width: max(0, newTabButton.frame.minX - 4 - trafficLightInset), height: bounds.height - 1
+                width: max(0, newTabButton.frame.minX - 4 - Self.reservedDragSpace - trafficLightInset), height: bounds.height - 1
             )
             let available = scrollView.frame.width
             let count = CGFloat(max(itemViews.count, 1))
