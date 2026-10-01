@@ -29,10 +29,18 @@ Settings (⌘,) and the View menu toggle **Vertical Tabs** and **Shared Address 
 - `BrowserWindowController` handles tabs, splitting/closing, and directional focus (spatial, ties go to the most recently focused pane).
 - Pane/tab shortcuts are dispatched by a key monitor before the web page sees them (`AppDelegate.priorityMenus`).
 
-## Self-test
+## App icon
 
-`BROWSER_SELFTEST=<dir>` runs a scripted sequence of real key events, prints the split tree after each step, and writes snapshots to `<dir>`:
+`Resources/AppIcon.png` is generated from `Resources/logo-source.png` (strips the baked-in background and fits Apple's icon grid); `scripts/build.sh` turns it into `AppIcon.icns`:
 
 ```bash
-open -W -n --env BROWSER_SELFTEST=/tmp/bt --stdout /tmp/bt.log build/Browser.app; cat /tmp/bt.log
+swift scripts/make-icon.swift Resources/logo-source.png Resources/AppIcon.png
+```
+
+## Self-test
+
+`BROWSER_SELFTEST=<dir>` runs a scripted sequence of real key events, prints the split tree after each step, and writes snapshots to `<dir>`. Set `BROWSER_HISTORY_DB` to keep test visits out of your real history:
+
+```bash
+open -W -n --env BROWSER_SELFTEST=/tmp/bt --env BROWSER_HISTORY_DB=/tmp/bt.sqlite --stdout /tmp/bt.log build/Browser.app; cat /tmp/bt.log
 ```

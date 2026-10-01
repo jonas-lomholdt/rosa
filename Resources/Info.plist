@@ -8,6 +8,8 @@
     <string>Browser</string>
     <key>CFBundleIdentifier</key>
     <string>com.example.browser</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleExecutable</key>
     <string>Browser</string>
     <key>CFBundlePackageType</key>
