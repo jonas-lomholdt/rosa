@@ -14,6 +14,7 @@ enum SelfTest {
     }
 
     private static func run(outputDir: URL) async {
+        setvbuf(stdout, nil, _IOLBF, 0)
         try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
         await pause()
         guard let controller = NSApp.windows.lazy.compactMap({ $0.windowController as? BrowserWindowController }).first else {
@@ -141,6 +142,24 @@ enum SelfTest {
         await probe("example.com allowed")
         ContentBlocker.shared.setAllowed(false, host: "example.com")
         await probe("example.com blocked again")
+
+        if let pane = controller.focusedPane {
+            let selector = Selector(("_inspector"))
+            let object = pane.webView.responds(to: selector) ? pane.webView.perform(selector)?.takeUnretainedValue() : nil
+            print("inspector object: \(object.map { String(describing: Swift.type(of: $0)) } ?? "nil") responds show=\((object as? NSObject)?.responds(to: Selector(("show"))) ?? false)")
+            let before = NSApp.windows.count
+            pane.toggleWebInspector()
+            await pause(3)
+            print("direct toggle                      visible=\(pane.isWebInspectorVisible) windows \(before)->\(NSApp.windows.count) \(NSApp.windows.map { "\(Swift.type(of: $0)):\($0.title):\($0.isVisible)" })")
+            pane.toggleWebInspector()
+            await pause(1)
+        }
+        // Web Inspector via F12, twice (open, then close).
+        for label in ["F12 (open inspector)", "F12 (close inspector)"] {
+            post(arrow(NSF12FunctionKey), keyCode: 111, modifiers: [.function], window: controller.window)
+            await pause(2)
+            print("\(label.padding(toLength: 34, withPad: " ", startingAt: 0)) visible=\(controller.focusedPane?.isWebInspectorVisible ?? false)")
+        }
         await step("⌘W in tab 1", [("w", 13, [.command])])
     }
 
@@ -156,7 +175,7 @@ enum SelfTest {
             windowNumber: window?.windowNumber ?? 0, context: nil, characters: characters,
             charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode
         ) else { return }
-        if modifiers.intersection([.command, .control]).isEmpty {
+        if modifiers.intersection([.command, .control]).isEmpty, keyCode != 111 {
             // Plain typing goes straight to the window, so it works even when another app is active.
             window?.sendEvent(event)
         } else {

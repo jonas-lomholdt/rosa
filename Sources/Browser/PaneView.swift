@@ -10,6 +10,9 @@ enum WebKitSupport {
         // Without a Safari-like suffix, some sites serve degraded pages to WKWebView.
         configuration.applicationNameForUserAgent = "Version/26.0 Safari/605.1.15"
         configuration.preferences.isElementFullscreenEnabled = true
+        // Local Web Inspector (context menu / F12) needs WebKit's developer extras on, in addition
+        // to `isInspectable`. Private preference key, set via KVC.
+        configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
         return configuration
     }
 }
@@ -82,6 +85,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = true
         webView.allowsMagnification = true
+        // Enables Web Inspector ("Inspect Element" in the context menu, and Safari's Develop menu).
+        webView.isInspectable = true
         webView.onFocus = { [weak self] in self.map { $0.delegate?.paneDidBecomeFocused($0) } }
 
         addressField.onFocus = { [weak self] in self.map { $0.delegate?.paneDidBecomeFocused($0) } }
@@ -173,6 +178,26 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         addressField.onFocus = nil
         addressField.onSubmit = nil
         addressField.onCancel = nil
+    }
+
+    // MARK: - Web Inspector
+
+    /// WebKit has no public API to open the inspector programmatically, so this uses the
+    /// private `_inspector` object (fine outside the App Store). Fails silently if it changes.
+    private var inspector: NSObject? {
+        let selector = Selector(("_inspector"))
+        guard webView.responds(to: selector) else { return nil }
+        return webView.perform(selector)?.takeUnretainedValue() as? NSObject
+    }
+
+    var isWebInspectorVisible: Bool {
+        (inspector?.value(forKey: "visible") as? Bool) ?? false
+    }
+
+    func toggleWebInspector() {
+        guard let inspector else { return }
+        let selector = Selector((isWebInspectorVisible ? "close" : "show"))
+        if inspector.responds(to: selector) { inspector.perform(selector) }
     }
 
     // MARK: - Content blocking

@@ -110,7 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func performPriorityKeyEquivalent(_ event: NSEvent) -> Bool {
-        guard !event.modifierFlags.intersection([.command, .control]).isEmpty else { return false }
+        let isF12 = event.keyCode == 111
+        guard isF12 || !event.modifierFlags.intersection([.command, .control]).isEmpty else { return false }
         return priorityMenus.contains { $0.performKeyEquivalent(with: event) }
     }
 
@@ -153,6 +154,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         view.addItem(.separator())
         view.addItem(item("Reload Page", #selector(BrowserWindowController.reloadPage(_:)), "r"))
         view.addItem(.separator())
+        view.addItem(item("Web Inspector", #selector(BrowserWindowController.toggleWebInspector(_:)), "i", [.command, .option]))
+        let f12 = item("Web Inspector", #selector(BrowserWindowController.toggleWebInspector(_:)), functionKey(NSF12FunctionKey), [])
+        f12.isAlternate = false
+        f12.isHidden = true
+        f12.allowsKeyEquivalentWhenHidden = true
+        view.addItem(f12)
+        view.addItem(.separator())
         view.addItem(item("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]))
 
         let history = submenu("History", in: main)
@@ -191,7 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         window.addItem(.separator())
         NSApp.windowsMenu = window
 
-        priorityMenus = [appMenu, file, history, pane, window]
+        priorityMenus = [appMenu, file, view, history, pane, window]
         return main
     }
 

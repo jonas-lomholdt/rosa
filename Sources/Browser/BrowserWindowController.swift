@@ -300,6 +300,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     @objc func equalizePanes(_ sender: Any?) { selectedTab.map { equalize($0.container.child) } }
     @objc func openLocation(_ sender: Any?) { focusAddressField() }
     @objc func reloadPage(_ sender: Any?) { focusedPane?.webView.reload() }
+    @objc func toggleWebInspector(_ sender: Any?) { focusedPane?.toggleWebInspector() }
     @objc func navigateBack(_ sender: Any?) { focusedPane?.webView.goBack() }
     @objc func navigateForward(_ sender: Any?) { focusedPane?.webView.goForward() }
 
