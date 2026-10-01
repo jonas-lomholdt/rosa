@@ -15,6 +15,7 @@
 
 - 🪟 **Split panes** — split any tab right or down, as many times as you like
 - 🧭 **Keyboard-first** — move between panes with arrow keys, like a terminal
+- 🔤 **Link hints** — press `f`, type the yellow label, and the link is clicked
 - 🗂️ **Tabs** — horizontal, or a vertical sidebar
 - 🛡️ **Ad & tracker blocking** — on by default, one click to allow a site
 - 🔎 **Smart address bar** — autocompletes from your history as you type
@@ -31,6 +32,7 @@
 | `⌘W` | Close pane |
 | `⌘T` | New tab |
 | `⌘L` | Address bar |
+| `f` / `⇧F` | Link hints / open link in background |
 | `⌘,` | Settings |
 | `F12` / `⌘⌥I` | Web Inspector |
 

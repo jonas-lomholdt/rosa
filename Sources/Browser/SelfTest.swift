@@ -214,6 +214,63 @@ enum SelfTest {
             Settings.linkTarget = .tab
         }
 
+        // Link hints: f shows labels, typing one clicks; F opens in the background; off = nothing.
+        if let pane = controller.focusedPane, let window = controller.window {
+            let keyCodes: [Character: UInt16] = [
+                "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "c": 8, "w": 13, "e": 14,
+                "p": 35, "l": 37, "j": 38, "k": 40, "m": 46,
+            ]
+            func press(_ text: String, shift: Bool = false) async {
+                for character in text {
+                    let typed = shift ? character.uppercased() : String(character)
+                    post(typed, keyCode: keyCodes[character] ?? 0, modifiers: shift ? [.shift] : [], window: window)
+                    await pause(0.15)
+                }
+                await pause(0.4)
+            }
+            func hintLabels() async -> [String] {
+                await withCheckedContinuation { continuation in
+                    pane.webView.evaluateJavaScript("window.__browserHints.debugLabels()", in: nil, in: LinkHints.contentWorld) {
+                        continuation.resume(returning: (try? $0.get()) as? [String] ?? [])
+                    }
+                }
+            }
+            let html = """
+                <title>hints</title>
+                <a id="one" href="#" onclick="document.title='clicked one';return false">One</a><br>
+                <a id="two" href="#" onclick="document.title='clicked two';return false">Two</a><br>
+                <a id="three" href="https://example.com/three">Three</a><br>
+                <input id="field">
+                """
+            pane.webView.loadHTMLString(html, baseURL: URL(string: "https://example.com/"))
+            await pause(1.5)
+            window.makeFirstResponder(pane.webView)
+            await press("f")
+            let labels = await hintLabels()
+            print("hints after f                      \(labels)")
+            if let two = labels.first(where: { $0.hasSuffix(":two") })?.split(separator: ":").first {
+                await press(String(two))
+                print("typed '\(two)'                       title=\(pane.webView.title ?? "-")")
+            }
+            let tabsBefore = controller.tabCount
+            await press("f", shift: true)
+            if let three = await hintLabels().first(where: { $0.hasSuffix(":three") })?.split(separator: ":").first {
+                await press(String(three))
+                await pause(0.5)
+                print("F + '\(three)' (background)          tabs \(tabsBefore)->\(controller.tabCount), title=\(pane.webView.title ?? "-")")
+            }
+            _ = try? await pane.webView.evaluateJavaScript("document.getElementById('field').focus()")
+            await pause(0.3)
+            await press("f")
+            print("f while typing in a field          hints=\(await hintLabels().count)")
+            _ = try? await pane.webView.evaluateJavaScript("document.activeElement.blur()")
+            Settings.linkHintsEnabled = false
+            await pause(0.3)
+            await press("f")
+            print("f with hints disabled              hints=\(await hintLabels().count)")
+            Settings.linkHintsEnabled = true
+        }
+
         await step("⌘W in tab 1", [("w", 13, [.command])])
     }
 

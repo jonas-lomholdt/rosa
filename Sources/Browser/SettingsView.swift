@@ -13,6 +13,12 @@ final class SettingsModel: ObservableObject {
     @Published var appearance: AppearanceMode {
         didSet { if Settings.appearance != appearance { Settings.appearance = appearance } }
     }
+    @Published var linkHintsEnabled: Bool {
+        didSet { if Settings.linkHintsEnabled != linkHintsEnabled { Settings.linkHintsEnabled = linkHintsEnabled } }
+    }
+    @Published var linkHintColor: String {
+        didSet { if Settings.linkHintColor != linkHintColor { Settings.linkHintColor = linkHintColor } }
+    }
     @Published var linkTarget: LinkTarget {
         didSet { if Settings.linkTarget != linkTarget { Settings.linkTarget = linkTarget } }
     }
@@ -42,6 +48,8 @@ final class SettingsModel: ObservableObject {
         appearance = Settings.appearance
         searchEngine = Settings.searchEngine
         linkTarget = Settings.linkTarget
+        linkHintsEnabled = Settings.linkHintsEnabled
+        linkHintColor = Settings.linkHintColor
         historyEnabled = Settings.historyEnabled
         historyPageCount = HistoryStore.shared.pageCount
         adBlockEnabled = Settings.adBlockEnabled
@@ -71,6 +79,8 @@ final class SettingsModel: ObservableObject {
         appearance = Settings.appearance
         searchEngine = Settings.searchEngine
         linkTarget = Settings.linkTarget
+        linkHintsEnabled = Settings.linkHintsEnabled
+        linkHintColor = Settings.linkHintColor
         historyEnabled = Settings.historyEnabled
         adBlockEnabled = Settings.adBlockEnabled
         enabledFilterLists = Settings.enabledFilterLists
@@ -90,6 +100,13 @@ final class SettingsModel: ObservableObject {
                 if enabled { lists.insert(list.id) } else { lists.remove(list.id) }
                 Settings.enabledFilterLists = lists
             }
+        )
+    }
+
+    var linkHintColorBinding: Binding<Color> {
+        Binding(
+            get: { Color(nsColor: NSColor(hex: self.linkHintColor) ?? .systemYellow) },
+            set: { self.linkHintColor = NSColor($0).hexString }
         )
     }
 
@@ -153,6 +170,18 @@ struct SettingsView: View {
                 Text(model.addressBarMode == .perPane
                      ? "Every pane has its own slim address bar."
                      : "One address bar at the top follows the focused pane.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Link hints", isOn: $model.linkHintsEnabled)
+                ColorPicker("Hint colour", selection: model.linkHintColorBinding, supportsOpacity: false)
+                    .disabled(!model.linkHintsEnabled)
+            } header: {
+                Text("Keyboard")
+            } footer: {
+                Text("Press F on a page to label every link, then type a label to click it. Shift-F opens the link in the background (new tab or pane). Esc cancels.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

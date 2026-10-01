@@ -324,6 +324,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     @objc func openLocation(_ sender: Any?) { focusAddressField() }
     @objc func reloadPage(_ sender: Any?) { focusedPane?.webView.reload() }
     @objc func toggleWebInspector(_ sender: Any?) { focusedPane?.toggleWebInspector() }
+    @objc func showLinkHints(_ sender: Any?) { focusedPane?.showLinkHints() }
     @objc func navigateBack(_ sender: Any?) { focusedPane?.webView.goBack() }
     @objc func navigateForward(_ sender: Any?) { focusedPane?.webView.goForward() }
 

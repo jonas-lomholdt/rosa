@@ -154,6 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         view.addItem(.separator())
         view.addItem(item("Reload Page", #selector(BrowserWindowController.reloadPage(_:)), "r"))
         view.addItem(.separator())
+        view.addItem(item("Show Link Hints (F)", #selector(BrowserWindowController.showLinkHints(_:))))
         view.addItem(item("Web Inspector", #selector(BrowserWindowController.toggleWebInspector(_:)), "i", [.command, .option]))
         let f12 = item("Web Inspector", #selector(BrowserWindowController.toggleWebInspector(_:)), functionKey(NSF12FunctionKey), [])
         f12.isAlternate = false

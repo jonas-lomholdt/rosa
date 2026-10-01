@@ -117,10 +117,15 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         addressBar.onShieldClick = { [weak self] in self?.toggleContentBlockingForSite() }
         for name in [ContentBlocker.didChange, Settings.didChange] {
             blockerObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.refreshContentBlocking() }
+                MainActor.assumeIsolated {
+                    self?.refreshContentBlocking()
+                    self?.refreshLinkHints()
+                }
             })
         }
         refreshContentBlocking()
+        LinkHints.install(on: webView.configuration.userContentController)
+        LinkHintsRouter.shared.register(self)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -199,6 +204,22 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         guard let inspector else { return }
         let selector = Selector((isWebInspectorVisible ? "close" : "show"))
         if inspector.responds(to: selector) { inspector.perform(selector) }
+    }
+
+    // MARK: - Link hints
+
+    private func refreshLinkHints() {
+        LinkHints.install(on: webView.configuration.userContentController)
+        LinkHints.configure(webView)
+    }
+
+    func showLinkHints(background: Bool = false) {
+        focusWebView()
+        LinkHints.start(in: webView, background: background)
+    }
+
+    func openLinkInBackground(_ url: URL) {
+        delegate?.pane(self, openLinkInBackground: URLRequest(url: url))
     }
 
     // MARK: - Content blocking

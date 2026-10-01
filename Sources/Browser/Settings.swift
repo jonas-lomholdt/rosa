@@ -105,6 +105,17 @@ enum Settings {
         set { defaults.set(newValue.rawValue, forKey: "linkTarget"); notify() }
     }
 
+    static var linkHintsEnabled: Bool {
+        get { defaults.object(forKey: "linkHintsEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "linkHintsEnabled"); notify() }
+    }
+
+    /// "#RRGGBB"
+    static var linkHintColor: String {
+        get { defaults.string(forKey: "linkHintColor") ?? "#FFD60A" }
+        set { defaults.set(newValue, forKey: "linkHintColor"); notify() }
+    }
+
     static var searchEngine: SearchEngine {
         get { defaults.string(forKey: "searchEngine").flatMap(SearchEngine.init) ?? .google }
         set { defaults.set(newValue.rawValue, forKey: "searchEngine"); notify() }
