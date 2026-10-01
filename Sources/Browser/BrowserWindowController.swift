@@ -325,6 +325,9 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     @objc func reloadPage(_ sender: Any?) { focusedPane?.webView.reload() }
     @objc func toggleWebInspector(_ sender: Any?) { focusedPane?.toggleWebInspector() }
     @objc func showLinkHints(_ sender: Any?) { focusedPane?.showLinkHints() }
+    @objc func showFindBar(_ sender: Any?) { focusedPane?.showFindBar() }
+    @objc func findNextMatch(_ sender: Any?) { focusedPane?.findNext() }
+    @objc func findPreviousMatch(_ sender: Any?) { focusedPane?.findPrevious() }
     @objc func navigateBack(_ sender: Any?) { focusedPane?.webView.goBack() }
     @objc func navigateForward(_ sender: Any?) { focusedPane?.webView.goForward() }
 

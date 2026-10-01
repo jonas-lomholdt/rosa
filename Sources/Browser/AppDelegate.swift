@@ -147,6 +147,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         edit.addItem(item("Copy", #selector(NSText.copy(_:)), "c"))
         edit.addItem(item("Paste", #selector(NSText.paste(_:)), "v"))
         edit.addItem(item("Select All", #selector(NSText.selectAll(_:)), "a"))
+        edit.addItem(.separator())
+        // Own submenu so it can take priority over pages without also hijacking ⌘C/⌘V.
+        let find = NSMenu(title: "Find")
+        find.addItem(item("Find…", #selector(BrowserWindowController.showFindBar(_:)), "f"))
+        find.addItem(item("Find Next", #selector(BrowserWindowController.findNextMatch(_:)), "g"))
+        find.addItem(item("Find Previous", #selector(BrowserWindowController.findPreviousMatch(_:)), "G", [.command, .shift]))
+        let findHolder = NSMenuItem(title: "Find", action: nil, keyEquivalent: "")
+        findHolder.submenu = find
+        edit.addItem(findHolder)
 
         let view = submenu("View", in: main)
         view.addItem(item("Vertical Tabs", #selector(toggleVerticalTabs(_:))))
@@ -200,7 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         window.addItem(.separator())
         NSApp.windowsMenu = window
 
-        priorityMenus = [appMenu, file, view, history, pane, window]
+        priorityMenus = [appMenu, file, find, view, history, pane, window]
         return main
     }
 

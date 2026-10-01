@@ -290,6 +290,45 @@ enum SelfTest {
             await press("gg")
             await pause(1)
             print("vim gg                             scrollY=\(await scrollY())")
+            let wide = "<title>wide</title><div style='width:6000px;height:100px'>left</div>"
+            pane.webView.loadHTMLString(wide, baseURL: URL(string: "https://example.com/"))
+            await pause(1.5)
+            window.makeFirstResponder(pane.webView)
+            func scrollX() async -> Int {
+                (try? await pane.webView.evaluateJavaScript("Math.round(scrollX)")) as? Int ?? -1
+            }
+            await press("ll")
+            await pause(0.5)
+            print("vim ll                             scrollX=\(await scrollX())")
+            await press("h")
+            await pause(0.5)
+            print("vim h                              scrollX=\(await scrollX())")
+
+            // Find in page.
+            let text = "<title>find</title><p>apple banana apple</p><p>cherry APPLE</p>"
+            pane.webView.loadHTMLString(text, baseURL: URL(string: "https://example.com/"))
+            await pause(1.5)
+            window.makeFirstResponder(pane.webView)
+            post("f", keyCode: 3, modifiers: [.command], window: window)
+            await pause(0.5)
+            let fieldFocused = (window.firstResponder as? NSTextView)?.delegate === pane.findBar.field
+            print("⌘F                                 bar visible=\(!pane.findBar.isHidden) field focused=\(fieldFocused)")
+            pane.findBar.field.stringValue = "apple"
+            pane.findBar.onChange?("apple")
+            await pause(1)
+            print("find 'apple'                       \(pane.findBar.statusText)")
+            pane.findNext()
+            await pause(0.7)
+            print("next                               \(pane.findBar.statusText)")
+            pane.findPrevious()
+            await pause(0.7)
+            print("previous                           \(pane.findBar.statusText)")
+            pane.findBar.field.stringValue = "zzz"
+            pane.findBar.onChange?("zzz")
+            await pause(1)
+            print("find 'zzz'                         \(pane.findBar.statusText)")
+            pane.hideFindBar()
+
             Settings.vimKeysEnabled = false
             await pause(0.3)
             await press("j")

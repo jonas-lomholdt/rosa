@@ -16,7 +16,8 @@
 - 🪟 **Split panes** — split any tab right or down, as many times as you like
 - 🧭 **Keyboard-first** — move between panes with arrow keys, like a terminal
 - 🔤 **Link hints** — press `f`, type the yellow label, and the link is clicked
-- ⌨️ **Vim keys** — `j`/`k` to scroll, `gg`/`G` for top and bottom (optional)
+- ⌨️ **Vim keys** — `hjkl` to scroll, `gg`/`G` for top and bottom (optional)
+- 🔍 **Find in page** — with a live match count
 - 🗂️ **Tabs** — horizontal, or a vertical sidebar
 - 🛡️ **Ad & tracker blocking** — on by default, one click to allow a site
 - 🔎 **Smart address bar** — autocompletes from your history as you type
@@ -34,7 +35,9 @@
 | `⌘T` | New tab |
 | `⌘L` | Address bar |
 | `f` / `⇧F` | Link hints / open link in background |
-| `j` / `k`, `gg` / `G` | Scroll down / up, jump to top / bottom |
+| `j` / `k`, `h` / `l` | Scroll down / up, left / right |
+| `gg` / `G` | Jump to top / bottom |
+| `⌘F`, `⌘G` / `⌘⇧G` | Find in page, next / previous match |
 | `⌘,` | Settings |
 | `F12` / `⌘⌥I` | Web Inspector |
 

@@ -76,6 +76,11 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     private let card = CardView()
     private let progressLine = ProgressLineView()
     private let overlay = FocusOverlayView()
+    let findBar = FindBar()
+    private var findCount = 0
+    private var findIndex = 0
+    /// Bumped per search so a slow result can't overwrite a newer one.
+    private var findGeneration = 0
     private var observations: [NSKeyValueObservation] = []
 
     init(configuration: WKWebViewConfiguration) {
@@ -109,7 +114,13 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         card.addSubview(webView)
         card.addSubview(progressLine)
 
-        for view in [card, addressBar, overlay] {
+        findBar.isHidden = true
+        findBar.onChange = { [weak self] text in self?.find(text, fresh: true) }
+        findBar.onNext = { [weak self] in self?.findNext() }
+        findBar.onPrevious = { [weak self] in self?.findPrevious() }
+        findBar.onClose = { [weak self] in self?.hideFindBar() }
+
+        for view in [card, addressBar, findBar, overlay] {
             addSubview(view)
         }
         observeWebView()
@@ -154,6 +165,10 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         webView.frame = card.bounds
         progressLine.frame = NSRect(x: 0, y: 0, width: card.bounds.width * webView.estimatedProgress, height: 2)
         overlay.frame = card.frame
+        findBar.frame = NSRect(
+            x: card.frame.maxX - FindBar.size.width - 10, y: card.frame.minY + 10,
+            width: min(FindBar.size.width, card.frame.width - 20), height: FindBar.size.height
+        )
     }
 
     // MARK: - Actions
@@ -205,6 +220,88 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         let selector = Selector((isWebInspectorVisible ? "close" : "show"))
         if inspector.responds(to: selector) { inspector.perform(selector) }
     }
+
+    // MARK: - Find in page
+
+    func showFindBar() {
+        findBar.isHidden = false
+        window?.makeFirstResponder(findBar.field)
+        findBar.field.selectText(nil)
+        if !findBar.field.stringValue.isEmpty { find(findBar.field.stringValue, fresh: true) }
+    }
+
+    func hideFindBar() {
+        guard !findBar.isHidden else { return }
+        findBar.isHidden = true
+        findGeneration += 1
+        Task { _ = try? await webView.evaluateJavaScript("getSelection().removeAllRanges()") }
+        focusWebView()
+    }
+
+    func findNext() {
+        guard !findBar.isHidden else { return showFindBar() }
+        find(findBar.field.stringValue, fresh: false)
+    }
+
+    func findPrevious() {
+        guard !findBar.isHidden else { return showFindBar() }
+        find(findBar.field.stringValue, fresh: false, backwards: true)
+    }
+
+    /// WebKit's find highlights and scrolls to the match; it doesn't report a count, so
+    /// matches are counted with a script (text nodes only, case-insensitive).
+    private func find(_ query: String, fresh: Bool, backwards: Bool = false) {
+        findGeneration += 1
+        let generation = findGeneration
+        Task {
+            guard !query.isEmpty else {
+                _ = try? await webView.evaluateJavaScript("getSelection().removeAllRanges()")
+                findCount = 0
+                findIndex = 0
+                findBar.setStatus(index: 0, count: 0, query: "")
+                return
+            }
+            if fresh {
+                // Start from the top rather than after the previous match.
+                _ = try? await webView.evaluateJavaScript("getSelection().removeAllRanges()")
+            }
+            let configuration = WKFindConfiguration()
+            configuration.backwards = backwards
+            configuration.caseSensitive = false
+            configuration.wraps = true
+            let result = try? await webView.find(query, configuration: configuration)
+            let count = (try? await webView.callAsyncJavaScript(
+                Self.countMatchesScript, arguments: ["query": query], in: nil, contentWorld: .defaultClient
+            )) as? Int ?? 0
+            guard generation == findGeneration else { return }
+
+            findCount = count
+            if result?.matchFound != true || count == 0 {
+                findIndex = 0
+            } else if fresh || findIndex == 0 {
+                findIndex = 1
+            } else if backwards {
+                findIndex = (findIndex - 2 + count) % count + 1
+            } else {
+                findIndex = findIndex % count + 1
+            }
+            findBar.setStatus(index: findIndex, count: findCount, query: query)
+        }
+    }
+
+    private static let countMatchesScript = """
+        const needle = query.toLowerCase();
+        let count = 0;
+        const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT, {
+          acceptNode: node => node.parentElement && !node.parentElement.closest('script,style,noscript,template,head')
+            ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+        });
+        while (walker.nextNode()) {
+          const text = walker.currentNode.data.toLowerCase();
+          for (let i = text.indexOf(needle); i !== -1; i = text.indexOf(needle, i + needle.length)) count++;
+        }
+        return count;
+        """
 
     // MARK: - Link hints
 
@@ -286,6 +383,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        // New page: refresh the match count if the find bar is open.
+        if !findBar.isHidden { find(findBar.field.stringValue, fresh: true) }
         let generation = faviconGeneration
         Task {
             let icon = await FaviconStore.shared.icon(for: webView)
