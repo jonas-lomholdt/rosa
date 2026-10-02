@@ -64,7 +64,12 @@ enum AppInfo {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "?"
         let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "\(short) (\(build))"
+        return "\(short) (\(isDevelopmentBuild ? "dev" : build))"
+    }
+
+    /// Local builds keep build number 0 from Resources/Info.plist; release.yml stamps the run number.
+    static var isDevelopmentBuild: Bool {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String == "0"
     }
 }
 
@@ -162,6 +167,11 @@ enum Settings {
     static var askWhereToSaveDownloads: Bool {
         get { defaults.bool(forKey: "askWhereToSaveDownloads") }
         set { defaults.set(newValue, forKey: "askWhereToSaveDownloads"); notify() }
+    }
+
+    static var checkForUpdatesOnLaunch: Bool {
+        get { defaults.object(forKey: "checkForUpdatesOnLaunch") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "checkForUpdatesOnLaunch"); notify() }
     }
 
     static var searchEngine: SearchEngine {

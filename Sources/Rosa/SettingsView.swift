@@ -52,10 +52,17 @@ final class SettingsModel: ObservableObject {
     @Published private(set) var allowlist: [String]
     @Published private(set) var blockerStatus = ""
     @Published private(set) var blockerUpdating = false
+    @Published var checkForUpdatesOnLaunch: Bool {
+        didSet { if Settings.checkForUpdatesOnLaunch != checkForUpdatesOnLaunch { Settings.checkForUpdatesOnLaunch = checkForUpdatesOnLaunch } }
+    }
+    @Published private(set) var updateStatus = ""
+    @Published private(set) var updaterBusy = false
+    @Published private(set) var availableUpdate: Updater.Release?
 
     private var observer: NSObjectProtocol?
     private var historyObserver: NSObjectProtocol?
     private var blockerObserver: NSObjectProtocol?
+    private var updaterObserver: NSObjectProtocol?
 
     init() {
         tabLayout = Settings.tabLayout
@@ -75,7 +82,14 @@ final class SettingsModel: ObservableObject {
         adBlockEnabled = Settings.adBlockEnabled
         enabledFilterLists = Settings.enabledFilterLists
         allowlist = Settings.adBlockAllowlist
+        checkForUpdatesOnLaunch = Settings.checkForUpdatesOnLaunch
         refreshBlockerStatus()
+        refreshUpdateStatus()
+        updaterObserver = NotificationCenter.default.addObserver(
+            forName: Updater.didChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshUpdateStatus() }
+        }
         blockerObserver = NotificationCenter.default.addObserver(
             forName: ContentBlocker.didChange, object: nil, queue: .main
         ) { [weak self] _ in
@@ -110,6 +124,22 @@ final class SettingsModel: ObservableObject {
         adBlockEnabled = Settings.adBlockEnabled
         enabledFilterLists = Settings.enabledFilterLists
         allowlist = Settings.adBlockAllowlist
+        checkForUpdatesOnLaunch = Settings.checkForUpdatesOnLaunch
+    }
+
+    private func refreshUpdateStatus() {
+        let updater = Updater.shared
+        updateStatus = updater.statusDescription
+        updaterBusy = updater.isBusy
+        if case .available(let release) = updater.status { availableUpdate = release } else { availableUpdate = nil }
+    }
+
+    func checkForUpdates() {
+        Updater.shared.checkNow()
+    }
+
+    func installUpdate() {
+        availableUpdate.map(Updater.shared.install)
     }
 
     private func refreshBlockerStatus() {
@@ -291,6 +321,24 @@ struct SettingsView: View {
                         Text(engine.name).tag(engine)
                     }
                 }
+            }
+
+            Section {
+                Toggle("Check for updates on launch", isOn: $model.checkForUpdatesOnLaunch)
+                LabeledContent(model.updateStatus) {
+                    if let release = model.availableUpdate {
+                        Button("Install \(release.version)") { model.installUpdate() }
+                    } else {
+                        Button("Check Now") { model.checkForUpdates() }
+                            .disabled(model.updaterBusy)
+                    }
+                }
+            } header: {
+                Text("Updates")
+            } footer: {
+                Text("Updates come from GitHub releases. Installing quits Rosa, replaces it and reopens it.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("About") {

@@ -24,6 +24,7 @@
 - ⬇️ **Downloads** — progress, cancel, show in Finder, right from the tab bar
 - 🎨 **Liquid Glass** look, light / dark / system theme
 - 🐞 **Web Inspector** — the same dev tools as Safari
+- 🔄 **Auto-updates** — checks GitHub on launch, installs and relaunches in one click
 
 ## ⌨️ Shortcuts
 

@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         newWindow(nil)
         NSApp.activate()
         SelfTest.runIfRequested()
+        Updater.shared.checkOnLaunch()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -72,6 +73,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         credits.addAttribute(.paragraphStyle, value: centred, range: NSRange(location: 0, length: credits.length))
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
         NSApp.activate()
+    }
+
+    @objc func checkForUpdates(_ sender: Any?) {
+        MainActor.assumeIsolated { Updater.shared.checkNow() }
     }
 
     @objc func showSettings(_ sender: Any?) {
@@ -130,6 +135,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             menuItem.state = Settings.tabLayout == .vertical ? .on : .off
         case #selector(toggleSharedAddressBar(_:)):
             menuItem.state = Settings.addressBarMode == .shared ? .on : .off
+        case #selector(checkForUpdates(_:)):
+            return !Updater.shared.isBusy
         default:
             break
         }
@@ -158,6 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         let appMenu = submenu("Rosa", in: main)
         appMenu.addItem(item("About Rosa", #selector(showAbout(_:))))
+        appMenu.addItem(item("Check for Updates…", #selector(checkForUpdates(_:))))
         appMenu.addItem(.separator())
         appMenu.addItem(item("Settings…", #selector(showSettings(_:)), ","))
         appMenu.addItem(.separator())

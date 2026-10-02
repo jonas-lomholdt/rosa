@@ -48,6 +48,13 @@ On by default (Settings → Content Blocking). EasyList + EasyPrivacy (and optio
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
+## Updates
+
+`Updater.swift` checks `api.github.com/repos/jonas-lomholdt/rosa/releases/latest` a few seconds after launch (Settings → Updates, or Rosa → Check for Updates…). Installing downloads the release zip into a staging folder on the app's volume, verifies the bundle id and signature, then a helper script waits for Rosa to quit, swaps the bundles and relaunches.
+
+- Local builds keep `CFBundleVersion` 0 from `Resources/Info.plist` ("dev" in About) and skip the launch check; release builds get the run number.
+- Test against a local feed: `BROWSER_UPDATE_URL=http://127.0.0.1:8765/latest.json` (a GitHub release JSON with `tag_name` and a `.zip` asset), plus `BROWSER_UPDATE_AUTOINSTALL=1` to install without the prompt.
+
 ## App icon
 
 `Resources/AppIcon.png` is generated from `Resources/logo-source.png` (strips the baked-in background and fits Apple's icon grid); `scripts/build.sh` turns it into `AppIcon.icns`:
