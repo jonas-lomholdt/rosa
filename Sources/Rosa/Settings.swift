@@ -76,107 +76,167 @@ enum AppInfo {
 enum Settings {
     static let didChange = Notification.Name("BrowserSettingsDidChange")
 
-    private static let defaults = UserDefaults.standard
+    /// `~/.rosa/settings.json`; `BROWSER_SETTINGS_FILE` points elsewhere (self-tests use a scratch file).
+    static let fileURL: URL = {
+        if let override = ProcessInfo.processInfo.environment["BROWSER_SETTINGS_FILE"] {
+            return URL(fileURLWithPath: override)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".rosa", isDirectory: true)
+            .appendingPathComponent("settings.json")
+    }()
+
+    private static let store = SettingsStore(url: fileURL)
+
+    /// Creates the file on first launch, carrying over settings from UserDefaults (where
+    /// they lived before), and starts watching it for hand edits.
+    static func load() {
+        if !store.fileExists {
+            let legacy = UserDefaults.standard
+            var imported: [String: Any] = [:]
+            for key in snapshot().keys {
+                if let value = legacy.object(forKey: key) { imported[key] = value }
+            }
+            store.addMissing(imported)
+            // Write every setting, defaults included, so the file shows what can be configured.
+            store.addMissing(snapshot())
+        }
+        store.onExternalChange = notify
+        store.startWatching()
+    }
+
+    /// Every setting in its JSON form.
+    private static func snapshot() -> [String: Any] {
+        [
+            "addressBarMode": addressBarMode.rawValue,
+            "tabLayout": tabLayout.rawValue,
+            "sidebarWidth": Double(sidebarWidth),
+            "sidebarAutoHide": sidebarAutoHide,
+            "appearance": appearance.rawValue,
+            "historyEnabled": historyEnabled,
+            "adBlockEnabled": adBlockEnabled,
+            "enabledFilterLists": enabledFilterLists.sorted(),
+            "adBlockAllowlist": adBlockAllowlist,
+            "linkTarget": linkTarget.rawValue,
+            "linkHintsEnabled": linkHintsEnabled,
+            "linkHintsAllPanes": linkHintsAllPanes,
+            "linkHintColor": linkHintColor,
+            "vimKeysEnabled": vimKeysEnabled,
+            "findHighlightColor": findHighlightColor,
+            "askWhereToSaveDownloads": askWhereToSaveDownloads,
+            "checkForUpdatesOnLaunch": checkForUpdatesOnLaunch,
+            "searchEngine": searchEngine.rawValue,
+        ]
+    }
+
+    private static func value<T>(_ key: String) -> T? {
+        store.values[key] as? T
+    }
+
+    private static func set(_ value: Any, _ key: String) {
+        store.set(value, forKey: key)
+        notify()
+    }
 
     static var addressBarMode: AddressBarMode {
-        get { defaults.string(forKey: "addressBarMode").flatMap(AddressBarMode.init) ?? .perPane }
-        set { defaults.set(newValue.rawValue, forKey: "addressBarMode"); notify() }
+        get { value("addressBarMode").flatMap(AddressBarMode.init) ?? .perPane }
+        set { set(newValue.rawValue, "addressBarMode") }
     }
 
     static var tabLayout: TabLayout {
-        get { defaults.string(forKey: "tabLayout").flatMap(TabLayout.init) ?? .horizontal }
-        set { defaults.set(newValue.rawValue, forKey: "tabLayout"); notify() }
+        get { value("tabLayout").flatMap(TabLayout.init) ?? .horizontal }
+        set { set(newValue.rawValue, "tabLayout") }
     }
 
     /// Vertical sidebar width in points.
     static var sidebarWidth: CGFloat {
-        get { (defaults.object(forKey: "sidebarWidth") as? Double).map { CGFloat($0) } ?? BrowserContentView.defaultSidebarWidth }
-        set { defaults.set(Double(newValue), forKey: "sidebarWidth"); notify() }
+        get { (value("sidebarWidth") as Double?).map { CGFloat($0) } ?? BrowserContentView.defaultSidebarWidth }
+        set { set(Double(newValue), "sidebarWidth") }
     }
 
     /// Vertical sidebar hides until the mouse reaches the window's left edge (or ⌃⌘S).
     static var sidebarAutoHide: Bool {
-        get { defaults.bool(forKey: "sidebarAutoHide") }
-        set { defaults.set(newValue, forKey: "sidebarAutoHide"); notify() }
+        get { value("sidebarAutoHide") ?? false }
+        set { set(newValue, "sidebarAutoHide") }
     }
 
     static var appearance: AppearanceMode {
-        get { defaults.string(forKey: "appearance").flatMap(AppearanceMode.init) ?? .system }
-        set { defaults.set(newValue.rawValue, forKey: "appearance"); notify() }
+        get { value("appearance").flatMap(AppearanceMode.init) ?? .system }
+        set { set(newValue.rawValue, "appearance") }
     }
 
     static var historyEnabled: Bool {
-        get { defaults.object(forKey: "historyEnabled") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "historyEnabled"); notify() }
+        get { value("historyEnabled") ?? true }
+        set { set(newValue, "historyEnabled") }
     }
 
     static var adBlockEnabled: Bool {
-        get { defaults.object(forKey: "adBlockEnabled") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "adBlockEnabled"); notify() }
+        get { value("adBlockEnabled") ?? true }
+        set { set(newValue, "adBlockEnabled") }
     }
 
     static var enabledFilterLists: Set<String> {
         get {
-            (defaults.array(forKey: "enabledFilterLists") as? [String]).map(Set.init)
+            (value("enabledFilterLists") as [String]?).map(Set.init)
                 ?? Set(FilterList.all.filter(\.enabledByDefault).map(\.id))
         }
-        set { defaults.set(newValue.sorted(), forKey: "enabledFilterLists"); notify() }
+        set { set(newValue.sorted(), "enabledFilterLists") }
     }
 
     /// Sites (normalized hosts, subdomains included) where content blocking is off.
     static var adBlockAllowlist: [String] {
-        get { defaults.stringArray(forKey: "adBlockAllowlist") ?? [] }
-        set { defaults.set(newValue, forKey: "adBlockAllowlist"); notify() }
+        get { value("adBlockAllowlist") ?? [] }
+        set { set(newValue, "adBlockAllowlist") }
     }
 
     static var linkTarget: LinkTarget {
-        get { defaults.string(forKey: "linkTarget").flatMap(LinkTarget.init) ?? .tab }
-        set { defaults.set(newValue.rawValue, forKey: "linkTarget"); notify() }
+        get { value("linkTarget").flatMap(LinkTarget.init) ?? .tab }
+        set { set(newValue.rawValue, "linkTarget") }
     }
 
     static var linkHintsEnabled: Bool {
-        get { defaults.object(forKey: "linkHintsEnabled") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "linkHintsEnabled"); notify() }
+        get { value("linkHintsEnabled") ?? true }
+        set { set(newValue, "linkHintsEnabled") }
     }
 
     /// `f` labels links in every pane of the tab, not just the focused one.
     static var linkHintsAllPanes: Bool {
-        get { defaults.object(forKey: "linkHintsAllPanes") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "linkHintsAllPanes"); notify() }
+        get { value("linkHintsAllPanes") ?? true }
+        set { set(newValue, "linkHintsAllPanes") }
     }
 
     /// "#RRGGBB"
     static var linkHintColor: String {
-        get { defaults.string(forKey: "linkHintColor") ?? "#FFD60A" }
-        set { defaults.set(newValue, forKey: "linkHintColor"); notify() }
+        get { value("linkHintColor") ?? "#FFD60A" }
+        set { set(newValue, "linkHintColor") }
     }
 
     /// j/k scroll, gg/G top/bottom.
     static var vimKeysEnabled: Bool {
-        get { defaults.object(forKey: "vimKeysEnabled") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "vimKeysEnabled"); notify() }
+        get { value("vimKeysEnabled") ?? true }
+        set { set(newValue, "vimKeysEnabled") }
     }
 
     /// "#RRGGBB" — find-in-page matches (current match solid, others tinted).
     static var findHighlightColor: String {
-        get { defaults.string(forKey: "findHighlightColor") ?? "#32D74B" }
-        set { defaults.set(newValue, forKey: "findHighlightColor"); notify() }
+        get { value("findHighlightColor") ?? "#32D74B" }
+        set { set(newValue, "findHighlightColor") }
     }
 
     /// Show a save panel for each download instead of saving straight to Downloads.
     static var askWhereToSaveDownloads: Bool {
-        get { defaults.bool(forKey: "askWhereToSaveDownloads") }
-        set { defaults.set(newValue, forKey: "askWhereToSaveDownloads"); notify() }
+        get { value("askWhereToSaveDownloads") ?? false }
+        set { set(newValue, "askWhereToSaveDownloads") }
     }
 
     static var checkForUpdatesOnLaunch: Bool {
-        get { defaults.object(forKey: "checkForUpdatesOnLaunch") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "checkForUpdatesOnLaunch"); notify() }
+        get { value("checkForUpdatesOnLaunch") ?? true }
+        set { set(newValue, "checkForUpdatesOnLaunch") }
     }
 
     static var searchEngine: SearchEngine {
-        get { defaults.string(forKey: "searchEngine").flatMap(SearchEngine.init) ?? .google }
-        set { defaults.set(newValue.rawValue, forKey: "searchEngine"); notify() }
+        get { value("searchEngine").flatMap(SearchEngine.init) ?? .google }
+        set { set(newValue.rawValue, "searchEngine") }
     }
 
     private static func notify() {

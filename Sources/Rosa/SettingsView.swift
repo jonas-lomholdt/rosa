@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Bridges `Settings` (UserDefaults + change notification) to SwiftUI, so the window
+/// Bridges `Settings` (~/.rosa/settings.json + change notification) to SwiftUI, so the window
 /// stays in sync when settings change elsewhere (e.g. the View menu toggles).
 @MainActor
 final class SettingsModel: ObservableObject {
@@ -344,6 +344,9 @@ struct SettingsView: View {
             Section("About") {
                 LabeledContent("Rosa", value: AppInfo.version)
                 Link("github.com/jonas-lomholdt/rosa", destination: AppInfo.repositoryURL)
+                LabeledContent("Settings file") {
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([Settings.fileURL]) }
+                }
             }
         }
         .formStyle(.grouped)

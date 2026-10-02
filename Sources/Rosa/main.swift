@@ -2,6 +2,7 @@ import AppKit
 
 // Before anything touches settings, history or WebKit's data store.
 Migration.run()
+Settings.load()
 
 let app = NSApplication.shared
 let delegate = AppDelegate()

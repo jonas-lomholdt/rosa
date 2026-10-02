@@ -29,6 +29,10 @@ scripts/build.sh release --run   # builds build/Rosa.app and opens it
 
 Settings (⌘,) and the View menu toggle **Vertical Tabs** and **Shared Address Bar** (default: slim bar per pane).
 
+## Settings file
+
+`Settings` reads and writes `~/.rosa/settings.json` (`SettingsStore`). On first launch it is created with every setting, carrying over values from UserDefaults. Hand edits apply live (the file and its folder are watched); invalid JSON is ignored and the previous values kept, and if Rosa later has to write over an invalid file it moves it to `settings.json.invalid` first. Unknown keys are preserved. Set `BROWSER_SETTINGS_FILE` to use a different file (e.g. for self-tests). Ad-block compile caches stay in UserDefaults.
+
 ## Content blocking
 
 On by default (Settings → Content Blocking). EasyList + EasyPrivacy (and optionally the EasyList Cookie List) are downloaded on first launch, refreshed weekly, converted by `FilterListConverter` (a subset of Adblock Plus syntax) and compiled into WebKit `WKContentRuleList`s, which WebKit caches. The shield in the address bar turns blocking off for one site.

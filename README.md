@@ -45,6 +45,8 @@
 | `⌘,` | Settings |
 | `F12` / `⌘⌥I` | Web Inspector |
 
+Settings are also stored in `~/.rosa/settings.json`. Edit the file and changes apply right away.
+
 ## 📦 Install
 
 ```bash
