@@ -326,6 +326,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         contentRoot.sidebarAutoHide = Settings.sidebarAutoHide
         contentRoot.showsSharedAddressBar = !perPane
         syncSharedAddressField()
+        refreshPaneHighlights()
     }
 
     // MARK: - Menu actions

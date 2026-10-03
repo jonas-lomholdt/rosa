@@ -112,7 +112,15 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     var shieldState: ShieldState { ContentBlocker.shared.shieldState(forHost: webView.url?.host()) }
 
     var highlight: Highlight = .none {
-        didSet { overlay.highlight = highlight }
+        didSet {
+            overlay.highlight = highlight
+            let alpha = highlight == .unfocused ? Settings.inactivePaneOpacity : 1
+            guard alphaValue != alpha else { return }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.15
+                animator().alphaValue = alpha
+            }
+        }
     }
 
     private let addressBar = GlassAddressBar()

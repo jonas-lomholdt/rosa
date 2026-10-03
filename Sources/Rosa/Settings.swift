@@ -112,6 +112,7 @@ enum Settings {
             "tabLayout": tabLayout.rawValue,
             "sidebarWidth": Double(sidebarWidth),
             "sidebarAutoHide": sidebarAutoHide,
+            "inactivePaneOpacity": inactivePaneOpacity,
             "appearance": appearance.rawValue,
             "historyEnabled": historyEnabled,
             "adBlockEnabled": adBlockEnabled,
@@ -158,6 +159,14 @@ enum Settings {
     static var sidebarAutoHide: Bool {
         get { value("sidebarAutoHide") ?? false }
         set { set(newValue, "sidebarAutoHide") }
+    }
+
+    static let inactivePaneOpacityRange: ClosedRange<Double> = 0.2...1
+
+    /// Opacity of the panes that don't have focus, when a tab is split (1 = fully opaque).
+    static var inactivePaneOpacity: Double {
+        get { min(max(value("inactivePaneOpacity") ?? 1, inactivePaneOpacityRange.lowerBound), inactivePaneOpacityRange.upperBound) }
+        set { set(newValue, "inactivePaneOpacity") }
     }
 
     static var appearance: AppearanceMode {

@@ -13,6 +13,9 @@ final class SettingsModel: ObservableObject {
     @Published var appearance: AppearanceMode {
         didSet { if Settings.appearance != appearance { Settings.appearance = appearance } }
     }
+    @Published var inactivePaneOpacity: Double {
+        didSet { if Settings.inactivePaneOpacity != inactivePaneOpacity { Settings.inactivePaneOpacity = inactivePaneOpacity } }
+    }
     @Published var linkHintsEnabled: Bool {
         didSet { if Settings.linkHintsEnabled != linkHintsEnabled { Settings.linkHintsEnabled = linkHintsEnabled } }
     }
@@ -68,6 +71,7 @@ final class SettingsModel: ObservableObject {
         tabLayout = Settings.tabLayout
         addressBarMode = Settings.addressBarMode
         appearance = Settings.appearance
+        inactivePaneOpacity = Settings.inactivePaneOpacity
         searchEngine = Settings.searchEngine
         linkTarget = Settings.linkTarget
         sidebarAutoHide = Settings.sidebarAutoHide
@@ -111,6 +115,7 @@ final class SettingsModel: ObservableObject {
         tabLayout = Settings.tabLayout
         addressBarMode = Settings.addressBarMode
         appearance = Settings.appearance
+        inactivePaneOpacity = Settings.inactivePaneOpacity
         searchEngine = Settings.searchEngine
         linkTarget = Settings.linkTarget
         sidebarAutoHide = Settings.sidebarAutoHide
@@ -200,6 +205,14 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 ColorPicker("Find highlight colour", selection: model.findHighlightColorBinding, supportsOpacity: false)
+                LabeledContent("Unfocused pane opacity") {
+                    HStack {
+                        Slider(value: $model.inactivePaneOpacity, in: Settings.inactivePaneOpacityRange, step: 0.05)
+                        Text("\(Int((model.inactivePaneOpacity * 100).rounded()))%")
+                            .monospacedDigit()
+                            .frame(width: 40, alignment: .trailing)
+                    }
+                }
             }
 
             Section {
