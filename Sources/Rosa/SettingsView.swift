@@ -218,7 +218,7 @@ struct SettingsView: View {
             } header: {
                 Text("Tabs & Links")
             } footer: {
-                Text("Drag the sidebar's edge to resize it. When auto-hiding, move the mouse to the window's left edge (or press ⌃⌘S) to show it. Open links in: applies to links that open a new window, and to ⌘-click (which opens in the background).")
+                Text("Drag the sidebar's edge to resize it. When auto-hiding, it shrinks to a column of favicons; hover it (or press ⌃⌘S) to expand it. Open links in: applies to links that open a new window, and to ⌘-click (which opens in the background).")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

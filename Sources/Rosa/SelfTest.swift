@@ -423,13 +423,13 @@ enum SelfTest {
             print("sidebar double-click reset         setting=\(Int(Settings.sidebarWidth))")
             Settings.sidebarAutoHide = true
             await pause(0.5)
-            print("auto-hide on                       sidebar minX=\(Int(root.debugSidebarFrame.minX))")
+            print("auto-hide on                       sidebar width=\(Int(root.debugSidebarFrame.width))")
             controller.toggleSidebar(nil)
             await pause(0.5)
-            print("⌃⌘S reveal                         sidebar minX=\(Int(root.debugSidebarFrame.minX)) revealed=\(root.isSidebarRevealed)")
+            print("⌃⌘S reveal                         sidebar width=\(Int(root.debugSidebarFrame.width)) revealed=\(root.isSidebarRevealed)")
             controller.toggleSidebar(nil)
             await pause(0.5)
-            print("⌃⌘S hide                           sidebar minX=\(Int(root.debugSidebarFrame.minX)) revealed=\(root.isSidebarRevealed)")
+            print("⌃⌘S hide                           sidebar width=\(Int(root.debugSidebarFrame.width)) revealed=\(root.isSidebarRevealed)")
             Settings.sidebarAutoHide = false
             Settings.tabLayout = .horizontal
         }

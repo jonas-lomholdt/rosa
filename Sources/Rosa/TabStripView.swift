@@ -30,6 +30,15 @@ final class TabStripView: ChromeView {
         }
     }
 
+    /// Vertical only: show just the favicons (the auto-hiding sidebar's collapsed rail).
+    var isCollapsed = false {
+        didSet {
+            guard isCollapsed != oldValue else { return }
+            for view in itemViews { view.isCompact = isCollapsed }
+            needsLayout = true
+        }
+    }
+
     /// Space kept free for the window's traffic-light buttons.
     var trafficLightInset: CGFloat = 78 { didSet { needsLayout = true } }
 
@@ -104,6 +113,7 @@ final class TabStripView: ChromeView {
                 guard let self, let view, let index = self.itemViews.firstIndex(where: { $0 === view }) else { return }
                 self.delegate?.tabStrip(self, didCloseTabAt: index)
             }
+            view.isCompact = isCollapsed
             documentView.addSubview(view)
             itemViews.append(view)
         }
@@ -129,6 +139,8 @@ final class TabStripView: ChromeView {
 
         switch tabLayout {
         case .horizontal:
+            newTabButton.isHidden = false
+            downloadsButton.isHidden = !showsDownloadsButton
             newTabButton.frame = NSRect(
                 x: bounds.width - buttonSize - 8, y: (bounds.height - buttonSize) / 2,
                 width: buttonSize, height: buttonSize
@@ -150,6 +162,9 @@ final class TabStripView: ChromeView {
 
         case .vertical:
             let top = Self.horizontalHeight
+            // The collapsed rail's top row sits under the traffic lights, so the buttons wait for the expanded sidebar.
+            newTabButton.isHidden = isCollapsed
+            downloadsButton.isHidden = isCollapsed || !showsDownloadsButton
             newTabButton.frame = NSRect(
                 x: bounds.width - buttonSize - 8, y: (top - buttonSize) / 2,
                 width: buttonSize, height: buttonSize
@@ -158,8 +173,9 @@ final class TabStripView: ChromeView {
             scrollView.frame = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
             let rowHeight: CGFloat = 30
             let width = scrollView.frame.width
+            let inset: CGFloat = isCollapsed ? 6 : 8
             slots = itemViews.indices.map { index in
-                NSRect(x: 8, y: 4 + CGFloat(index) * (rowHeight + 2), width: width - 16, height: rowHeight)
+                NSRect(x: inset, y: 4 + CGFloat(index) * (rowHeight + 2), width: width - inset * 2, height: rowHeight)
             }
             documentView.frame = NSRect(
                 x: 0, y: 0, width: width,
@@ -289,6 +305,9 @@ private final class TabItemView: NSView {
     private let paneBadge = NonDraggingLabel(labelWithString: "")
     private let closeButton: NSButton
     private var isSelected = false
+    private var paneCount = 1
+    /// Favicon only, centred (collapsed sidebar rail).
+    var isCompact = false { didSet { updateAppearance(); needsLayout = true } }
     private var isHovered = false { didSet { updateAppearance() } }
     private var trackingArea: NSTrackingArea?
 
@@ -336,7 +355,7 @@ private final class TabItemView: NSView {
         if iconView.favicon !== item.favicon { iconView.favicon = item.favicon }
         toolTip = item.title
         paneBadge.stringValue = item.paneCount > 1 ? "▦ \(item.paneCount)" : ""
-        paneBadge.isHidden = item.paneCount <= 1
+        paneCount = item.paneCount
         isSelected = selected
         updateAppearance()
         needsLayout = true
@@ -344,12 +363,19 @@ private final class TabItemView: NSView {
 
     private func updateAppearance() {
         titleLabel.textColor = isSelected ? .labelColor : .secondaryLabelColor
-        closeButton.isHidden = !(isHovered || isSelected)
+        closeButton.isHidden = isCompact || !(isHovered || isSelected)
+        titleLabel.isHidden = isCompact
+        paneBadge.isHidden = isCompact || paneCount <= 1
         needsDisplay = true
     }
 
     override func layout() {
         super.layout()
+        if isCompact {
+            iconView.frame = NSRect(x: ((bounds.width - 16) / 2).rounded(), y: ((bounds.height - 16) / 2).rounded(),
+                                    width: 16, height: 16)
+            return
+        }
         let closeSize: CGFloat = 16
         closeButton.frame = NSRect(
             x: bounds.width - closeSize - 6, y: (bounds.height - closeSize) / 2,

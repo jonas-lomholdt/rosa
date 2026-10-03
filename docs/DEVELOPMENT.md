@@ -23,7 +23,7 @@ scripts/build.sh release --run   # builds build/Rosa.app and opens it
 | f / ⇧F | Link hints: label clickable elements, type a label to click / open in background (`LinkHints.swift`). With "all panes" on, `BrowserWindowController` runs one session across every pane in the tab |
 | j / k, h / l, gg / G | Vim-style scrolling (same injected script as link hints) |
 | ⌘F, ⌘G / ⌘⇧G | Find in page (`FindBar.swift`), next / previous |
-| ⌃⌘S | Show/hide the auto-hiding vertical sidebar |
+| ⌃⌘S | Expand/collapse the auto-hiding vertical sidebar (collapsed, it is a rail of favicons; hovering it expands) |
 | ⌥⌘L | Downloads popover (`DownloadManager`, `DownloadsView`) |
 | F12 / ⌘⌥I | Toggle Web Inspector (also right-click → Inspect Element) |
 

@@ -71,12 +71,14 @@ final class HeaderView: ChromeView {
 
 /// Window content: translucent background, tab strip (top row or floating glass sidebar),
 /// optional header, and the selected tab's split tree. The vertical sidebar can be resized
-/// by dragging its edge, and can auto-hide (revealed by hovering the window's left edge).
+/// by dragging its edge, and can auto-hide to a rail of favicons (hover it to expand over the page).
 final class BrowserContentView: NSView {
     static let defaultSidebarWidth: CGFloat = 220
     static let sidebarWidthRange: ClosedRange<CGFloat> = 160...420
     /// Room for the traffic-light buttons when the sidebar is hidden.
     static let trafficLightInset: CGFloat = 78
+    /// Width of the auto-hiding sidebar's collapsed glass rail.
+    static let railWidth: CGFloat = 44
 
     let tabStrip = TabStripView()
     let header = HeaderView()
@@ -89,6 +91,7 @@ final class BrowserContentView: NSView {
     private let edgeHotZone = HoverZoneView()
     private let sidebarHoverZone = HoverZoneView()
     private var hideWorkItem: DispatchWorkItem?
+    private var revealWorkItem: DispatchWorkItem?
 
     var tabLayout: TabLayout = .horizontal {
         didSet { tabStrip.tabLayout = tabLayout; needsLayout = true }
@@ -110,7 +113,7 @@ final class BrowserContentView: NSView {
         }
     }
 
-    /// Auto-hide mode only: whether the sidebar is currently slid in over the page.
+    /// Auto-hide mode only: whether the sidebar is expanded over the page (otherwise it's a favicon rail).
     private(set) var isSidebarRevealed = false
 
     private var isVerticalAutoHide: Bool { tabLayout == .vertical && sidebarAutoHide }
@@ -140,7 +143,8 @@ final class BrowserContentView: NSView {
         resizeHandle.onDoubleClick = { [weak self] in
             self?.onSidebarResized?(BrowserContentView.defaultSidebarWidth)
         }
-        edgeHotZone.onEnter = { [weak self] in self?.setSidebarRevealed(true) }
+        edgeHotZone.onEnter = { [weak self] in self?.scheduleReveal() }
+        edgeHotZone.onExit = { [weak self] in self?.revealWorkItem?.cancel() }
         sidebarHoverZone.onEnter = { [weak self] in self?.hideWorkItem?.cancel() }
         sidebarHoverZone.onExit = { [weak self] in self?.scheduleHide() }
 
@@ -163,6 +167,7 @@ final class BrowserContentView: NSView {
 
     private func setSidebarRevealed(_ revealed: Bool) {
         hideWorkItem?.cancel()
+        revealWorkItem?.cancel()
         guard isVerticalAutoHide, revealed != isSidebarRevealed else { return }
         isSidebarRevealed = revealed
         NSAnimationContext.runAnimationGroup { context in
@@ -173,6 +178,14 @@ final class BrowserContentView: NSView {
             needsLayout = true
             layoutSubtreeIfNeeded()
         }
+    }
+
+    /// A short delay so the mouse passing over the rail (or clicking a favicon) doesn't pop the sidebar open.
+    private func scheduleReveal() {
+        revealWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in self?.setSidebarRevealed(true) }
+        revealWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: item)
     }
 
     private func scheduleHide() {
@@ -204,6 +217,7 @@ final class BrowserContentView: NSView {
             edgeHotZone.isHidden = true
             sidebarHoverZone.isHidden = true
             header.leadingInset = 0
+            tabStrip.isCollapsed = false
             let stripHeight = TabStripView.horizontalHeight
             tabStrip.frame = NSRect(x: 0, y: 0, width: bounds.width, height: stripHeight)
             var top = stripHeight
@@ -215,11 +229,15 @@ final class BrowserContentView: NSView {
             contentRect = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
 
         case .vertical:
-            let width = min(sidebarWidth, bounds.width / 2)
+            let fullWidth = min(sidebarWidth, bounds.width / 2)
             let autoHide = sidebarAutoHide
-            // When auto-hiding, the page takes the full width and the sidebar floats over it.
-            let contentX = autoHide ? 0 : width
-            let sidebarX = autoHide && !isSidebarRevealed ? -width : margin
+            let collapsed = autoHide && !isSidebarRevealed
+            // When auto-hiding, the page sits beside the favicon rail and the expanded sidebar floats over it.
+            let railWidth = margin + Self.railWidth
+            let contentX = autoHide ? railWidth : fullWidth
+            let width = collapsed ? railWidth : fullWidth
+            let sidebarX = margin
+            tabStrip.isCollapsed = collapsed
 
             sidebarGlass.isHidden = false
             // The glass panel lines up with the panes (top of their address bars to their bottom);
@@ -228,18 +246,19 @@ final class BrowserContentView: NSView {
             sidebarGlass.frame = NSRect(x: sidebarX, y: paneTop, width: width - margin,
                                         height: max(0, bounds.height - paneTop - margin))
             tabStrip.frame = NSRect(x: sidebarX, y: 0, width: width - margin, height: bounds.height - margin)
-            sidebarGlass.shadow = autoHide ? Self.floatingShadow : nil
+            sidebarGlass.shadow = autoHide && !collapsed ? Self.floatingShadow : nil
 
-            resizeHandle.isHidden = autoHide && !isSidebarRevealed
+            resizeHandle.isHidden = collapsed
             resizeHandle.frame = NSRect(x: sidebarGlass.frame.maxX - 2, y: sidebarGlass.frame.minY, width: 8, height: sidebarGlass.frame.height)
 
-            edgeHotZone.isHidden = !autoHide || isSidebarRevealed
-            edgeHotZone.frame = NSRect(x: 0, y: HeaderView.height, width: 6, height: max(0, bounds.height - HeaderView.height))
+            edgeHotZone.isHidden = !collapsed
+            edgeHotZone.frame = NSRect(x: 0, y: HeaderView.height, width: railWidth,
+                                       height: max(0, bounds.height - HeaderView.height))
             sidebarHoverZone.isHidden = !autoHide || !isSidebarRevealed
             sidebarHoverZone.frame = tabStrip.frame.insetBy(dx: -margin, dy: -margin)
 
             header.isHidden = false
-            header.leadingInset = autoHide ? Self.trafficLightInset : 0
+            header.leadingInset = autoHide ? max(0, Self.trafficLightInset - contentX) : 0
             header.frame = NSRect(x: contentX, y: 0, width: bounds.width - contentX, height: HeaderView.height)
             let top = HeaderView.height - margin
             contentRect = NSRect(x: contentX, y: top, width: bounds.width - contentX, height: max(0, bounds.height - top))
