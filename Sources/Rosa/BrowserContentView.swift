@@ -91,7 +91,6 @@ final class BrowserContentView: NSView {
     private let edgeHotZone = HoverZoneView()
     private let sidebarHoverZone = HoverZoneView()
     private var hideWorkItem: DispatchWorkItem?
-    private var revealWorkItem: DispatchWorkItem?
 
     var tabLayout: TabLayout = .horizontal {
         didSet { tabStrip.tabLayout = tabLayout; needsLayout = true }
@@ -143,8 +142,7 @@ final class BrowserContentView: NSView {
         resizeHandle.onDoubleClick = { [weak self] in
             self?.onSidebarResized?(BrowserContentView.defaultSidebarWidth)
         }
-        edgeHotZone.onEnter = { [weak self] in self?.scheduleReveal() }
-        edgeHotZone.onExit = { [weak self] in self?.revealWorkItem?.cancel() }
+        edgeHotZone.onEnter = { [weak self] in self?.setSidebarRevealed(true) }
         sidebarHoverZone.onEnter = { [weak self] in self?.hideWorkItem?.cancel() }
         sidebarHoverZone.onExit = { [weak self] in self?.scheduleHide() }
 
@@ -167,7 +165,6 @@ final class BrowserContentView: NSView {
 
     private func setSidebarRevealed(_ revealed: Bool) {
         hideWorkItem?.cancel()
-        revealWorkItem?.cancel()
         guard isVerticalAutoHide, revealed != isSidebarRevealed else { return }
         isSidebarRevealed = revealed
         NSAnimationContext.runAnimationGroup { context in
@@ -178,14 +175,6 @@ final class BrowserContentView: NSView {
             needsLayout = true
             layoutSubtreeIfNeeded()
         }
-    }
-
-    /// A short delay so the mouse passing over the rail (or clicking a favicon) doesn't pop the sidebar open.
-    private func scheduleReveal() {
-        revealWorkItem?.cancel()
-        let item = DispatchWorkItem { [weak self] in self?.setSidebarRevealed(true) }
-        revealWorkItem = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: item)
     }
 
     private func scheduleHide() {

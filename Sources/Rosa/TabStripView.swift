@@ -147,14 +147,16 @@ final class TabStripView: ChromeView {
             )
             downloadsButton.frame = newTabButton.frame.offsetBy(dx: -(buttonSize + 2), dy: 0)
             let buttonsMinX = showsDownloadsButton ? downloadsButton.frame.minX : newTabButton.frame.minX
-            scrollView.frame = NSRect(
+            let scrollFrame = NSRect(
                 x: trafficLightInset, y: 0,
                 width: max(0, buttonsMinX - 4 - Self.reservedDragSpace - trafficLightInset), height: bounds.height - 1
             )
-            let available = scrollView.frame.width
+            scrollView.frame = scrollFrame
+            // Sizes come from the target frame: while the sidebar animates, `scrollView.frame` still reports the old one.
+            let available = scrollFrame.width
             let count = CGFloat(max(itemViews.count, 1))
             let width = min(240, max(110, ((available - spacing * (count - 1)) / count).rounded(.down)))
-            let height = scrollView.frame.height
+            let height = scrollFrame.height
             slots = itemViews.indices.map { index in
                 NSRect(x: CGFloat(index) * (width + spacing), y: 4, width: width, height: height - 8)
             }
@@ -170,16 +172,17 @@ final class TabStripView: ChromeView {
                 width: buttonSize, height: buttonSize
             )
             downloadsButton.frame = newTabButton.frame.offsetBy(dx: -(buttonSize + 2), dy: 0)
-            scrollView.frame = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
+            let scrollFrame = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
+            scrollView.frame = scrollFrame
             let rowHeight: CGFloat = 30
-            let width = scrollView.frame.width
+            let width = scrollFrame.width
             let inset: CGFloat = isCollapsed ? 6 : 8
             slots = itemViews.indices.map { index in
                 NSRect(x: inset, y: 4 + CGFloat(index) * (rowHeight + 2), width: width - inset * 2, height: rowHeight)
             }
             documentView.frame = NSRect(
                 x: 0, y: 0, width: width,
-                height: max(scrollView.contentSize.height, (slots.last?.maxY ?? 0) + 4)
+                height: max(scrollFrame.height, (slots.last?.maxY ?? 0) + 4)
             )
         }
         place(dragOrder ?? itemViews)
