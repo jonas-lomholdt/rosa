@@ -42,6 +42,11 @@ final class TabStripView: ChromeView {
     /// Space kept free for the window's traffic-light buttons.
     var trafficLightInset: CGFloat = 78 { didSet { needsLayout = true } }
 
+    /// Left edge of the top-row buttons (+, downloads) in vertical layout, in this view's coordinates.
+    var topRowButtonsMinX: CGFloat {
+        showsDownloadsButton ? downloadsButton.frame.minX : newTabButton.frame.minX
+    }
+
     private let scrollView = NSScrollView()
     private let documentView = TabListDocumentView()
     private let newTabButton: NSButton

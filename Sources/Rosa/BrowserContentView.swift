@@ -84,6 +84,7 @@ final class BrowserContentView: NSView {
 
     let tabStrip = TabStripView()
     let header = HeaderView()
+    let navigationButtons = NavigationButtonsView()
     let bookmarksBar = BookmarksBarView()
     /// Called when a sidebar resize finishes, with the new width.
     var onSidebarResized: ((CGFloat) -> Void)?
@@ -155,7 +156,7 @@ final class BrowserContentView: NSView {
 
         // Back to front: page content, header, then the sidebar (it floats over both when auto-hiding).
         bookmarksBar.isHidden = true
-        for view in [background, header, bookmarksBar, sidebarGlass, tabStrip, resizeHandle, edgeHotZone, sidebarHoverZone] {
+        for view in [background, header, bookmarksBar, sidebarGlass, tabStrip, navigationButtons, resizeHandle, edgeHotZone, sidebarHoverZone] {
             addSubview(view)
         }
     }
@@ -263,6 +264,37 @@ final class BrowserContentView: NSView {
         }
 
         tabContent?.frame = contentRect
+        layoutNavigationButtons()
+    }
+
+    /// Back / forward / reload right after the traffic lights, in the top row of every layout:
+    /// the tabs (horizontal), the sidebar's top row, or the header beside the collapsed rail make room.
+    private func layoutNavigationButtons() {
+        let size = navigationButtons.fittingSize
+        var centerY = TabStripView.horizontalHeight / 2
+        var minX = Self.trafficLightInset - 4
+        if let zoom = window?.standardWindowButton(.zoomButton), let superview = zoom.superview {
+            let frame = convert(superview.convert(zoom.frame, to: nil), from: nil)
+            centerY = frame.midY
+            minX = frame.maxX + 12
+        }
+        let y = (centerY - size.height / 2).rounded()
+        switch tabLayout {
+        case .horizontal:
+            navigationButtons.frame = NSRect(x: minX, y: y, width: size.width, height: size.height)
+            tabStrip.trafficLightInset = navigationButtons.frame.maxX + 4
+        case .vertical:
+            let sidebarButtons = tabStrip.frame.minX + tabStrip.topRowButtonsMinX
+            let fitsInSidebar = !(isVerticalAutoHide && !isSidebarRevealed) && minX + size.width + 4 <= sidebarButtons
+            if fitsInSidebar {
+                navigationButtons.frame = NSRect(x: minX, y: y, width: size.width, height: size.height)
+            } else {
+                // Collapsed rail or narrow sidebar: at the start of the header, past the traffic lights.
+                let x = max(minX, header.frame.minX + 8)
+                navigationButtons.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
+                header.leadingInset = max(header.leadingInset, navigationButtons.frame.maxX + 4 - header.frame.minX)
+            }
+        }
     }
 
     /// Places the bookmarks bar (if shown) where the panes would start; returns the panes' new top.
@@ -332,4 +364,78 @@ private final class HoverZoneView: NSView {
 
     override func mouseEntered(with event: NSEvent) { onEnter?() }
     override func mouseExited(with event: NSEvent) { onExit?() }
+}
+
+/// Back, forward (only when there's somewhere to go) and reload/stop, beside the traffic lights.
+final class NavigationButtonsView: NSView {
+    var onBack: (() -> Void)?
+    var onForward: (() -> Void)?
+    var onReload: (() -> Void)?
+    var onStop: (() -> Void)?
+
+    private let back = NavigationButtonsView.button("arrow.left", "Back (⌘[)")
+    private let forward = NavigationButtonsView.button("arrow.right", "Forward (⌘])")
+    private let reload = NavigationButtonsView.button("arrow.clockwise", "Reload (⌘R)")
+    private var isLoading = false
+    private static let buttonSize: CGFloat = 26
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        for button in [back, forward, reload] {
+            button.target = self
+            addSubview(button)
+        }
+        back.action = #selector(backClicked)
+        forward.action = #selector(forwardClicked)
+        reload.action = #selector(reloadClicked)
+        update(canGoBack: false, canGoForward: false, isLoading: false)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override var isFlipped: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    func update(canGoBack: Bool, canGoForward: Bool, isLoading: Bool) {
+        back.isEnabled = canGoBack
+        forward.isHidden = !canGoForward
+        self.isLoading = isLoading
+        reload.image = Self.symbol(isLoading ? "xmark" : "arrow.clockwise")
+        reload.toolTip = isLoading ? "Stop" : "Reload (⌘R)"
+        if frame.width != fittingSize.width { superview?.needsLayout = true }
+        needsLayout = true
+    }
+
+    override var fittingSize: NSSize {
+        let count = CGFloat(forward.isHidden ? 2 : 3)
+        return NSSize(width: count * Self.buttonSize + (count - 1) * 2, height: Self.buttonSize)
+    }
+
+    override func layout() {
+        super.layout()
+        var x: CGFloat = 0
+        for button in [back, forward, reload] where !button.isHidden {
+            button.frame = NSRect(x: x, y: 0, width: Self.buttonSize, height: Self.buttonSize)
+            x += Self.buttonSize + 2
+        }
+    }
+
+    @objc private func backClicked() { onBack?() }
+    @objc private func forwardClicked() { onForward?() }
+    @objc private func reloadClicked() { isLoading ? onStop?() : onReload?() }
+
+    private static func button(_ symbol: String, _ tip: String) -> NSButton {
+        let button = NSButton(image: Self.symbol(symbol), target: nil, action: nil)
+        button.isBordered = false
+        button.bezelStyle = .accessoryBarAction
+        button.showsBorderOnlyWhileMouseInside = true
+        button.contentTintColor = .secondaryLabelColor
+        button.toolTip = tip
+        return button
+    }
+
+    private static func symbol(_ name: String) -> NSImage {
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil) ?? NSImage()
+        return image.withSymbolConfiguration(.init(pointSize: 13, weight: .regular)) ?? image
+    }
 }

@@ -421,7 +421,14 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
             webView.observe(\.url) { [weak self] _, _ in MainActor.assumeIsolated { self?.pageStateChanged() } },
             webView.observe(\.title) { [weak self] _, _ in MainActor.assumeIsolated { self?.titleChanged() } },
             webView.observe(\.estimatedProgress) { [weak self] _, _ in MainActor.assumeIsolated { self?.progressChanged() } },
-            webView.observe(\.isLoading) { [weak self] _, _ in MainActor.assumeIsolated { self?.progressChanged() } },
+            webView.observe(\.isLoading) { [weak self] _, _ in
+                MainActor.assumeIsolated {
+                    self?.progressChanged()
+                    self.map { $0.delegate?.paneDidChangeState($0) }
+                }
+            },
+            webView.observe(\.canGoBack) { [weak self] _, _ in MainActor.assumeIsolated { self.map { $0.delegate?.paneDidChangeState($0) } } },
+            webView.observe(\.canGoForward) { [weak self] _, _ in MainActor.assumeIsolated { self.map { $0.delegate?.paneDidChangeState($0) } } },
         ]
     }
 

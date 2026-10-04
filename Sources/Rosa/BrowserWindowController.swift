@@ -75,6 +75,12 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
             focusedPane?.focusWebView()
         }
 
+        let navigation = contentRoot.navigationButtons
+        navigation.onBack = { [weak self] in self?.focusedPane?.webView.goBack() }
+        navigation.onForward = { [weak self] in self?.focusedPane?.webView.goForward() }
+        navigation.onReload = { [weak self] in self?.focusedPane?.webView.reload() }
+        navigation.onStop = { [weak self] in self?.focusedPane?.webView.stopLoading() }
+
         contentRoot.bookmarksBar.bookmarks = Bookmarks.items
         contentRoot.bookmarksBar.onOpen = { [weak self] url, background in self?.openBookmark(url, background: background) }
         contentRoot.bookmarksBar.onEdit = { [weak self] path, anchor in
@@ -242,6 +248,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
             refreshPaneHighlights()
             updateTitle()
             syncSharedAddressField()
+            updateNavigationButtons()
         }
         reloadTabStrip()
     }
@@ -330,6 +337,14 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         if field.currentEditor() == nil {
             field.stringValue = focusedPane?.displayURL ?? ""
         }
+    }
+
+    private func updateNavigationButtons() {
+        let webView = focusedPane?.webView
+        contentRoot.navigationButtons.update(
+            canGoBack: webView?.canGoBack ?? false, canGoForward: webView?.canGoForward ?? false,
+            isLoading: webView?.isLoading ?? false
+        )
     }
 
     private func updateTitle() {
@@ -480,6 +495,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         if pane === focusedPane {
             updateTitle()
             syncSharedAddressField()
+            updateNavigationButtons()
         }
     }
 
