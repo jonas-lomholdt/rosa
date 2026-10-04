@@ -6,6 +6,8 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.4.0
+
 ### Bookmarks
 - **Bookmarks bar** across the top of the window (⌘⇧B to show or hide), with folders that open as menus and a » menu for what doesn't fit.
 - **⌘B bookmarks the current page**: rename it, pick a folder or remove it in the little panel that pops up. ⌘B on a bookmarked page edits it.
