@@ -78,7 +78,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         contentRoot.bookmarksBar.bookmarks = Bookmarks.items
         contentRoot.bookmarksBar.onOpen = { [weak self] url, background in self?.openBookmark(url, background: background) }
         contentRoot.bookmarksBar.onEdit = { [weak self] path, anchor in
-            self?.bookmarkEditor.show(path, added: false, relativeTo: anchor.bounds, of: anchor)
+            self?.bookmarkEditor.show(path, added: false, below: anchor)
         }
         contentRoot.bookmarksBar.onNewFolder = { [weak self] in self?.addBookmarkFolder() }
         bookmarksObserver = NotificationCenter.default.addObserver(
@@ -387,16 +387,13 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     }
 
     /// Adds `url` to the end of the bar (or finds its existing bookmark) and opens the editor,
-    /// hanging from the address bar, flush with its right end (so it stays inside the window).
+    /// hanging from the right end of the address bar (where a star button would be).
     private func bookmark(_ url: URL, title: String, from pane: PaneView) {
         bookmarkEditor.close()  // applies its edits first, so the paths below are current
         let existing = Bookmarks.path(of: url)
         let path = existing ?? Bookmarks.add(Bookmark(title: title.isEmpty ? (url.host() ?? "") : title, kind: .link(url)))
         let bar = Settings.addressBarMode == .shared ? contentRoot.header.addressBarView : pane.addressBarView
-        // The popover centres on the anchor; half its width (plus its border) in from the right edge.
-        let inset = BookmarkEditorView.width / 2 + 14
-        let anchor = NSRect(x: max(0, bar.bounds.maxX - inset - 1), y: 0, width: 2, height: bar.bounds.height)
-        bookmarkEditor.show(path, added: existing == nil, relativeTo: anchor, of: bar)
+        bookmarkEditor.show(path, added: existing == nil, below: bar, arrow: .trailing)
     }
 
     private func addBookmarkFolder() {
@@ -406,7 +403,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         bar.bookmarks = Bookmarks.items
         bar.layoutSubtreeIfNeeded()
         let anchor = path.last.flatMap(bar.itemView(at:)) ?? bar
-        bookmarkEditor.show(path, added: true, relativeTo: anchor.bounds, of: anchor)
+        bookmarkEditor.show(path, added: true, below: anchor)
     }
 
     var isBookmarkEditorShown: Bool { bookmarkEditor.isShown }

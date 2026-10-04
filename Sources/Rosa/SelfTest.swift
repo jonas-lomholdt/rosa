@@ -610,10 +610,10 @@ enum SelfTest {
         if let pane = controller.focusedPane, let popover = controller.debugBookmarkEditor.debugPopoverFrame {
             let bar = pane.addressBarView
             let anchor = bar.window?.convertToScreen(bar.convert(bar.bounds, to: nil)) ?? .zero
-            // The arrow is ~13pt tall, so the content's top should sit within ~20pt of the bar's bottom.
-            print("bookmarks: popover placement       hangsFromBar=\(popover.maxY <= anchor.minY && anchor.minY - popover.maxY < 24) "
-                  + "insideBar=\(popover.minX >= anchor.minX && popover.maxX <= anchor.maxX) flushRight=\(anchor.maxX - popover.maxX < 30) "
-                  + "popover=\(popover.integral) bar=\(anchor.integral)")
+            let tip = controller.debugBookmarkEditor.debugArrowTip ?? .zero
+            print("bookmarks: popover placement       hangsFromBar=\(popover.maxY <= anchor.minY && anchor.minY - popover.maxY < 6) "
+                  + "flushRight=\(abs(anchor.maxX - popover.maxX) < 3) arrowNearRightEnd=\(anchor.maxX - tip.x < 40) "
+                  + "popover=\(popover.integral) bar=\(anchor.integral) tip=\(tip)")
             // Popovers are separate windows the snapshot can't see: leave a marker with the screen rect
             // (screencapture's top-left coordinates) and hold, so a script can capture the real screen.
             if let frame = controller.window?.frame, let mainHeight = NSScreen.screens.first?.frame.height {
