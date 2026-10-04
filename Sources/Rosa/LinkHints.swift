@@ -318,6 +318,7 @@ enum LinkHints {
               action: 'contextTarget',
               image: image ? (image.currentSrc || image.src) : null,
               link: link ? link.href : null,
+              linkTitle: link ? (link.innerText || link.title || '').trim().replace(/\s+/g, ' ').slice(0, 120) : null,
               media: media ? (media.currentSrc || media.src || (media.querySelector('source') || {}).src || null) : null,
             });
           }, true);
@@ -367,7 +368,9 @@ final class LinkHintsRouter: NSObject, WKScriptMessageHandler {
             pane.delegate?.paneCancelledHints(pane)
         case "contextTarget":
             func url(_ key: String) -> URL? { (body[key] as? String).flatMap(URL.init(string:)) }
-            pane.webView.contextTarget = .init(image: url("image"), link: url("link"), media: url("media"))
+            pane.webView.contextTarget = .init(
+                image: url("image"), link: url("link"), linkTitle: body["linkTitle"] as? String, media: url("media")
+            )
         default:
             break
         }

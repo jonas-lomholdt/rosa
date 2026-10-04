@@ -23,6 +23,7 @@ scripts/build.sh release --run   # builds build/Rosa.app and opens it
 | f / ⇧F | Link hints: label clickable elements, type a label to click / open in background (`LinkHints.swift`). With "all panes" on, `BrowserWindowController` runs one session across every pane in the tab |
 | j / k, h / l, gg / G | Vim-style scrolling (same injected script as link hints) |
 | ⌘F, ⌘G / ⌘⇧G | Find in page (`FindBar.swift`), next / previous |
+| ⌘B | Bookmark this page: adds it (or finds the existing one) and opens `BookmarkEditor`'s popover. Not a priority shortcut, so pages that handle ⌘B (bold in editors) keep it |
 | ⌘⇧B | Show/hide the bookmarks bar (`BookmarksBarView`) |
 | ⌃⌘S | Expand/collapse the auto-hiding vertical sidebar (collapsed, it is a rail of favicons; hovering it expands) |
 | ⌥⌘L | Downloads popover (`DownloadManager`, `DownloadsView`) |
@@ -36,7 +37,7 @@ Settings (⌘,) and the View menu toggle **Vertical Tabs** and **Shared Address 
 
 ## Bookmarks
 
-`Bookmarks` reads `bookmarks.json` beside the settings file (`BROWSER_BOOKMARKS_FILE` overrides it) through the same `SettingsStore`, so hand edits apply live and an unparseable file keeps the last good bookmarks. Format: `{"bookmarks": [{"title", "url"} | {"title", "children": [...]}]}`; bad entries are skipped. The bar spans the content width (not per pane) and opens links in the focused pane; ⌘/middle-click goes through `pane(_:openLinkInBackground:)`, so it honours the link-target setting. Favicons come from `FaviconStore.icon(forSite:)` (the host's last seen icon, else `/favicon.ico`). `BROWSER_SELFTEST_ONLY=bookmarks` runs just the bookmarks part of the self-test (needs `BROWSER_SETTINGS_FILE` pointing at a scratch location, since it rewrites the file).
+`Bookmarks` reads and writes `bookmarks.json` beside the settings file (`BROWSER_BOOKMARKS_FILE` overrides it) through the same `SettingsStore`: it's the single source of truth, so hand edits apply live and an unparseable file keeps the last good bookmarks, but the UI never mentions it. Edits come from ⌘B, the page context menu (Add Page / Link to Bookmarks), and the bar's context menu (Edit…, Delete, Rename…, New Folder); `Bookmarks.Path` index paths address entries. The editor popover applies its changes once, when it closes. Format: `{"bookmarks": [{"title", "url"} | {"title", "children": [...]}]}`; bad entries are skipped. The bar spans the content width (not per pane) and opens links in the focused pane; ⌘/middle-click goes through `pane(_:openLinkInBackground:)`, so it honours the link-target setting. Favicons come from `FaviconStore.icon(forSite:)` (the host's last seen icon, else `/favicon.ico`). `BROWSER_SELFTEST_ONLY=bookmarks` runs just the bookmarks part of the self-test (needs `BROWSER_SETTINGS_FILE` pointing at a scratch location, since it rewrites the file).
 
 ## Content blocking
 

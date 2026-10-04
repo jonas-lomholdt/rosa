@@ -129,10 +129,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         Settings.showBookmarksBar.toggle()
     }
 
-    @objc func editBookmarks(_ sender: Any?) {
-        NSWorkspace.shared.open(Bookmarks.fileURL)
-    }
-
     @objc func toggleSharedAddressBar(_ sender: Any?) {
         Settings.addressBarMode = Settings.addressBarMode == .shared ? .perPane : .shared
     }
@@ -232,7 +228,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         view.addItem(item("Vertical Tabs", #selector(toggleVerticalTabs(_:))))
         view.addItem(item("Shared Address Bar", #selector(toggleSharedAddressBar(_:))))
         view.addItem(item("Bookmarks Bar", #selector(toggleBookmarksBar(_:)), "B", [.command, .shift]))
-        view.addItem(item("Edit Bookmarks…", #selector(editBookmarks(_:))))
         view.addItem(item("Show Sidebar", #selector(BrowserWindowController.toggleSidebar(_:)), "s", [.command, .control]))
         view.addItem(item("Downloads", #selector(BrowserWindowController.toggleDownloads(_:)), "l", [.command, .option]))
         view.addItem(.separator())
@@ -251,6 +246,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let history = submenu("History", in: main)
         history.addItem(item("Back", #selector(BrowserWindowController.navigateBack(_:)), "["))
         history.addItem(item("Forward", #selector(BrowserWindowController.navigateForward(_:)), "]"))
+
+        // Not a priority menu: pages get ⌘B first (bold in editors), the menu gets it otherwise.
+        let bookmarks = submenu("Bookmarks", in: main)
+        bookmarks.addItem(item("Bookmark This Page…", #selector(BrowserWindowController.bookmarkCurrentPage(_:)), "b"))
 
         let pane = submenu("Pane", in: main)
         pane.addItem(item("Split Right", #selector(BrowserWindowController.splitRight(_:)), "d"))

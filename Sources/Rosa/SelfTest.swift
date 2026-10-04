@@ -591,9 +591,61 @@ enum SelfTest {
         snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-4-vertical.png"))
         Settings.tabLayout = .horizontal
 
+        // ⌘B on a loaded page adds it and opens the editor; edits apply when it closes.
+        func editorState() -> String {
+            guard let model = controller.debugBookmarkEditor.debugModel else { return "editor=closed" }
+            return "editor=\(model.mode) shown=\(controller.isBookmarkEditorShown) title=\"\(model.title)\" folder=\(model.folder)"
+        }
+        controller.focusedPane?.load("https://example.net/")
+        for _ in 0..<40 {
+            await pause(0.25)
+            if let webView = controller.focusedPane?.webView, webView.url?.host() == "example.net", !webView.isLoading { break }
+        }
+        controller.focusedPane?.focusWebView()
+        let countBefore = Bookmarks.items.count
+        await ensureActive(controller.window)
+        post("b", keyCode: 11, modifiers: [.command], window: controller.window)
+        await pause(0.8)
+        print("bookmarks: ⌘B                      count \(countBefore) → \(Bookmarks.items.count) \(editorState())")
+        if let model = controller.debugBookmarkEditor.debugModel {
+            model.title = "Example"
+            model.folderIndex = model.folderChoices.firstIndex { $0.label.contains("Work") } ?? 0
+            model.onDone()
+        }
+        await pause(0.5)
+        let added = URL(string: "https://example.net/")!
+        print("bookmarks: rename + move to Work   path=\(Bookmarks.path(of: added) ?? []) "
+              + "title=\(Bookmarks.path(of: added).flatMap(Bookmarks.bookmark(at:))?.title ?? "-") \(editorState())")
+        await ensureActive(controller.window)
+        controller.focusedPane?.focusWebView()
+        post("b", keyCode: 11, modifiers: [.command], window: controller.window)
+        await pause(0.8)
+        print("bookmarks: ⌘B again (existing)     count=\(Bookmarks.items.count) \(editorState())")
+        controller.debugBookmarkEditor.debugModel?.onRemove()
+        await pause(0.5)
+        print("bookmarks: Remove                  found=\(Bookmarks.path(of: added) != nil) \(editorState())")
+        controller.focusedPane?.webView.onBookmark?(URL(string: "https://example.org/linked")!, "A link")
+        await pause(0.5)
+        print("bookmarks: context menu link       \(editorState()) last=\(Bookmarks.items.last?.title ?? "-")")
+        controller.debugBookmarkEditor.close()
+        await pause(0.4)
+        bar.onNewFolder?()
+        await pause(0.5)
+        print("bookmarks: New Folder              \(editorState()) visible=\(bar.debugVisibleTitles)")
+        controller.debugBookmarkEditor.debugModel?.title = "Reading"
+        controller.debugBookmarkEditor.close()
+        await pause(0.5)
+        print("bookmarks: folder renamed          visible=\(bar.debugVisibleTitles)")
+        if let data = try? Data(contentsOf: Bookmarks.fileURL),
+           let json = try? JSONSerialization.jsonObject(with: data),
+           let compact = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys, .withoutEscapingSlashes]) {
+            print("bookmarks: file                    \(String(decoding: compact, as: UTF8.self))")
+        }
+        snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-5-edited.png"))
+
         await write((1...40).map { ["title": "Bookmark \($0)", "url": "https://example.com/\($0)"] })
         report("bookmarks: 40 (overflow)")
-        snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-5-overflow.png"))
+        snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-6-overflow.png"))
 
         await ensureActive(controller.window)
         post("B", keyCode: 11, modifiers: [.command, .shift], window: controller.window)

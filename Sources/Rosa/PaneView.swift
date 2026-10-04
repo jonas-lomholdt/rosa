@@ -28,6 +28,8 @@ protocol PaneViewDelegate: AnyObject {
     func paneRequestedHintsInAllPanes(_ pane: PaneView, background: Bool)
     func pane(_ pane: PaneView, typedHintKey key: String)
     func paneCancelledHints(_ pane: PaneView)
+    /// Context menu → Add Page / Link to Bookmarks.
+    func pane(_ pane: PaneView, bookmark url: URL, title: String)
 }
 
 /// WKWebView that reports when it gains keyboard focus, so the window can track the focused pane.
@@ -35,11 +37,14 @@ final class BrowserWebView: WKWebView {
     var onFocus: (() -> Void)?
     /// Called with downloads started from the context menu.
     var onDownload: ((WKDownload) -> Void)?
+    /// Context menu → Add Page / Link to Bookmarks, with the URL and a suggested title.
+    var onBookmark: ((URL, String) -> Void)?
 
     /// What was under the pointer at the last right-click (reported by the page script).
     struct ContextTarget {
         var image: URL?
         var link: URL?
+        var linkTitle: String?
         var media: URL?
     }
 
@@ -63,6 +68,34 @@ final class BrowserWebView: WKWebView {
             item.action = #selector(downloadContextItem(_:))
             item.representedObject = url
         }
+        addBookmarkItems(to: menu)
+    }
+
+    private func addBookmarkItems(to menu: NSMenu) {
+        var items: [NSMenuItem] = []
+        if let link = contextTarget.link, ["http", "https"].contains(link.scheme?.lowercased()) {
+            let item = NSMenuItem(title: "Add Link to Bookmarks", action: #selector(bookmarkContextItem(_:)), keyEquivalent: "")
+            item.representedObject = (link, contextTarget.linkTitle ?? "")
+            items.append(item)
+        } else if let page = url, !["about", "data"].contains(page.scheme?.lowercased()) {
+            let item = NSMenuItem(title: "Add Page to Bookmarks", action: #selector(bookmarkContextItem(_:)), keyEquivalent: "")
+            item.representedObject = (page, title ?? "")
+            items.append(item)
+        }
+        guard !items.isEmpty else { return }
+        // Above WebKit's trailing "Inspect Element" group when there is one.
+        var index = menu.items.lastIndex { $0.isSeparatorItem } ?? menu.items.count
+        if menu.items.isEmpty { index = 0 } else { menu.insertItem(.separator(), at: index); index += 1 }
+        for item in items {
+            item.target = self
+            menu.insertItem(item, at: index)
+            index += 1
+        }
+    }
+
+    @objc func bookmarkContextItem(_ sender: NSMenuItem) {
+        guard let (url, title) = sender.representedObject as? (URL, String) else { return }
+        onBookmark?(url, title)
     }
 
     private func downloadURL(for item: NSMenuItem) -> URL? {
@@ -145,6 +178,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         webView.isInspectable = true
         webView.onFocus = { [weak self] in self.map { $0.delegate?.paneDidBecomeFocused($0) } }
         webView.onDownload = { [weak self] download in self.map { $0.delegate?.pane($0, didStartDownload: download) } }
+        webView.onBookmark = { [weak self] url, title in self.map { $0.delegate?.pane($0, bookmark: url, title: title) } }
 
         addressField.onFocus = { [weak self] in self.map { $0.delegate?.paneDidBecomeFocused($0) } }
         addressField.onSubmit = { [weak self] text in

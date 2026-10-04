@@ -16,6 +16,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     private var settingsObserver: NSObjectProtocol?
     private var downloadsObserver: NSObjectProtocol?
     private var bookmarksObserver: NSObjectProtocol?
+    private let bookmarkEditor = BookmarkEditor()
     private lazy var downloadsPopover: NSPopover = {
         let popover = NSPopover()
         popover.behavior = .transient
@@ -76,7 +77,10 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
 
         contentRoot.bookmarksBar.bookmarks = Bookmarks.items
         contentRoot.bookmarksBar.onOpen = { [weak self] url, background in self?.openBookmark(url, background: background) }
-        contentRoot.bookmarksBar.onEditBookmarks = { NSWorkspace.shared.open(Bookmarks.fileURL) }
+        contentRoot.bookmarksBar.onEdit = { [weak self] path, anchor in
+            self?.bookmarkEditor.show(path, added: false, relativeTo: anchor.bounds, of: anchor)
+        }
+        contentRoot.bookmarksBar.onNewFolder = { [weak self] in self?.addBookmarkFolder() }
         bookmarksObserver = NotificationCenter.default.addObserver(
             forName: Bookmarks.didChange, object: nil, queue: .main
         ) { [weak self] _ in
@@ -374,6 +378,39 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         }
     }
 
+    @objc func bookmarkCurrentPage(_ sender: Any?) {
+        guard let pane = focusedPane, let url = pane.webView.url, !["about", "data"].contains(url.scheme?.lowercased()) else {
+            NSSound.beep()
+            return
+        }
+        bookmark(url, title: pane.webView.title ?? "", from: pane)
+    }
+
+    /// Adds `url` to the end of the bar (or finds its existing bookmark) and opens the editor,
+    /// anchored to the right end of the pane's address bar (where a star would be).
+    private func bookmark(_ url: URL, title: String, from pane: PaneView) {
+        bookmarkEditor.close()  // applies its edits first, so the paths below are current
+        let existing = Bookmarks.path(of: url)
+        let path = existing ?? Bookmarks.add(Bookmark(title: title.isEmpty ? (url.host() ?? "") : title, kind: .link(url)))
+        let field: NSView = Settings.addressBarMode == .shared ? contentRoot.header.addressField : pane.addressField
+        let anchor = NSRect(x: max(0, field.bounds.maxX - 24), y: 0, width: 24, height: field.bounds.height)
+        bookmarkEditor.show(path, added: existing == nil, relativeTo: anchor, of: field)
+    }
+
+    private func addBookmarkFolder() {
+        bookmarkEditor.close()
+        let path = Bookmarks.add(Bookmark(title: "New Folder", kind: .folder([])))
+        let bar = contentRoot.bookmarksBar
+        bar.bookmarks = Bookmarks.items
+        bar.layoutSubtreeIfNeeded()
+        let anchor = path.last.flatMap(bar.itemView(at:)) ?? bar
+        bookmarkEditor.show(path, added: true, relativeTo: anchor.bounds, of: anchor)
+    }
+
+    var isBookmarkEditorShown: Bool { bookmarkEditor.isShown }
+    /// For the self-test.
+    var debugBookmarkEditor: BookmarkEditor { bookmarkEditor }
+
     /// Bookmarks open in the focused pane; in the background they go where ⌘-clicked links go.
     private func openBookmark(_ url: URL, background: Bool) {
         guard let pane = focusedPane else { return }
@@ -472,6 +509,10 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
             close(pane)
         }
         if window?.isKeyWindow == true { showDownloads() }
+    }
+
+    func pane(_ pane: PaneView, bookmark url: URL, title: String) {
+        bookmark(url, title: title, from: pane)
     }
 
     func paneRequestedHintsInAllPanes(_ pane: PaneView, background: Bool) {
