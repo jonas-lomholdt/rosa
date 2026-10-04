@@ -703,6 +703,27 @@ enum SelfTest {
         await pause(0.5)
         report("bookmarks: ⌘⇧B show")
 
+        // ⌘⇧T: close a tab with history and a split, reopen it with both.
+        controller.focusedPane?.load("https://example.com/one")
+        await pause(1.5)
+        controller.focusedPane?.load("https://example.com/two")
+        await pause(1.5)
+        await ensureActive(controller.window)
+        post("d", keyCode: 2, modifiers: [.command], window: controller.window)
+        await pause(0.6)
+        controller.focusedPane?.load("https://example.org/")
+        await pause(1.5)
+        let beforeClose = "\(controller.tabCount) tabs | \(controller.debugDescriptionOfState)"
+        await ensureActive(controller.window)
+        post("W", keyCode: 13, modifiers: [.command, .shift], window: controller.window)
+        await pause(0.6)
+        let afterClose = controller.tabCount
+        post("T", keyCode: 17, modifiers: [.command, .shift], window: controller.window)
+        await pause(2)
+        let panes = controller.debugPaneURLs
+        print("tabs: ⌘⇧W then ⌘⇧T                 before=\(beforeClose) closed→\(afterClose) reopened→\(controller.tabCount) | \(controller.debugDescriptionOfState)")
+        print("tabs: reopened panes               \(panes)")
+
         let tabsBefore = controller.tabCount
         bar.onOpen?(URL(string: "https://example.com/opened")!, false)
         await pause(1.5)
@@ -731,6 +752,12 @@ enum SelfTest {
 }
 
 extension BrowserWindowController {
+    /// Each pane of the selected tab: URL and whether it can go back.
+    var debugPaneURLs: [String] {
+        guard let root = (window?.contentView as? BrowserContentView)?.tabContent else { return [] }
+        return root.paneLeaves.map { "\($0.webView.url?.absoluteString ?? "-") back=\($0.webView.canGoBack)" }
+    }
+
     /// e.g. `tabs=2 sel=0 | H(A, V(B, *C))` where `*` marks the focused pane.
     var debugDescriptionOfState: String {
         let tree = (window?.contentView as? BrowserContentView)?.tabContent.map(describe) ?? "-"

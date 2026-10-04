@@ -144,6 +144,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         guard tabs.indices.contains(index) else { return }
         let wasSelected = index == selectedIndex
         let tab = tabs.remove(at: index)
+        rememberClosedTab(tab, at: index)
         tab.panes.forEach { $0.teardown() }
         tab.container.removeFromSuperview()
 
@@ -208,6 +209,61 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         }
         reloadTabStrip()
         return newPane
+    }
+
+    // MARK: - Reopening closed tabs (⌘⇧T)
+
+    /// A closed tab's split layout, with each pane's back/forward history.
+    private indirect enum ClosedLayout {
+        case pane(url: URL?, state: Any?, focused: Bool)
+        case split(SplitView.Axis, ratio: CGFloat, ClosedLayout, ClosedLayout)
+    }
+
+    /// Most recent last; shared by all windows so a tab can come back in any of them.
+    private static var closedTabs: [(layout: ClosedLayout, index: Int)] = []
+    private static let closedTabsLimit = 25
+
+    private func rememberClosedTab(_ tab: Tab, at index: Int) {
+        // Nothing worth reopening in a single blank pane.
+        if tab.panes.count == 1, tab.panes.first?.webView.url == nil { return }
+        func capture(_ view: NSView) -> ClosedLayout? {
+            if let pane = view as? PaneView {
+                return .pane(url: pane.webView.url, state: pane.webView.interactionState, focused: pane === tab.focusedPane)
+            }
+            guard let split = view as? SplitView, let first = capture(split.first), let second = capture(split.second) else { return nil }
+            return .split(split.axis, ratio: split.ratio, first, second)
+        }
+        guard let layout = capture(tab.container.child) else { return }
+        Self.closedTabs.append((layout, index))
+        if Self.closedTabs.count > Self.closedTabsLimit { Self.closedTabs.removeFirst() }
+    }
+
+    static var canReopenClosedTab: Bool { !closedTabs.isEmpty }
+
+    @objc func reopenClosedTab(_ sender: Any?) {
+        guard let closed = Self.closedTabs.popLast() else { return NSSound.beep() }
+        var focused: PaneView?
+        func restore(_ layout: ClosedLayout) -> NSView {
+            switch layout {
+            case .pane(let url, let state, let isFocused):
+                let pane = makePane()
+                if let state {
+                    pane.webView.interactionState = state
+                } else if let url {
+                    pane.webView.load(URLRequest(url: url))
+                }
+                if isFocused { focused = pane }
+                return pane
+            case .split(let axis, let ratio, let first, let second):
+                let split = SplitView(axis: axis, first: restore(first), second: restore(second))
+                split.ratio = ratio
+                return split
+            }
+        }
+        let tab = Tab(root: restore(closed.layout), focusedPane: focused)
+        let index = min(closed.index, tabs.count)
+        tabs.insert(tab, at: index)
+        selectTab(at: index)
     }
 
     private func close(_ pane: PaneView) {

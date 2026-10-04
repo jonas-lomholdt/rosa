@@ -11,6 +11,12 @@ final class Tab {
         focusedPane = pane
     }
 
+    /// A tab around an existing split tree (reopening a closed tab).
+    init(root: NSView, focusedPane: PaneView?) {
+        container = PaneContainerView(child: root)
+        self.focusedPane = focusedPane ?? root.paneLeaves.first
+    }
+
     var panes: [PaneView] { container.paneLeaves }
 
     var favicon: NSImage? { (focusedPane ?? panes.first)?.favicon }

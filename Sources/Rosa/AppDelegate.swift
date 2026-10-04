@@ -226,6 +226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         file.addItem(.separator())
         file.addItem(item("Close Pane", #selector(BrowserWindowController.closePane(_:)), "w"))
         file.addItem(item("Close Tab", #selector(BrowserWindowController.closeCurrentTab(_:)), "W", [.command, .shift]))
+        file.addItem(item("Reopen Closed Tab", #selector(BrowserWindowController.reopenClosedTab(_:)), "T", [.command, .shift]))
 
         let edit = submenu("Edit", in: main)
         edit.addItem(item("Undo", Selector(("undo:")), "z"))
