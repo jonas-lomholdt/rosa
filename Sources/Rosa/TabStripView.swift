@@ -42,14 +42,19 @@ final class TabStripView: ChromeView {
     /// Space kept free for the window's traffic-light buttons.
     var trafficLightInset: CGFloat = 78 { didSet { needsLayout = true } }
 
-    /// Left edge of the top-row buttons (+, downloads) in vertical layout, in this view's coordinates.
+    /// Left edge of any buttons in the top row, in this view's coordinates. Vertical layout keeps
+    /// that row free (for the navigation buttons): New Tab follows the tabs, downloads sit at the bottom.
     var topRowButtonsMinX: CGFloat {
-        showsDownloadsButton ? downloadsButton.frame.minX : newTabButton.frame.minX
+        guard tabLayout == .horizontal else { return bounds.width }
+        return showsDownloadsButton ? downloadsButton.frame.minX : newTabButton.frame.minX
     }
 
     private let scrollView = NSScrollView()
     private let documentView = TabListDocumentView()
     private let newTabButton: NSButton
+    /// Vertical only: "+ New Tab ⌘T" after the last tab (just + on the collapsed rail), like Edge.
+    private let newTabRow = NewTabRowView()
+    private let newTabSeparator = NSBox()
     /// Shown once there are downloads; opens the downloads popover.
     let downloadsButton = NSButton()
     var onDownloadsClick: (() -> Void)?
@@ -92,6 +97,11 @@ final class TabStripView: ChromeView {
         scrollView.autohidesScrollers = true
         scrollView.automaticallyAdjustsContentInsets = false
         scrollView.documentView = documentView
+
+        newTabRow.onClick = { [weak self] in self.map { $0.delegate?.tabStripDidRequestNewTab($0) } }
+        newTabSeparator.boxType = .separator
+        documentView.addSubview(newTabSeparator)
+        documentView.addSubview(newTabRow)
 
         addSubview(scrollView)
         addSubview(newTabButton)
@@ -142,6 +152,8 @@ final class TabStripView: ChromeView {
         let buttonSize: CGFloat = 28
         let spacing: CGFloat = 4
 
+        newTabRow.isHidden = tabLayout == .horizontal
+        newTabSeparator.isHidden = tabLayout == .horizontal
         switch tabLayout {
         case .horizontal:
             newTabButton.isHidden = false
@@ -169,15 +181,15 @@ final class TabStripView: ChromeView {
 
         case .vertical:
             let top = Self.horizontalHeight
-            // The collapsed rail's top row sits under the traffic lights, so the buttons wait for the expanded sidebar.
-            newTabButton.isHidden = isCollapsed
-            downloadsButton.isHidden = isCollapsed || !showsDownloadsButton
-            newTabButton.frame = NSRect(
-                x: bounds.width - buttonSize - 8, y: (top - buttonSize) / 2,
-                width: buttonSize, height: buttonSize
+            newTabButton.isHidden = true
+            // Downloads: pinned to the bottom of the sidebar, once there are any.
+            downloadsButton.isHidden = !showsDownloadsButton
+            let bottomBar: CGFloat = showsDownloadsButton ? buttonSize + 8 : 0
+            downloadsButton.frame = NSRect(
+                x: isCollapsed ? ((bounds.width - buttonSize) / 2).rounded() : 8,
+                y: bounds.height - buttonSize - 6, width: buttonSize, height: buttonSize
             )
-            downloadsButton.frame = newTabButton.frame.offsetBy(dx: -(buttonSize + 2), dy: 0)
-            let scrollFrame = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
+            let scrollFrame = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top - bottomBar))
             scrollView.frame = scrollFrame
             let rowHeight: CGFloat = 30
             let width = scrollFrame.width
@@ -185,9 +197,13 @@ final class TabStripView: ChromeView {
             slots = itemViews.indices.map { index in
                 NSRect(x: inset, y: 4 + CGFloat(index) * (rowHeight + 2), width: width - inset * 2, height: rowHeight)
             }
+            let listBottom = slots.last?.maxY ?? 4
+            newTabSeparator.frame = NSRect(x: inset + 4, y: listBottom + 5, width: width - (inset + 4) * 2, height: 1)
+            newTabRow.isCompact = isCollapsed
+            newTabRow.frame = NSRect(x: inset, y: listBottom + 10, width: width - inset * 2, height: rowHeight)
             documentView.frame = NSRect(
                 x: 0, y: 0, width: width,
-                height: max(scrollFrame.height, (slots.last?.maxY ?? 0) + 4)
+                height: max(scrollFrame.height, newTabRow.frame.maxY + 4)
             )
         }
         place(dragOrder ?? itemViews)
@@ -456,6 +472,73 @@ private final class TabItemView: NSView {
     }
 
     @objc private func closeClicked(_ sender: Any?) { onClose?() }
+}
+
+/// "+ New Tab ⌘T" row at the end of the vertical tab list; only the + when compact (collapsed rail).
+private final class NewTabRowView: NSView {
+    var onClick: (() -> Void)?
+    var isCompact = false { didSet { titleLabel.isHidden = isCompact; shortcutLabel.isHidden = isCompact; needsLayout = true } }
+
+    private let iconView = NSImageView()
+    private let titleLabel = NonDraggingLabel(labelWithString: "New Tab")
+    private let shortcutLabel = NonDraggingLabel(labelWithString: "⌘T")
+    private var isHovered = false { didSet { needsDisplay = true } }
+    private var trackingArea: NSTrackingArea?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        let plus = NSImage(systemSymbolName: "plus", accessibilityDescription: "New Tab")
+        iconView.image = plus?.withSymbolConfiguration(.init(pointSize: 12, weight: .regular))
+        iconView.contentTintColor = .secondaryLabelColor
+        titleLabel.font = .systemFont(ofSize: 12)
+        titleLabel.textColor = .secondaryLabelColor
+        shortcutLabel.font = .systemFont(ofSize: 11)
+        shortcutLabel.textColor = .tertiaryLabelColor
+        toolTip = "New Tab (⌘T)"
+        for view in [iconView, titleLabel, shortcutLabel] { addSubview(view) }
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override var isFlipped: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        isHidden || !frame.contains(point) ? nil : self
+    }
+
+    override func layout() {
+        super.layout()
+        // Lines up with the tabs' favicons and titles.
+        let iconX = isCompact ? ((bounds.width - 16) / 2).rounded() : 10
+        iconView.frame = NSRect(x: iconX, y: ((bounds.height - 16) / 2).rounded(), width: 16, height: 16)
+        let shortcutSize = shortcutLabel.intrinsicContentSize
+        shortcutLabel.frame = NSRect(x: bounds.width - shortcutSize.width - 10, y: ((bounds.height - shortcutSize.height) / 2).rounded(),
+                                     width: shortcutSize.width, height: shortcutSize.height)
+        let titleHeight = titleLabel.intrinsicContentSize.height
+        titleLabel.frame = NSRect(x: 32, y: ((bounds.height - titleHeight) / 2).rounded(),
+                                  width: max(0, shortcutLabel.frame.minX - 36), height: titleHeight)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard isHovered else { return }
+        NSColor.labelColor.withAlphaComponent(0.06).setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 10, yRadius: 10).fill()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { isHovered = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false }
+    override func mouseUp(with event: NSEvent) {
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick?() }
+    }
 }
 
 final class NonDraggingLabel: NSTextField {

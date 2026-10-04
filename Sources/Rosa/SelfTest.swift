@@ -582,13 +582,18 @@ enum SelfTest {
         Settings.addressBarMode = .shared
         await pause(0.4)
         snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-2-horizontal-shared.png"))
+        for name in ["Second tab", "Third tab"] {
+            controller.addTab(select: false).webView.loadHTMLString("<title>\(name)</title>", baseURL: nil)
+        }
         Settings.tabLayout = .vertical
-        await pause(0.4)
+        await pause(0.6)
         report("bookmarks: vertical + shared")
+        await requestScreenCapture("vertical-shared", of: controller, in: outputDir)
         snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-3-vertical-shared.png"))
         Settings.addressBarMode = .perPane
         await pause(0.4)
         snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-4-vertical.png"))
+        await requestScreenCapture("vertical", of: controller, in: outputDir)
         Settings.tabLayout = .horizontal
 
         // ⌘B on a loaded page adds it and opens the editor; edits apply when it closes.
@@ -614,13 +619,7 @@ enum SelfTest {
             print("bookmarks: popover placement       hangsFromBar=\(popover.maxY <= anchor.minY && anchor.minY - popover.maxY < 6) "
                   + "flushRight=\(abs(anchor.maxX - popover.maxX) < 3) arrowNearRightEnd=\(anchor.maxX - tip.x < 40) "
                   + "popover=\(popover.integral) bar=\(anchor.integral) tip=\(tip)")
-            // Popovers are separate windows the snapshot can't see: leave a marker with the screen rect
-            // (screencapture's top-left coordinates) and hold, so a script can capture the real screen.
-            if let frame = controller.window?.frame, let mainHeight = NSScreen.screens.first?.frame.height {
-                let rect = "\(Int(frame.minX)),\(Int(mainHeight - frame.maxY)),\(Int(frame.width)),\(Int(frame.height))"
-                try? rect.write(to: outputDir.appendingPathComponent("popover-rect.txt"), atomically: true, encoding: .utf8)
-                await pause(2.5)
-            }
+            await requestScreenCapture("bookmarks-popover", of: controller, in: outputDir)
         }
         if let model = controller.debugBookmarkEditor.debugModel {
             model.title = "Example"
@@ -711,6 +710,16 @@ enum SelfTest {
         bar.onOpen?(URL(string: "https://example.com/background")!, true)
         await pause(0.5)
         print("bookmarks: open in background      tabs \(tabsBefore) → \(controller.tabCount)")
+    }
+
+    /// Glass and popover-style windows don't show up in `snapshot`. This leaves a marker with the
+    /// window's rect (in screencapture's top-left coordinates) and holds, so a script watching the
+    /// output directory can grab the real screen: `screencapture -R<rect> <name>.png`.
+    private static func requestScreenCapture(_ name: String, of controller: BrowserWindowController, in outputDir: URL) async {
+        guard let frame = controller.window?.frame, let mainHeight = NSScreen.screens.first?.frame.height else { return }
+        let rect = "\(Int(frame.minX)),\(Int(mainHeight - frame.maxY)),\(Int(frame.width)),\(Int(frame.height))"
+        try? rect.write(to: outputDir.appendingPathComponent("capture-\(name).txt"), atomically: true, encoding: .utf8)
+        await pause(1.5)
     }
 
     private static func snapshot(_ controller: BrowserWindowController, to url: URL) {
