@@ -124,6 +124,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     weak var delegate: PaneViewDelegate?
     let webView: BrowserWebView
     var addressField: AddressField { addressBar.field }
+    /// The address bar capsule (anchors the bookmark popover).
+    var addressBarView: NSView { addressBar }
     /// Increases every time the pane is focused; used to pick the most recently used pane.
     var lastFocusSerial = 0
 

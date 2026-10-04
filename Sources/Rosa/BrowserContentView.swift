@@ -9,6 +9,8 @@ final class HeaderView: ChromeView {
     private let titleLabel = NSTextField(labelWithString: "")
 
     var addressField: AddressField { addressBar.field }
+    /// The address bar capsule (anchors the bookmark popover).
+    var addressBarView: NSView { addressBar }
 
     var icon: NSImage? {
         get { addressBar.icon }

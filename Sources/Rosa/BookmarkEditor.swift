@@ -32,6 +32,8 @@ final class BookmarkEditorModel: ObservableObject {
 }
 
 struct BookmarkEditorView: View {
+    static let width: CGFloat = 300
+
     @ObservedObject var model: BookmarkEditorModel
 
     private var heading: String {
@@ -63,7 +65,7 @@ struct BookmarkEditorView: View {
             }
         }
         .padding(16)
-        .frame(width: 300)
+        .frame(width: Self.width)
     }
 }
 
@@ -83,7 +85,8 @@ final class BookmarkEditor {
             if let session, self?.session === session { self?.session = nil }
         }
         self.session = session
-        session.popover.show(relativeTo: rect, of: view, preferredEdge: .maxY)
+        // Always hang below the anchor: the bottom edge is maxY only in flipped views.
+        session.popover.show(relativeTo: rect, of: view, preferredEdge: view.isFlipped ? .maxY : .minY)
     }
 
     /// Closes the popover, applying its edits right away.
@@ -92,6 +95,12 @@ final class BookmarkEditor {
     }
 
     // MARK: - Testing
+
+    /// The popover's window frame in screen coordinates.
+    var debugPopoverFrame: NSRect? {
+        guard let view = session?.popover.contentViewController?.view, let window = view.window else { return nil }
+        return window.convertToScreen(view.convert(view.bounds, to: nil))
+    }
 
     var debugModel: BookmarkEditorModel? { session?.model }
 }
@@ -119,7 +128,12 @@ private final class Session: NSObject, NSPopoverDelegate {
         super.init()
         popover.behavior = .transient
         popover.delegate = self
-        popover.contentViewController = NSHostingController(rootView: BookmarkEditorView(model: model))
+        let host = NSHostingController(rootView: BookmarkEditorView(model: model))
+        host.sizingOptions = .preferredContentSize
+        popover.contentViewController = host
+        // Final size up front: if the popover first opens at the hosting view's provisional size and
+        // then shrinks, AppKit keeps its bottom edge, so the arrow ends up far below the anchor.
+        popover.contentSize = host.view.fittingSize
         model.onDone = { [weak self] in self?.finish() }
         model.onRemove = { [weak self] in self?.finish(remove: true) }
     }

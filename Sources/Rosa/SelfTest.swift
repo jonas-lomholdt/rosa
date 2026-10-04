@@ -607,6 +607,21 @@ enum SelfTest {
         post("b", keyCode: 11, modifiers: [.command], window: controller.window)
         await pause(0.8)
         print("bookmarks: ⌘B                      count \(countBefore) → \(Bookmarks.items.count) \(editorState())")
+        if let pane = controller.focusedPane, let popover = controller.debugBookmarkEditor.debugPopoverFrame {
+            let bar = pane.addressBarView
+            let anchor = bar.window?.convertToScreen(bar.convert(bar.bounds, to: nil)) ?? .zero
+            // The arrow is ~13pt tall, so the content's top should sit within ~20pt of the bar's bottom.
+            print("bookmarks: popover placement       hangsFromBar=\(popover.maxY <= anchor.minY && anchor.minY - popover.maxY < 24) "
+                  + "insideBar=\(popover.minX >= anchor.minX && popover.maxX <= anchor.maxX) flushRight=\(anchor.maxX - popover.maxX < 30) "
+                  + "popover=\(popover.integral) bar=\(anchor.integral)")
+            // Popovers are separate windows the snapshot can't see: leave a marker with the screen rect
+            // (screencapture's top-left coordinates) and hold, so a script can capture the real screen.
+            if let frame = controller.window?.frame, let mainHeight = NSScreen.screens.first?.frame.height {
+                let rect = "\(Int(frame.minX)),\(Int(mainHeight - frame.maxY)),\(Int(frame.width)),\(Int(frame.height))"
+                try? rect.write(to: outputDir.appendingPathComponent("popover-rect.txt"), atomically: true, encoding: .utf8)
+                await pause(2.5)
+            }
+        }
         if let model = controller.debugBookmarkEditor.debugModel {
             model.title = "Example"
             model.folderIndex = model.folderChoices.firstIndex { $0.label.contains("Work") } ?? 0

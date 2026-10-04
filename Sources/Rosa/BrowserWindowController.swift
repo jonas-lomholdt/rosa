@@ -387,14 +387,16 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     }
 
     /// Adds `url` to the end of the bar (or finds its existing bookmark) and opens the editor,
-    /// anchored to the right end of the pane's address bar (where a star would be).
+    /// hanging from the address bar, flush with its right end (so it stays inside the window).
     private func bookmark(_ url: URL, title: String, from pane: PaneView) {
         bookmarkEditor.close()  // applies its edits first, so the paths below are current
         let existing = Bookmarks.path(of: url)
         let path = existing ?? Bookmarks.add(Bookmark(title: title.isEmpty ? (url.host() ?? "") : title, kind: .link(url)))
-        let field: NSView = Settings.addressBarMode == .shared ? contentRoot.header.addressField : pane.addressField
-        let anchor = NSRect(x: max(0, field.bounds.maxX - 24), y: 0, width: 24, height: field.bounds.height)
-        bookmarkEditor.show(path, added: existing == nil, relativeTo: anchor, of: field)
+        let bar = Settings.addressBarMode == .shared ? contentRoot.header.addressBarView : pane.addressBarView
+        // The popover centres on the anchor; half its width (plus its border) in from the right edge.
+        let inset = BookmarkEditorView.width / 2 + 14
+        let anchor = NSRect(x: max(0, bar.bounds.maxX - inset - 1), y: 0, width: 2, height: bar.bounds.height)
+        bookmarkEditor.show(path, added: existing == nil, relativeTo: anchor, of: bar)
     }
 
     private func addBookmarkFolder() {
