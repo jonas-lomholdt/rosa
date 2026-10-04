@@ -244,6 +244,14 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         }
     }
 
+    /// Handles ⌃H/J/K/L pane navigation. Returns false when the tab has a single pane,
+    /// so the keys keep their text-editing meaning (⌃K kills a line, ⌃H deletes back).
+    func handleVimPaneNavigation(_ direction: Direction) -> Bool {
+        guard let tab = selectedTab, tab.panes.count > 1 else { return false }
+        focusNeighbor(direction)
+        return true
+    }
+
     /// Moves focus to the pane visually adjacent in `direction`. Among equally close
     /// candidates, the most recently focused one wins (like tmux/iTerm).
     private func focusNeighbor(_ direction: Direction) {

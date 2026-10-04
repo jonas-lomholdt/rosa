@@ -32,7 +32,7 @@
 |---|---|
 | `⌘D` | Split right |
 | `⌘⇧D` | Split down |
-| `⌘⌥ ← ↑ ↓ →` | Jump to the pane in that direction |
+| `⌘⌥ ← ↑ ↓ →` / `⌃H` `⌃J` `⌃K` `⌃L` | Jump to the pane in that direction |
 | `⌘W` | Close pane |
 | `⌘T` | New tab |
 | `⌘L` | Address bar |

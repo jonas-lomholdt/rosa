@@ -14,7 +14,7 @@ scripts/build.sh release --run   # builds build/Rosa.app and opens it
 |---|---|
 | ⌘D / ⌘⇧D | Split pane right / down |
 | ⌘W | Close pane (last pane closes the tab) |
-| ⌘⌥ ←↑↓→ | Focus neighbouring pane |
+| ⌘⌥ ←↑↓→, ⌃H/J/K/L | Focus neighbouring pane (⌃HJKL pass through to the page/text field when the tab has a single pane; handled in `AppDelegate.performVimPaneNavigation`) |
 | ⌘⌃= | Equalize pane sizes (double-click a gap resets that split) |
 | ⌘T / ⌘⇧W | New tab / close tab |
 | ⌃⇥ / ⌃⇧⇥, ⌘1–9 | Switch tabs |

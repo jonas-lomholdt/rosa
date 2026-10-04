@@ -155,7 +155,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private func performPriorityKeyEquivalent(_ event: NSEvent) -> Bool {
         let isF12 = event.keyCode == 111
         guard isF12 || !event.modifierFlags.intersection([.command, .control]).isEmpty else { return false }
+        if performVimPaneNavigation(event) { return true }
         return priorityMenus.contains { $0.performKeyEquivalent(with: event) }
+    }
+
+    /// ⌃H/J/K/L focus the neighbouring pane, like vim-tmux-navigator. Not menu items: a
+    /// disabled item still swallows its key, and these must pass through in a single pane.
+    private func performVimPaneNavigation(_ event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock) == .control,
+              let controller = event.window?.windowController as? BrowserWindowController else { return false }
+        let direction: BrowserWindowController.Direction
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "h": direction = .left
+        case "j": direction = .down
+        case "k": direction = .up
+        case "l": direction = .right
+        default: return false
+        }
+        return controller.handleVimPaneNavigation(direction)
     }
 
     // MARK: - Menu
