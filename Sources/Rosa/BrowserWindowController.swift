@@ -15,6 +15,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     private var selectedIndex = 0
     private var settingsObserver: NSObjectProtocol?
     private var downloadsObserver: NSObjectProtocol?
+    private var bookmarksObserver: NSObjectProtocol?
     private lazy var downloadsPopover: NSPopover = {
         let popover = NSPopover()
         popover.behavior = .transient
@@ -71,6 +72,15 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
             guard let self else { return }
             contentRoot.header.addressField.stringValue = focusedPane?.displayURL ?? ""
             focusedPane?.focusWebView()
+        }
+
+        contentRoot.bookmarksBar.bookmarks = Bookmarks.items
+        contentRoot.bookmarksBar.onOpen = { [weak self] url, background in self?.openBookmark(url, background: background) }
+        contentRoot.bookmarksBar.onEditBookmarks = { NSWorkspace.shared.open(Bookmarks.fileURL) }
+        bookmarksObserver = NotificationCenter.default.addObserver(
+            forName: Bookmarks.didChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.contentRoot.bookmarksBar.bookmarks = Bookmarks.items }
         }
 
         settingsObserver = NotificationCenter.default.addObserver(
@@ -333,6 +343,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         contentRoot.sidebarWidth = Settings.sidebarWidth
         contentRoot.sidebarAutoHide = Settings.sidebarAutoHide
         contentRoot.showsSharedAddressBar = !perPane
+        contentRoot.showsBookmarksBar = Settings.showBookmarksBar
         syncSharedAddressField()
         refreshPaneHighlights()
     }
@@ -360,6 +371,17 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
             downloadsPopover.performClose(nil)
         } else {
             showDownloads()
+        }
+    }
+
+    /// Bookmarks open in the focused pane; in the background they go where ⌘-clicked links go.
+    private func openBookmark(_ url: URL, background: Bool) {
+        guard let pane = focusedPane else { return }
+        if background {
+            self.pane(pane, openLinkInBackground: URLRequest(url: url))
+        } else {
+            pane.webView.load(URLRequest(url: url))
+            pane.focusWebView()
         }
     }
 
@@ -564,6 +586,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         tabs.removeAll()
         if let settingsObserver { NotificationCenter.default.removeObserver(settingsObserver) }
         if let downloadsObserver { NotificationCenter.default.removeObserver(downloadsObserver) }
+        if let bookmarksObserver { NotificationCenter.default.removeObserver(bookmarksObserver) }
         onClose?(self)
     }
 }

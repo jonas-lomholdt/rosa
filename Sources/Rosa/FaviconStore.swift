@@ -37,6 +37,20 @@ final class FaviconStore {
         return nil
     }
 
+    /// Icon for a page that isn't open (bookmarks): the host's last seen icon, else `/favicon.ico`.
+    func icon(forSite url: URL) async -> NSImage? {
+        guard ["http", "https"].contains(url.scheme?.lowercased()), let host = url.host() else { return nil }
+        if let cached = iconsByHost[host] { return cached }
+        var components = URLComponents()
+        components.scheme = url.scheme
+        components.host = host
+        components.port = url.port
+        components.path = "/favicon.ico"
+        guard let iconURL = components.url, let image = await image(at: iconURL) else { return nil }
+        if iconsByHost[host] == nil { iconsByHost[host] = image }
+        return image
+    }
+
     private func image(at url: URL) async -> NSImage? {
         if let cached = iconsByURL.object(forKey: url as NSURL) { return cached }
         guard let (data, response) = try? await session.data(from: url) else { return nil }

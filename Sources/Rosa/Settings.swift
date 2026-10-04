@@ -112,6 +112,7 @@ enum Settings {
             "tabLayout": tabLayout.rawValue,
             "sidebarWidth": Double(sidebarWidth),
             "sidebarAutoHide": sidebarAutoHide,
+            "showBookmarksBar": showBookmarksBar,
             "inactivePaneOpacity": inactivePaneOpacity,
             "appearance": appearance.rawValue,
             "historyEnabled": historyEnabled,
@@ -159,6 +160,12 @@ enum Settings {
     static var sidebarAutoHide: Bool {
         get { value("sidebarAutoHide") ?? false }
         set { set(newValue, "sidebarAutoHide") }
+    }
+
+    /// Bookmarks bar under the tab strip / address bar (⌘⇧B).
+    static var showBookmarksBar: Bool {
+        get { value("showBookmarksBar") ?? true }
+        set { set(newValue, "showBookmarksBar") }
     }
 
     static let inactivePaneOpacityRange: ClosedRange<Double> = 0.2...1

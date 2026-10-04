@@ -125,6 +125,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         Settings.tabLayout = Settings.tabLayout == .vertical ? .horizontal : .vertical
     }
 
+    @objc func toggleBookmarksBar(_ sender: Any?) {
+        Settings.showBookmarksBar.toggle()
+    }
+
+    @objc func editBookmarks(_ sender: Any?) {
+        NSWorkspace.shared.open(Bookmarks.fileURL)
+    }
+
     @objc func toggleSharedAddressBar(_ sender: Any?) {
         Settings.addressBarMode = Settings.addressBarMode == .shared ? .perPane : .shared
     }
@@ -133,6 +141,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         switch menuItem.action {
         case #selector(toggleVerticalTabs(_:)):
             menuItem.state = Settings.tabLayout == .vertical ? .on : .off
+        case #selector(toggleBookmarksBar(_:)):
+            menuItem.state = Settings.showBookmarksBar ? .on : .off
         case #selector(toggleSharedAddressBar(_:)):
             menuItem.state = Settings.addressBarMode == .shared ? .on : .off
         case #selector(checkForUpdates(_:)):
@@ -221,6 +231,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let view = submenu("View", in: main)
         view.addItem(item("Vertical Tabs", #selector(toggleVerticalTabs(_:))))
         view.addItem(item("Shared Address Bar", #selector(toggleSharedAddressBar(_:))))
+        view.addItem(item("Bookmarks Bar", #selector(toggleBookmarksBar(_:)), "B", [.command, .shift]))
+        view.addItem(item("Edit Bookmarks…", #selector(editBookmarks(_:))))
         view.addItem(item("Show Sidebar", #selector(BrowserWindowController.toggleSidebar(_:)), "s", [.command, .control]))
         view.addItem(item("Downloads", #selector(BrowserWindowController.toggleDownloads(_:)), "l", [.command, .option]))
         view.addItem(.separator())

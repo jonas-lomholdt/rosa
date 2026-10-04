@@ -21,6 +21,7 @@
 - 🗂️ **Tabs** — horizontal, or a resizable vertical sidebar that can auto-hide
 - 🛡️ **Ad & tracker blocking** — on by default, one click to allow a site
 - 🔎 **Smart address bar** — autocompletes from your history as you type
+- 🔖 **Bookmarks bar** — a plain JSON file you edit by hand, with folders
 - ⬇️ **Downloads** — progress, cancel, show in Finder, right from the tab bar
 - 🎨 **Liquid Glass** look, light / dark / system theme
 - 🐞 **Web Inspector** — the same dev tools as Safari
@@ -40,12 +41,29 @@
 | `j` / `k`, `h` / `l` | Scroll down / up, left / right |
 | `gg` / `G` | Jump to top / bottom |
 | `⌘F`, `⌘G` / `⌘⇧G` | Find in page, next / previous match |
+| `⌘⇧B` | Show / hide bookmarks bar |
 | `⌃⌘S` | Show sidebar (when auto-hiding) |
 | `⌥⌘L` | Downloads |
 | `⌘,` | Settings |
 | `F12` / `⌘⌥I` | Web Inspector |
 
 Settings are also stored in `~/.rosa/settings.json`. Edit the file and changes apply right away.
+
+Bookmarks live next to it in `~/.rosa/bookmarks.json` (View → Edit Bookmarks… opens it), and also apply as you save:
+
+```json
+{
+  "bookmarks": [
+    { "title": "GitHub", "url": "https://github.com" },
+    { "url": "news.ycombinator.com" },
+    { "title": "Work", "children": [
+      { "title": "Jira", "url": "jira.example.com" }
+    ] }
+  ]
+}
+```
+
+Leave out `title` to show just the favicon; folders open as menus. Click opens in the focused pane, ⌘-click in the background.
 
 ## 📦 Install
 

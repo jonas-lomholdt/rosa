@@ -82,6 +82,7 @@ final class BrowserContentView: NSView {
 
     let tabStrip = TabStripView()
     let header = HeaderView()
+    let bookmarksBar = BookmarksBarView()
     /// Called when a sidebar resize finishes, with the new width.
     var onSidebarResized: ((CGFloat) -> Void)?
 
@@ -98,6 +99,10 @@ final class BrowserContentView: NSView {
 
     var showsSharedAddressBar = false {
         didSet { header.showsAddressField = showsSharedAddressBar; needsLayout = true }
+    }
+
+    var showsBookmarksBar = false {
+        didSet { bookmarksBar.isHidden = !showsBookmarksBar; needsLayout = true }
     }
 
     var sidebarWidth: CGFloat = BrowserContentView.defaultSidebarWidth {
@@ -147,7 +152,8 @@ final class BrowserContentView: NSView {
         sidebarHoverZone.onExit = { [weak self] in self?.scheduleHide() }
 
         // Back to front: page content, header, then the sidebar (it floats over both when auto-hiding).
-        for view in [background, header, sidebarGlass, tabStrip, resizeHandle, edgeHotZone, sidebarHoverZone] {
+        bookmarksBar.isHidden = true
+        for view in [background, header, bookmarksBar, sidebarGlass, tabStrip, resizeHandle, edgeHotZone, sidebarHoverZone] {
             addSubview(view)
         }
     }
@@ -215,6 +221,7 @@ final class BrowserContentView: NSView {
                 header.frame = NSRect(x: 0, y: top, width: bounds.width, height: HeaderView.height)
                 top += HeaderView.height - margin
             }
+            top = layoutBookmarksBar(x: 0, top: top)
             contentRect = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
 
         case .vertical:
@@ -249,11 +256,21 @@ final class BrowserContentView: NSView {
             header.isHidden = false
             header.leadingInset = autoHide ? max(0, Self.trafficLightInset - contentX) : 0
             header.frame = NSRect(x: contentX, y: 0, width: bounds.width - contentX, height: HeaderView.height)
-            let top = HeaderView.height - margin
+            let top = layoutBookmarksBar(x: contentX, top: HeaderView.height - margin)
             contentRect = NSRect(x: contentX, y: top, width: bounds.width - contentX, height: max(0, bounds.height - top))
         }
 
         tabContent?.frame = contentRect
+    }
+
+    /// Places the bookmarks bar (if shown) where the panes would start; returns the panes' new top.
+    private func layoutBookmarksBar(x: CGFloat, top: CGFloat) -> CGFloat {
+        guard showsBookmarksBar else { return top }
+        let margin = PaneContainerView.margin
+        // `top` includes the panes' margin; the bar's items line up with the panes' edges.
+        bookmarksBar.leadingInset = margin
+        bookmarksBar.frame = NSRect(x: x, y: top + margin / 2, width: bounds.width - x, height: BookmarksBarView.height)
+        return bookmarksBar.frame.maxY - margin
     }
 
     private static let floatingShadow: NSShadow = {

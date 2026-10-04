@@ -1,10 +1,12 @@
 import Foundation
 
-/// The JSON file behind `Settings`. Loaded once, rewritten on every change, and
+/// A JSON object file (`settings.json`, `bookmarks.json`). Loaded once, rewritten on every change, and
 /// reloaded when edited by hand. Unknown keys are kept; a file that doesn't parse
 /// leaves the last good values in place.
 final class SettingsStore {
     let url: URL
+    /// Prefix for log lines, e.g. "settings".
+    private let name: String
     private(set) var values: [String: Any] = [:]
     /// False until the file has been written once (first launch).
     private(set) var fileExists = false
@@ -19,8 +21,9 @@ final class SettingsStore {
     private var directorySource: DispatchSourceFileSystemObject?
     private var pendingReload: DispatchWorkItem?
 
-    init(url: URL) {
+    init(url: URL, name: String = "settings") {
         self.url = url
+        self.name = name
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard let data = try? Data(contentsOf: url) else { return }
         fileExists = true
@@ -29,7 +32,7 @@ final class SettingsStore {
             lastData = data
         } else {
             fileIsInvalid = true
-            print("[settings] \(url.path) isn't a valid JSON object; using defaults")
+            print("[\(name)] \(url.path) isn't a valid JSON object; using defaults")
         }
     }
 
@@ -55,7 +58,7 @@ final class SettingsStore {
             let backup = url.appendingPathExtension("invalid")
             try? FileManager.default.removeItem(at: backup)
             try? FileManager.default.moveItem(at: url, to: backup)
-            print("[settings] moved unparseable settings to \(backup.path)")
+            print("[\(name)] moved unparseable file to \(backup.path)")
             fileIsInvalid = false
         }
         let output = data + Data("\n".utf8)
@@ -64,7 +67,7 @@ final class SettingsStore {
             lastData = output
             fileExists = true
         } catch {
-            print("[settings] couldn't write \(url.path): \(error.localizedDescription)")
+            print("[\(name)] couldn't write \(url.path): \(error.localizedDescription)")
         }
     }
 
@@ -105,7 +108,7 @@ final class SettingsStore {
         lastData = data
         guard let parsed = Self.parse(data) else {
             fileIsInvalid = true
-            print("[settings] \(url.path) isn't a valid JSON object; keeping previous settings")
+            print("[\(name)] \(url.path) isn't a valid JSON object; keeping previous values")
             return
         }
         fileIsInvalid = false

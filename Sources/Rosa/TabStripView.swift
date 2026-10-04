@@ -453,6 +453,6 @@ private final class TabItemView: NSView {
     @objc private func closeClicked(_ sender: Any?) { onClose?() }
 }
 
-private final class NonDraggingLabel: NSTextField {
+final class NonDraggingLabel: NSTextField {
     override var mouseDownCanMoveWindow: Bool { false }
 }

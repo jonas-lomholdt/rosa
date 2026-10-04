@@ -26,6 +26,10 @@ enum SelfTest {
             await pause(0.25)
         }
         print("active=\(NSApp.isActive) key=\(NSApp.keyWindow != nil)")
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "bookmarks" {
+            await runBookmarks(controller, outputDir: outputDir)
+            return
+        }
 
         func page(_ name: String, _ color: String) {
             controller.focusedPane?.load("data:text/html,<title>\(name)</title><body style='background:\(color)'><h1>\(name)</h1>")
@@ -74,6 +78,7 @@ enum SelfTest {
         await step("horizontal + shared")
         snapshot(controller, to: outputDir.appendingPathComponent("4-horizontal-shared.png"))
         Settings.addressBarMode = .perPane
+        await runBookmarks(controller, outputDir: outputDir)
         for site in ["https://github.com", "https://www.apple.com", "https://news.ycombinator.com"] {
             controller.focusedPane?.load(site)
             // Wait for this site's page to finish and its own icon to arrive (not the previous page's).
@@ -536,6 +541,76 @@ enum SelfTest {
         } else {
             NSApp.postEvent(event, atStart: false)
         }
+    }
+
+    /// Bookmarks bar: layouts, live edits of bookmarks.json, overflow, ⌘⇧B, opening. Writes the
+    /// bookmarks file, so it only runs against a scratch settings/bookmarks location.
+    private static func runBookmarks(_ controller: BrowserWindowController, outputDir: URL) async {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["BROWSER_SETTINGS_FILE"] != nil || environment["BROWSER_BOOKMARKS_FILE"] != nil else {
+            print("SKIP bookmarks: set BROWSER_SETTINGS_FILE or BROWSER_BOOKMARKS_FILE to a scratch location")
+            return
+        }
+        let bar = controller.debugContentRoot.bookmarksBar
+        func write(_ entries: [[String: Any]]) async {
+            let data = try! JSONSerialization.data(withJSONObject: ["bookmarks": entries], options: .prettyPrinted)
+            try? data.write(to: Bookmarks.fileURL, options: .atomic)
+            await pause(0.8)
+        }
+        func report(_ label: String) {
+            print("\(label.padding(toLength: 34, withPad: " ", startingAt: 0)) shown=\(!bar.isHidden) frame=\(bar.frame.integral) "
+                  + "visible=\(bar.debugVisibleTitles) overflow=\(bar.debugOverflowCount)")
+        }
+
+        Settings.showBookmarksBar = true
+        await write([])
+        report("bookmarks: empty file (hint)")
+        snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-0-empty.png"))
+        await write([
+            ["url": "https://example.com"],
+            ["title": "GitHub", "url": "https://github.com"],
+            ["title": "Work", "children": [
+                ["title": "Apple", "url": "apple.com"],
+                ["title": "Nested", "children": [["title": "HN", "url": "https://news.ycombinator.com"]]],
+            ]],
+            ["title": "Hacker News", "url": "news.ycombinator.com"],
+            ["title": "no url, skipped"],
+        ])
+        await pause(1.5)  // favicons
+        report("bookmarks: live edit")
+        snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-1-horizontal.png"))
+        Settings.addressBarMode = .shared
+        await pause(0.4)
+        snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-2-horizontal-shared.png"))
+        Settings.tabLayout = .vertical
+        await pause(0.4)
+        report("bookmarks: vertical + shared")
+        snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-3-vertical-shared.png"))
+        Settings.addressBarMode = .perPane
+        await pause(0.4)
+        snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-4-vertical.png"))
+        Settings.tabLayout = .horizontal
+
+        await write((1...40).map { ["title": "Bookmark \($0)", "url": "https://example.com/\($0)"] })
+        report("bookmarks: 40 (overflow)")
+        snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-5-overflow.png"))
+
+        await ensureActive(controller.window)
+        post("B", keyCode: 11, modifiers: [.command, .shift], window: controller.window)
+        await pause(0.5)
+        report("bookmarks: ⌘⇧B hide")
+        await ensureActive(controller.window)
+        post("B", keyCode: 11, modifiers: [.command, .shift], window: controller.window)
+        await pause(0.5)
+        report("bookmarks: ⌘⇧B show")
+
+        let tabsBefore = controller.tabCount
+        bar.onOpen?(URL(string: "https://example.com/opened")!, false)
+        await pause(1.5)
+        print("bookmarks: open in pane            url=\(controller.focusedPane?.webView.url?.absoluteString ?? "-")")
+        bar.onOpen?(URL(string: "https://example.com/background")!, true)
+        await pause(0.5)
+        print("bookmarks: open in background      tabs \(tabsBefore) → \(controller.tabCount)")
     }
 
     private static func snapshot(_ controller: BrowserWindowController, to url: URL) {

@@ -3,6 +3,7 @@ import AppKit
 // Before anything touches settings, history or WebKit's data store.
 Migration.run()
 Settings.load()
+Bookmarks.load()
 
 let app = NSApplication.shared
 let delegate = AppDelegate()
