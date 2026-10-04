@@ -55,6 +55,8 @@ On by default (Settings → Content Blocking). EasyList + EasyPrivacy (and optio
 - `.github/workflows/ci.yml` builds `Rosa.app` on every push/PR (macOS 26 runner) and uploads it as an artifact.
 - `.github/workflows/release.yml`: push a tag `vX.Y.Z` to build, stamp the version into `Info.plist`, and publish a GitHub release with `Rosa-vX.Y.Z.zip`.
 
+Release notes come from `CHANGELOG.md`: add user-facing changes under **Unreleased** as they land, then rename that heading to the version and commit before tagging. `scripts/release-notes.sh vX.Y.Z` prints what will be published (its section, else Unreleased, else commit subjects since the previous tag); GitHub's generated "Full Changelog" link is appended.
+
 ```bash
 git tag v0.1.0 && git push origin v0.1.0
 ```
