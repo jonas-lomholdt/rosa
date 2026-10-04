@@ -9,6 +9,8 @@ struct Bookmark {
 
     var title: String
     var kind: Kind
+    /// Stable while the app runs (not stored), so views can keep selection and expansion across edits.
+    var id = UUID()
 }
 
 /// Bookmarks are stored in `bookmarks.json` next to `settings.json` (`~/.rosa/`), the single
@@ -121,6 +123,14 @@ enum Bookmarks {
         save()
     }
 
+    static func setURL(at path: Path, to url: URL) {
+        guard let last = path.last else { return }
+        modify(Array(path.dropLast())) { list in
+            if list.indices.contains(last), case .link = list[last].kind { list[last].kind = .link(url) }
+        }
+        save()
+    }
+
     static func remove(at path: Path) {
         guard let last = path.last else { return }
         modify(Array(path.dropLast())) { list in
@@ -129,13 +139,20 @@ enum Bookmarks {
         save()
     }
 
-    /// Moves a bookmark to the end of `folder`, unless it's already in it. Returns its new path.
+    /// Moves a bookmark into `folder` before the item at `index` (as numbered before the move),
+    /// or to the end when `index` is nil — unless it's already in that folder. Returns its new path.
     @discardableResult
-    static func move(_ path: Path, to folder: Path) -> Path {
+    static func move(_ path: Path, to folder: Path, at index: Int? = nil) -> Path {
         guard let bookmark = bookmark(at: path), let last = path.last else { return path }
         let parent = Array(path.dropLast())
-        // Not into itself or its own subfolders, and nothing to do if it's already there.
-        guard parent != folder, !folder.starts(with: path) else { return path }
+        // Not into itself or its own subfolders.
+        guard !folder.starts(with: path) else { return path }
+        var index = index
+        if parent == folder {
+            guard let target = index else { return path }
+            if target > last { index = target - 1 }
+            if index == last { return path }
+        }
         modify(parent) { $0.remove(at: last) }
         // Removing shifts later siblings (and so the destination, if it was one of them) up by one.
         var destination = folder
@@ -144,8 +161,9 @@ enum Bookmarks {
         }
         var newPath = destination
         modify(destination) { list in
-            list.append(bookmark)
-            newPath.append(list.count - 1)
+            let position = min(index ?? list.count, list.count)
+            list.insert(bookmark, at: position)
+            newPath.append(position)
         }
         save()
         return newPath
@@ -191,7 +209,8 @@ enum Bookmarks {
         }
     }
 
-    private static func linkURL(_ text: String) -> URL? {
+    /// A typed address as a URL; `https://` is assumed when there's no scheme.
+    static func linkURL(_ text: String) -> URL? {
         let text = text.trimmingCharacters(in: .whitespaces)
         if text.contains("://") || text.hasPrefix("about:") || text.hasPrefix("data:") { return URL(string: text) }
         return URL(string: "https://" + text)

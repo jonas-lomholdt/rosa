@@ -636,6 +636,39 @@ enum SelfTest {
         controller.debugBookmarkEditor.close()
         await pause(0.5)
         print("bookmarks: folder renamed          visible=\(bar.debugVisibleTitles)")
+        // Manager window: ⌥⌘B, a nested folder named inline, moves into it, reordering.
+        await ensureActive(controller.window)
+        post("b", keyCode: 11, modifiers: [.command, .option], window: controller.window)
+        await pause(0.8)
+        if let manager = (NSApp.delegate as? AppDelegate)?.debugBookmarksManager, let managerWindow = manager.window {
+            manager.debugExpandAll()
+            print("manager: ⌥⌘B                       visible=\(managerWindow.isVisible) rows=\(manager.debugRows)")
+            print("manager: layout                    " + (managerWindow.contentView?.subviews.map { "\(type(of: $0))\($0.frame.integral)" } ?? []).joined(separator: " "))
+            manager.debugSelect("Nested")
+            manager.newFolder(nil)
+            await pause(0.3)
+            (managerWindow.firstResponder as? NSTextView)?.string = "Deep"
+            managerWindow.makeFirstResponder(nil)
+            await pause(0.3)
+            print("manager: new folder in Nested      rows=\(manager.debugRows)")
+            if let link = Bookmarks.path(of: URL(string: "https://example.org/linked")!),
+               let deep = Bookmarks.folders.first(where: { $0.title == "Deep" })?.path {
+                Bookmarks.move(link, to: deep, at: 0)
+            }
+            Bookmarks.move([1], to: [], at: 0)
+            await pause(0.3)
+            manager.debugExpandAll()
+            print("manager: move into Deep + reorder  rows=\(manager.debugRows)")
+            print("manager: folders                   \(Bookmarks.folders.map { String(repeating: ">", count: $0.depth) + $0.title })")
+            if let view = managerWindow.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: rep)
+                try? rep.representation(using: .png, properties: [:])?.write(to: outputDir.appendingPathComponent("manager.png"))
+            }
+            managerWindow.close()
+        } else {
+            print("FAIL manager: not opened")
+        }
+
         if let data = try? Data(contentsOf: Bookmarks.fileURL),
            let json = try? JSONSerialization.jsonObject(with: data),
            let compact = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys, .withoutEscapingSlashes]) {

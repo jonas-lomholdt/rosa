@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var priorityMenus: [NSMenu] = []
     private var keyMonitor: Any?
     private var settingsWindow: NSWindow?
+    private var bookmarksManager: BookmarksManagerController?
     private var settingsObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -93,6 +94,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         settingsWindow.makeKeyAndOrderFront(nil)
     }
+
+    @objc func showBookmarksManager(_ sender: Any?) {
+        if bookmarksManager == nil {
+            let manager = BookmarksManagerController()
+            manager.onOpen = { [weak self] url, newTab in
+                guard let self else { return }
+                if frontmostBrowserWindow == nil { newWindow(nil) }
+                (frontmostBrowserWindow?.windowController as? BrowserWindowController)?.open(url, newTab: newTab)
+            }
+            bookmarksManager = manager
+        }
+        guard let window = bookmarksManager?.window else { return }
+        if !window.isVisible, !window.setFrameUsingName("BookmarksManager") {
+            centre(window, over: frontmostBrowserWindow)
+        }
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    /// For the self-test.
+    var debugBookmarksManager: BookmarksManagerController? { bookmarksManager }
 
     /// The browser window the user was last in (Settings itself excluded).
     var frontmostBrowserWindow: NSWindow? {
@@ -250,6 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // Not a priority menu: pages get ⌘B first (bold in editors), the menu gets it otherwise.
         let bookmarks = submenu("Bookmarks", in: main)
         bookmarks.addItem(item("Bookmark This Page…", #selector(BrowserWindowController.bookmarkCurrentPage(_:)), "b"))
+        bookmarks.addItem(item("Manage Bookmarks…", #selector(showBookmarksManager(_:)), "b", [.command, .option]))
 
         let pane = submenu("Pane", in: main)
         pane.addItem(item("Split Right", #selector(BrowserWindowController.splitRight(_:)), "d"))

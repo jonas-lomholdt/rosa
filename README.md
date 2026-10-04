@@ -21,7 +21,7 @@
 - 🗂️ **Tabs** — horizontal, or a resizable vertical sidebar that can auto-hide
 - 🛡️ **Ad & tracker blocking** — on by default, one click to allow a site
 - 🔎 **Smart address bar** — autocompletes from your history as you type
-- 🔖 **Bookmarks bar** — ⌘B or right-click to bookmark, folders, right-click to edit
+- 🔖 **Bookmarks** — ⌘B or right-click to bookmark, a bar with nested folders, and a manager to organise them
 - ⬇️ **Downloads** — progress, cancel, show in Finder, right from the tab bar
 - 🎨 **Liquid Glass** look, light / dark / system theme
 - 🐞 **Web Inspector** — the same dev tools as Safari
@@ -43,6 +43,7 @@
 | `⌘F`, `⌘G` / `⌘⇧G` | Find in page, next / previous match |
 | `⌘B` | Bookmark this page (rename, pick a folder, or remove) |
 | `⌘⇧B` | Show / hide bookmarks bar |
+| `⌥⌘B` | Manage bookmarks (drag to reorder and nest folders) |
 | `⌃⌘S` | Show sidebar (when auto-hiding) |
 | `⌥⌘L` | Downloads |
 | `⌘,` | Settings |

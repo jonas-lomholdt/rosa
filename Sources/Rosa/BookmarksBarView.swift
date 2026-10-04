@@ -111,7 +111,14 @@ final class BookmarksBarView: ChromeView {
     override func menu(for event: NSEvent) -> NSMenu? {
         let menu = NSMenu()
         menu.addItem(ClosureMenuItem("New Folder") { [weak self] in self?.onNewFolder?() })
+        menu.addItem(Self.manageItem())
         return menu
+    }
+
+    private static func manageItem() -> NSMenuItem {
+        ClosureMenuItem("Manage Bookmarks…") {
+            NSApp.sendAction(#selector(AppDelegate.showBookmarksManager(_:)), to: nil, from: nil)
+        }
     }
 
     private func contextMenu(for bookmark: Bookmark, at path: Bookmarks.Path, anchor: NSView) -> NSMenu {
@@ -136,6 +143,7 @@ final class BookmarksBarView: ChromeView {
         }
         menu.addItem(.separator())
         menu.addItem(ClosureMenuItem("New Folder") { [weak self] in self?.onNewFolder?() })
+        menu.addItem(Self.manageItem())
         return menu
     }
 

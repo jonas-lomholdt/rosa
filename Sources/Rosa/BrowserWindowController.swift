@@ -411,6 +411,16 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     /// For the self-test.
     var debugBookmarkEditor: BookmarkEditor { bookmarkEditor }
 
+    /// From the bookmarks manager: a new tab, or the focused pane.
+    func open(_ url: URL, newTab: Bool) {
+        if newTab {
+            addTab(request: URLRequest(url: url))
+        } else {
+            openBookmark(url, background: false)
+        }
+        window?.makeKeyAndOrderFront(nil)
+    }
+
     /// Bookmarks open in the focused pane; in the background they go where ⌘-clicked links go.
     private func openBookmark(_ url: URL, background: Bool) {
         guard let pane = focusedPane else { return }
