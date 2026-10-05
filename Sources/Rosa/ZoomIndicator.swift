@@ -48,10 +48,13 @@ final class ZoomIndicator: NSView {
         updateTint()
     }
 
+    /// The text gets a fixed colour too: glass otherwise adapts it to the page behind.
     private func updateTint() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             glass.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.85)
         }
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        label.textColor = isDark ? .white : .black
     }
 
     override func layout() {
