@@ -9,6 +9,9 @@ release notes (`scripts/release-notes.sh`).
 ### Zoom
 - **⌘+ / ⌘- zoom the page in and out, ⌘0 resets it** (also in the View menu). Each pane zooms on its own, and the level shows briefly at the top of the pane.
 
+### JSON
+- **JSON responses are formatted and colour-coded**, in light and dark mode. A Raw / Pretty switch in the corner shows the original text. Turn it off in Settings → Appearance → Format JSON responses.
+
 ## v0.4.0
 
 ### Bookmarks

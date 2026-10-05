@@ -45,6 +45,10 @@ Settings (⌘,) and the View menu toggle **Vertical Tabs** and **Shared Address 
 
 On by default (Settings → Content Blocking). EasyList + EasyPrivacy (and optionally the EasyList Cookie List) are downloaded on first launch, refreshed weekly, converted by `FilterListConverter` (a subset of Adblock Plus syntax) and compiled into WebKit `WKContentRuleList`s, which WebKit caches. The shield in the address bar turns blocking off for one site.
 
+## JSON viewer
+
+`JSONViewer.swift` injects a script (same isolated world as link hints, installed by `LinkHints.install`) that turns WebKit's plain `<pre>` for `application/json` / `*+json` documents into an indented, colour-coded copy with a Raw / Pretty toggle. It validates with `JSON.parse` but formats by re-tokenizing the original text, so numbers beyond 2^53 and key order are kept; anti-hijacking prefixes (`)]}'`, `while(1);`) are stripped. Invalid JSON and `text/plain` are left alone. Over 3 MB it indents without colouring. Styles use a constructable stylesheet (`adoptedStyleSheets`) because CSPs like `default-src 'none'` block injected `<style>` elements. Setting: `formatJSON` (applies to the next load).
+
 ## Layout
 
 - `Tab` owns a split tree: `PaneContainerView` → nested `SplitView`s → `PaneView` leaves (one `WKWebView` each).

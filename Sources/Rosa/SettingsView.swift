@@ -28,6 +28,9 @@ final class SettingsModel: ObservableObject {
     @Published var findHighlightColor: String {
         didSet { if Settings.findHighlightColor != findHighlightColor { Settings.findHighlightColor = findHighlightColor } }
     }
+    @Published var formatJSON: Bool {
+        didSet { if Settings.formatJSON != formatJSON { Settings.formatJSON = formatJSON } }
+    }
     @Published var vimKeysEnabled: Bool {
         didSet { if Settings.vimKeysEnabled != vimKeysEnabled { Settings.vimKeysEnabled = vimKeysEnabled } }
     }
@@ -80,6 +83,7 @@ final class SettingsModel: ObservableObject {
         linkHintColor = Settings.linkHintColor
         vimKeysEnabled = Settings.vimKeysEnabled
         findHighlightColor = Settings.findHighlightColor
+        formatJSON = Settings.formatJSON
         linkHintsAllPanes = Settings.linkHintsAllPanes
         historyEnabled = Settings.historyEnabled
         historyPageCount = HistoryStore.shared.pageCount
@@ -124,6 +128,7 @@ final class SettingsModel: ObservableObject {
         linkHintColor = Settings.linkHintColor
         vimKeysEnabled = Settings.vimKeysEnabled
         findHighlightColor = Settings.findHighlightColor
+        formatJSON = Settings.formatJSON
         linkHintsAllPanes = Settings.linkHintsAllPanes
         historyEnabled = Settings.historyEnabled
         adBlockEnabled = Settings.adBlockEnabled
@@ -213,6 +218,7 @@ struct SettingsView: View {
                             .frame(width: 40, alignment: .trailing)
                     }
                 }
+                Toggle("Format JSON responses", isOn: $model.formatJSON)
             }
 
             Section {

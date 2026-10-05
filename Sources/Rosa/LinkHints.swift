@@ -20,8 +20,10 @@ enum LinkHints {
         controller.addUserScript(WKUserScript(
             source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: contentWorld
         ))
-        // removeAllUserScripts() above clears every page script, so find-in-page is (re)added here too.
+        // removeAllUserScripts() above clears every page script, so find-in-page and the
+        // JSON viewer are (re)added here too.
         controller.addUserScript(FindInPage.userScript)
+        if Settings.formatJSON { controller.addUserScript(JSONViewer.userScript) }
         // Popups share their opener's controller; a handler name may only be added once.
         if !controllersWithHandler.contains(controller) {
             controller.add(LinkHintsRouter.shared, contentWorld: contentWorld, name: messageName)

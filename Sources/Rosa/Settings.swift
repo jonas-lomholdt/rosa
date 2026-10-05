@@ -125,6 +125,7 @@ enum Settings {
             "linkHintColor": linkHintColor,
             "vimKeysEnabled": vimKeysEnabled,
             "findHighlightColor": findHighlightColor,
+            "formatJSON": formatJSON,
             "askWhereToSaveDownloads": askWhereToSaveDownloads,
             "checkForUpdatesOnLaunch": checkForUpdatesOnLaunch,
             "searchEngine": searchEngine.rawValue,
@@ -237,6 +238,12 @@ enum Settings {
     static var findHighlightColor: String {
         get { value("findHighlightColor") ?? "#32D74B" }
         set { set(newValue, "findHighlightColor") }
+    }
+
+    /// Pretty-print and colour JSON responses (`JSONViewer`).
+    static var formatJSON: Bool {
+        get { value("formatJSON") ?? true }
+        set { set(newValue, "formatJSON") }
     }
 
     /// Show a save panel for each download instead of saving straight to Downloads.
