@@ -18,9 +18,11 @@
 - 🔤 **Link hints** — press `f`, type the yellow label, and the link is clicked — across all panes at once
 - ⌨️ **Vim keys** — `hjkl` to scroll, `gg`/`G` for top and bottom (optional)
 - 🔍 **Find in page** — with a live match count
+- 🔎 **Zoom per pane** — `⌘+` / `⌘-` / `⌘0`, each pane keeps its own level
+- 🧾 **JSON viewer** — JSON responses are pretty-printed and colour-coded, with a Raw / Pretty switch
 - 🗂️ **Tabs** — horizontal, or a resizable vertical sidebar that can auto-hide
 - 🛡️ **Ad & tracker blocking** — on by default, one click to allow a site
-- 🔎 **Smart address bar** — autocompletes from your history as you type
+- 🧠 **Smart address bar** — autocompletes from your history as you type
 - 🔖 **Bookmarks** — ⌘B or right-click to bookmark, a bar with nested folders, and a manager to organise them
 - ⬇️ **Downloads** — progress, cancel, show in Finder, right from the tab bar
 - 🎨 **Liquid Glass** look, light / dark / system theme
@@ -36,11 +38,13 @@
 | `⌘⌥ ← ↑ ↓ →` / `⌃H` `⌃J` `⌃K` `⌃L` | Jump to the pane in that direction |
 | `⌘W` | Close pane |
 | `⌘T` | New tab |
+| `⌘⇧T` | Reopen closed tab (with its panes and history) |
 | `⌘L` | Address bar |
 | `f` / `⇧F` | Link hints / open link in background |
 | `j` / `k`, `h` / `l` | Scroll down / up, left / right |
 | `gg` / `G` | Jump to top / bottom |
 | `⌘F`, `⌘G` / `⌘⇧G` | Find in page, next / previous match |
+| `⌘+` / `⌘-` / `⌘0` | Zoom in / out / reset (focused pane) |
 | `⌘B` | Bookmark this page (rename, pick a folder, or remove) |
 | `⌘⇧B` | Show / hide bookmarks bar |
 | `⌥⌘B` | Manage bookmarks (drag to reorder and nest folders) |
