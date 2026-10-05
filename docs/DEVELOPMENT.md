@@ -19,6 +19,7 @@ scripts/build.sh release --run   # builds build/Rosa.app and opens it
 | ⌘T / ⌘⇧W | New tab / close tab |
 | ⌃⇥ / ⌃⇧⇥, ⌘1–9 | Switch tabs |
 | ⌘L, ⌘R, ⌘[ / ⌘] | Address bar, reload, back / forward |
+| ⌘+ (or ⌘=) / ⌘- / ⌘0 | Zoom the focused pane in / out / reset (`WKWebView.pageZoom`, Chrome's steps in `PageZoom`; ⌘0 also undoes pinch magnification) |
 | ⌘, | Settings (tab layout, address bar, search engine) |
 | f / ⇧F | Link hints: label clickable elements, type a label to click / open in background (`LinkHints.swift`). With "all panes" on, `BrowserWindowController` runs one session across every pane in the tab |
 | j / k, h / l, gg / G | Vim-style scrolling (same injected script as link hints) |

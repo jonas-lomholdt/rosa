@@ -57,6 +57,18 @@ enum SelfTest {
         page("C", "#efd")
         await step("load C")
         snapshot(controller, to: outputDir.appendingPathComponent("1-splits.png"))
+        func zooms(_ label: String) {
+            let levels = controller.debugPanes.map { "\(Int(($0.webView.pageZoom * 100).rounded()))%" }
+            print("\(label.padding(toLength: 34, withPad: " ", startingAt: 0)) zoom=\(levels) indicator=\(controller.focusedPane?.zoomIndicator.text ?? "-")")
+        }
+        await step("⌘= zoom in", [("=", 24, [.command])])
+        await step("⌘+ zoom in", [("+", 24, [.command, .shift])])
+        zooms("after ⌘= ⌘+")
+        snapshot(controller, to: outputDir.appendingPathComponent("1-zoomed.png"))
+        await step("⌘- ⌘- ⌘- zoom out", [("-", 27, [.command]), ("-", 27, [.command]), ("-", 27, [.command])])
+        zooms("after ⌘- ×3")
+        await step("⌘0 actual size", [("0", 29, [.command])])
+        zooms("after ⌘0")
         await step("⌘⌥← focus left", [(left, 123, paneNav)])
         await step("⌘⌥→ focus right (most recent)", [(right, 124, paneNav)])
         await step("⌘⌥↑ focus up", [(up, 126, paneNav)])

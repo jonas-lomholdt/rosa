@@ -164,6 +164,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     private let progressLine = ProgressLineView()
     private let overlay = FocusOverlayView()
     let findBar = FindBar()
+    let zoomIndicator = ZoomIndicator()
     /// Bumped per search so a slow result can't overwrite a newer one.
     private var findGeneration = 0
     private var observations: [NSKeyValueObservation] = []
@@ -207,7 +208,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         findBar.onPrevious = { [weak self] in self?.findPrevious() }
         findBar.onClose = { [weak self] in self?.hideFindBar() }
 
-        for view in [card, addressBar, findBar, overlay] {
+        for view in [card, addressBar, findBar, zoomIndicator, overlay] {
             addSubview(view)
         }
         observeWebView()
@@ -255,6 +256,10 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         findBar.frame = NSRect(
             x: card.frame.maxX - FindBar.size.width - 10, y: card.frame.minY + 10,
             width: min(FindBar.size.width, card.frame.width - 20), height: FindBar.size.height
+        )
+        zoomIndicator.frame = NSRect(
+            x: (card.frame.midX - ZoomIndicator.size.width / 2).rounded(), y: card.frame.minY + 10,
+            width: ZoomIndicator.size.width, height: ZoomIndicator.size.height
         )
     }
 
@@ -306,6 +311,22 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         guard let inspector else { return }
         let selector = Selector((isWebInspectorVisible ? "close" : "show"))
         if inspector.responds(to: selector) { inspector.perform(selector) }
+    }
+
+    // MARK: - Zoom
+
+    func zoomIn() { setZoom(PageZoom.next(after: webView.pageZoom)) }
+    func zoomOut() { setZoom(PageZoom.previous(before: webView.pageZoom)) }
+
+    /// Also undoes pinch magnification.
+    func resetZoom() {
+        webView.magnification = 1
+        setZoom(1)
+    }
+
+    private func setZoom(_ zoom: CGFloat) {
+        webView.pageZoom = zoom
+        zoomIndicator.show(zoom)
     }
 
     // MARK: - Find in page

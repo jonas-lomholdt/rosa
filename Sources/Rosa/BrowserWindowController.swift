@@ -437,6 +437,9 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     @objc func equalizePanes(_ sender: Any?) { selectedTab.map { equalize($0.container.child) } }
     @objc func openLocation(_ sender: Any?) { focusAddressField() }
     @objc func reloadPage(_ sender: Any?) { focusedPane?.webView.reload() }
+    @objc func zoomIn(_ sender: Any?) { focusedPane?.zoomIn() }
+    @objc func zoomOut(_ sender: Any?) { focusedPane?.zoomOut() }
+    @objc func resetZoom(_ sender: Any?) { focusedPane?.resetZoom() }
     @objc func toggleWebInspector(_ sender: Any?) { focusedPane?.toggleWebInspector() }
     @objc func showLinkHints(_ sender: Any?) { focusedPane?.showLinkHints() }
     @objc func toggleSidebar(_ sender: Any?) { contentRoot.toggleSidebar() }
@@ -697,6 +700,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
 
     /// For the self-test.
     var debugTabTitles: [String] { tabs.map(\.title) }
+    var debugPanes: [PaneView] { selectedTab?.panes ?? [] }
     var debugTabCenters: [NSPoint] { contentRoot.tabStrip.debugTabCenters }
 
     // MARK: - NSWindowDelegate

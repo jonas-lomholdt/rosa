@@ -255,13 +255,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         view.addItem(.separator())
         view.addItem(item("Reload Page", #selector(BrowserWindowController.reloadPage(_:)), "r"))
         view.addItem(.separator())
+        view.addItem(item("Actual Size", #selector(BrowserWindowController.resetZoom(_:)), "0"))
+        view.addItem(item("Zoom In", #selector(BrowserWindowController.zoomIn(_:)), "+"))
+        view.addItem(item("Zoom Out", #selector(BrowserWindowController.zoomOut(_:)), "-"))
+        // ⌘= too, so zooming in doesn't need ⇧ on layouts where + is shifted =.
+        view.addItem(hidden(item("Zoom In", #selector(BrowserWindowController.zoomIn(_:)), "=")))
+        view.addItem(.separator())
         view.addItem(item("Show Link Hints (F)", #selector(BrowserWindowController.showLinkHints(_:))))
         view.addItem(item("Web Inspector", #selector(BrowserWindowController.toggleWebInspector(_:)), "i", [.command, .option]))
-        let f12 = item("Web Inspector", #selector(BrowserWindowController.toggleWebInspector(_:)), functionKey(NSF12FunctionKey), [])
-        f12.isAlternate = false
-        f12.isHidden = true
-        f12.allowsKeyEquivalentWhenHidden = true
-        view.addItem(f12)
+        view.addItem(hidden(item("Web Inspector", #selector(BrowserWindowController.toggleWebInspector(_:)),
+                                 functionKey(NSF12FunctionKey), [])))
         view.addItem(.separator())
         view.addItem(item("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]))
 
@@ -324,6 +327,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     ) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
         item.keyEquivalentModifierMask = modifiers
+        return item
+    }
+
+    /// A shortcut-only duplicate of a visible item.
+    private func hidden(_ item: NSMenuItem) -> NSMenuItem {
+        item.isHidden = true
+        item.allowsKeyEquivalentWhenHidden = true
         return item
     }
 
