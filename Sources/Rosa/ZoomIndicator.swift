@@ -18,18 +18,22 @@ final class ZoomIndicator: NSView {
     static let size = NSSize(width: 72, height: 28)
 
     private let glass = NSGlassEffectView()
+    /// The glass sizes its content view to fill it, so the label sits in a container to be centred.
+    private let content = NSView()
     private let label = NSTextField(labelWithString: "")
     private var hideGeneration = 0
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         glass.cornerRadius = Self.size.height / 2
-        glass.contentView = label
+        glass.contentView = content
+        content.addSubview(label)
         addSubview(glass)
         label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
         label.alignment = .center
         alphaValue = 0
         isHidden = true
+        updateTint()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -38,9 +42,22 @@ final class ZoomIndicator: NSView {
 
     var text: String { label.stringValue }
 
+    /// Tinted with the window colour so the pill follows Rosa's appearance, not the page under it.
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateTint()
+    }
+
+    private func updateTint() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            glass.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.85)
+        }
+    }
+
     override func layout() {
         super.layout()
         glass.frame = bounds
+        content.frame = glass.bounds
         let height = label.intrinsicContentSize.height
         label.frame = NSRect(x: 0, y: ((bounds.height - height) / 2).rounded(), width: bounds.width, height: height)
     }
