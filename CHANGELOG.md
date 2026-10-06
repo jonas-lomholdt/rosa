@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.5.1
+
+🩹 The address bar stays put when the sidebar slides out.
+
 ### 🐛 Fixes
 - With an auto-hiding vertical sidebar and the shared address bar, expanding the sidebar no longer stretches the address bar over the back / forward / reload buttons. The address bar now stays put.
 
