@@ -54,6 +54,7 @@ On by default (Settings → Content Blocking). EasyList + EasyPrivacy (and optio
 - `Tab` owns a split tree: `PaneContainerView` → nested `SplitView`s → `PaneView` leaves (one `WKWebView` each).
 - `BrowserWindowController` handles tabs, splitting/closing, and directional focus (spatial, ties go to the most recently focused pane).
 - Pane/tab shortcuts are dispatched by a key monitor before the web page sees them (`AppDelegate.priorityMenus`).
+- Back / forward / reload (`NavigationButtonsView`) sit beside the traffic lights: in the tab strip (horizontal), the sidebar's top row (vertical), or the start of the header (auto-hide sidebar, so revealing it doesn't move the address bar). `BROWSER_SELFTEST_ONLY=layout` checks every tab layout × address bar mode, collapsed and revealed, for overlap.
 
 ## CI & releases
 

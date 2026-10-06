@@ -30,6 +30,10 @@ enum SelfTest {
             await runBookmarks(controller, outputDir: outputDir)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "layout" {
+            await runLayout(controller, outputDir: outputDir)
+            return
+        }
 
         func page(_ name: String, _ color: String) {
             controller.focusedPane?.load("data:text/html,<title>\(name)</title><body style='background:\(color)'><h1>\(name)</h1>")
@@ -553,6 +557,55 @@ enum SelfTest {
         } else {
             NSApp.postEvent(event, atStart: false)
         }
+    }
+
+    /// Every tab layout × address bar mode (× auto-hide sidebar, collapsed and revealed): the address
+    /// bar must clear the navigation buttons, and revealing the sidebar must not move it.
+    private static func runLayout(_ controller: BrowserWindowController, outputDir: URL) async {
+        let root = controller.debugContentRoot
+        controller.focusedPane?.load("data:text/html,<title>Layout</title><h1>Layout</h1>")
+        await pause(0.5)
+        var failures = 0
+        func addressBarFrame() -> NSRect? {
+            let bar = Settings.addressBarMode == .shared ? root.header.addressBarView : controller.focusedPane?.addressBarView
+            guard let bar, !bar.isHiddenOrHasHiddenAncestor else { return nil }
+            return bar.convert(bar.bounds, to: root)
+        }
+        func check(_ label: String) -> NSRect? {
+            let bar = addressBarFrame(), buttons = root.navigationButtons.frame
+            let overlaps = bar.map { $0.intersects(buttons) } ?? false
+            if overlaps { failures += 1 }
+            print("\(overlaps ? "FAIL" : "ok  ") \(label.padding(toLength: 40, withPad: " ", startingAt: 0)) bar=\(bar.map { "\(Int($0.minX))…\(Int($0.maxX))" } ?? "-") buttons=\(Int(buttons.minX))…\(Int(buttons.maxX))")
+            return bar
+        }
+        for layout in [TabLayout.horizontal, .vertical] {
+            for mode in [AddressBarMode.shared, .perPane] {
+                Settings.tabLayout = layout
+                Settings.addressBarMode = mode
+                Settings.sidebarAutoHide = false
+                await pause(0.5)
+                let name = "\(layout) \(mode)"
+                _ = check(name)
+                snapshot(controller, to: outputDir.appendingPathComponent("layout-\(layout)-\(mode).png"))
+                guard layout == .vertical else { continue }
+                Settings.sidebarAutoHide = true
+                await pause(0.5)
+                let collapsed = check("\(name) auto-hide collapsed")
+                controller.toggleSidebar(nil)
+                await pause(0.5)
+                let revealed = check("\(name) auto-hide revealed")
+                snapshot(controller, to: outputDir.appendingPathComponent("layout-\(layout)-\(mode)-revealed.png"))
+                let stays = collapsed == revealed
+                if !stays { failures += 1 }
+                print("\(stays ? "ok  " : "FAIL") \("\(name) bar stays on reveal".padding(toLength: 40, withPad: " ", startingAt: 0))")
+                controller.toggleSidebar(nil)
+                await pause(0.5)
+            }
+        }
+        Settings.sidebarAutoHide = false
+        Settings.tabLayout = .horizontal
+        Settings.addressBarMode = .perPane
+        print(failures == 0 ? "layout: all ok" : "layout: \(failures) FAILED")
     }
 
     /// Bookmarks bar: layouts, live edits of bookmarks.json, overflow, ⌘⇧B, opening. Writes the

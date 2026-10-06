@@ -285,11 +285,12 @@ final class BrowserContentView: NSView {
             tabStrip.trafficLightInset = navigationButtons.frame.maxX + 4
         case .vertical:
             let sidebarButtons = tabStrip.frame.minX + tabStrip.topRowButtonsMinX
-            let fitsInSidebar = !(isVerticalAutoHide && !isSidebarRevealed) && minX + size.width + 4 <= sidebarButtons
+            // Auto-hide keeps them in the header either way, so revealing the sidebar doesn't move the address bar.
+            let fitsInSidebar = !isVerticalAutoHide && minX + size.width + 4 <= sidebarButtons
             if fitsInSidebar {
                 navigationButtons.frame = NSRect(x: minX, y: y, width: size.width, height: size.height)
             } else {
-                // Collapsed rail or narrow sidebar: at the start of the header, past the traffic lights.
+                // Auto-hide or narrow sidebar: at the start of the header, past the traffic lights.
                 let x = max(minX, header.frame.minX + 8)
                 navigationButtons.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
                 header.leadingInset = max(header.leadingInset, navigationButtons.frame.maxX + 4 - header.frame.minX)

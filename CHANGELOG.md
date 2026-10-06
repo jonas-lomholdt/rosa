@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🐛 Fixes
+- With an auto-hiding vertical sidebar and the shared address bar, expanding the sidebar no longer stretches the address bar over the back / forward / reload buttons. The address bar now stays put.
+
 ## v0.5.0
 
 ✨ Zoom in on any pane, and JSON that finally looks good.
