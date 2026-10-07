@@ -17,6 +17,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     private var downloadsObserver: NSObjectProtocol?
     private var bookmarksObserver: NSObjectProtocol?
     private let bookmarkEditor = BookmarkEditor()
+    private let commandPalette = CommandPaletteView()
     private lazy var downloadsPopover: NSPopover = {
         let popover = NSPopover()
         popover.behavior = .transient
@@ -324,6 +325,12 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     /// Handles ⌃H/J/K/L pane navigation. Returns false when the tab has a single pane,
     /// so the keys keep their text-editing meaning (⌃K kills a line, ⌃H deletes back).
     func handleVimPaneNavigation(_ direction: Direction) -> Bool {
+        // In the command palette, ⌃J / ⌃K move the selection instead.
+        if commandPalette.isShown {
+            guard direction == .up || direction == .down else { return false }
+            commandPalette.handleVimKey(down: direction == .down)
+            return true
+        }
         guard let tab = selectedTab, tab.panes.count > 1 else { return false }
         focusNeighbor(direction)
         return true
@@ -483,6 +490,18 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     var isBookmarkEditorShown: Bool { bookmarkEditor.isShown }
     /// For the self-test.
     var debugBookmarkEditor: BookmarkEditor { bookmarkEditor }
+
+    /// ⌘⇧P: search bookmarks and open one in the focused pane. Pressing it again closes the palette.
+    @objc func showCommandPalette(_ sender: Any?) {
+        if commandPalette.isShown { return commandPalette.close(restoringFocus: true) }
+        bookmarkEditor.close()
+        let bookmarks = BookmarksPaletteSource { [weak self] url, background in self?.openBookmark(url, background: background) }
+        commandPalette.show(in: contentRoot, sources: [bookmarks], placeholder: "Search bookmarks",
+                            emptyText: "No bookmarks yet. Press ⌘B to bookmark the current page.")
+    }
+
+    /// For the self-test.
+    var debugCommandPalette: CommandPaletteView { commandPalette }
 
     /// From the bookmarks manager: a new tab, or the focused pane.
     func open(_ url: URL, newTab: Bool) {

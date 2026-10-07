@@ -247,6 +247,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         edit.addItem(findHolder)
 
         let view = submenu("View", in: main)
+        view.addItem(item("Command Palette…", #selector(BrowserWindowController.showCommandPalette(_:)), "P", [.command, .shift]))
+        view.addItem(.separator())
         view.addItem(item("Vertical Tabs", #selector(toggleVerticalTabs(_:))))
         view.addItem(item("Shared Address Bar", #selector(toggleSharedAddressBar(_:))))
         view.addItem(item("Bookmarks Bar", #selector(toggleBookmarksBar(_:)), "B", [.command, .shift]))

@@ -644,6 +644,7 @@ enum SelfTest {
         await pause(1.5)  // favicons
         report("bookmarks: live edit")
         snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-1-horizontal.png"))
+        await runCommandPalette(controller, outputDir: outputDir)
         Settings.addressBarMode = .shared
         await pause(0.4)
         snapshot(controller, to: outputDir.appendingPathComponent("bookmarks-2-horizontal-shared.png"))
@@ -796,6 +797,78 @@ enum SelfTest {
         bar.onOpen?(URL(string: "https://example.com/background")!, true)
         await pause(0.5)
         print("bookmarks: open in background      tabs \(tabsBefore) → \(controller.tabCount)")
+    }
+
+    /// ⌘⇧P over the bookmarks written by `runBookmarks` (GitHub, Work › Apple, Work › Nested › HN, …).
+    private static func runCommandPalette(_ controller: BrowserWindowController, outputDir: URL) async {
+        let palette = controller.debugCommandPalette
+        let window = controller.window
+        let keyCodes: [Character: UInt16] = [
+            "a": 0, "e": 14, "g": 5, "h": 4, "i": 34, "k": 40, "l": 37, "n": 45, "o": 31, "p": 35, "r": 15, "t": 17, "u": 32, "w": 13,
+        ]
+        func type(_ text: String) async {
+            for character in text {
+                post(String(character), keyCode: keyCodes[character] ?? 0, modifiers: [], window: window)
+                await pause(0.1)
+            }
+            await pause(0.2)
+        }
+        func report(_ label: String) {
+            print("\(label.padding(toLength: 34, withPad: " ", startingAt: 0)) shown=\(palette.isShown) query=\"\(palette.debugQuery)\" "
+                  + "results=\(palette.debugResults) selected=\(palette.debugSelectedTitle ?? "-")")
+        }
+        func open() async {
+            await ensureActive(window)
+            post("P", keyCode: 35, modifiers: [.command, .shift], window: window)
+            await pause(0.5)
+        }
+        let down = arrow(NSDownArrowFunctionKey), arrowFlags: NSEvent.ModifierFlags = [.function, .numericPad]
+
+        controller.focusedPane?.focusWebView()
+        await open()
+        report("palette: ⌘⇧P")
+        await requestScreenCapture("command-palette", of: controller, in: outputDir)
+        await type("hn")
+        report("palette: 'hn'")
+        await type("\u{7f}\u{7f}gh")
+        report("palette: 'gh' (letters in order)")
+        await type("\u{7f}\u{7f}work")
+        report("palette: 'work' (folder)")
+        await requestScreenCapture("command-palette-work", of: controller, in: outputDir)
+        post(down, keyCode: 125, modifiers: arrowFlags, window: window)
+        await pause(0.2)
+        report("palette: ↓")
+        post("j", keyCode: 38, modifiers: [.control], window: window)
+        await pause(0.3)
+        report("palette: ⌃J")
+        post("\u{1b}", keyCode: 53, modifiers: [], window: window)
+        await pause(0.3)
+        let webViewFocused = window?.firstResponder === controller.focusedPane?.webView
+        print("palette: Esc                        shown=\(palette.isShown) focus back on page=\(webViewFocused)")
+
+        await open()
+        await type("hacker")
+        report("palette: 'hacker'")
+        post("\r", keyCode: 36, modifiers: [], window: window)
+        for _ in 0..<20 where controller.focusedPane?.webView.url?.host() != "news.ycombinator.com" { await pause(0.25) }
+        print("palette: ↩                          shown=\(palette.isShown) url=\(controller.focusedPane?.webView.url?.absoluteString ?? "-")")
+
+        await open()
+        await open()
+        print("palette: ⌘⇧P twice                  shown=\(palette.isShown)")
+
+        // Matching speed over a large collection (it runs on every keystroke).
+        let many = (0..<5000).map { index in
+            CommandPaletteMatcher.Candidate(
+                CommandPaletteItem(title: "Bookmark number \(index) about topic \(index % 97)",
+                                   keywords: "https://example.com/section/\(index)", perform: { _ in }), order: index)
+        }
+        let start = Date()
+        var counts: [Int] = []
+        for query in ["b", "bo", "boo", "book 4", "tpc", "example 42", "zzz"] {
+            counts.append(CommandPaletteMatcher.matches(query, in: many).count)
+        }
+        print("palette: 7 queries over 5000        \(Int(Date().timeIntervalSince(start) * 1000)) ms total, matches=\(counts)")
     }
 
     /// Glass and popover-style windows don't show up in `snapshot`. This leaves a marker with the
