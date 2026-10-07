@@ -6,7 +6,11 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
-### Command palette
+## v0.6.0
+
+✨ Jump to any bookmark by typing its name: ⌘⇧P.
+
+### ⌨️ Command palette
 - **⌘⇧P opens a command palette** to jump to any bookmark, including ones inside folders. Results filter instantly as you type: by name, folder or address, and letters in order work too (`gh` finds GitHub). ↑ / ↓ (or ⌃J / ⌃K) to pick, Return opens it in the current pane, ⌘Return opens it in the background, Esc closes.
 
 ## v0.5.1
