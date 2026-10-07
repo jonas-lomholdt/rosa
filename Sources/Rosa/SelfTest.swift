@@ -34,6 +34,10 @@ enum SelfTest {
             await runLayout(controller, outputDir: outputDir)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "welcome" {
+            await runWelcome(controller, outputDir: outputDir)
+            return
+        }
 
         func page(_ name: String, _ color: String) {
             controller.focusedPane?.load("data:text/html,<title>\(name)</title><body style='background:\(color)'><h1>\(name)</h1>")
@@ -606,6 +610,49 @@ enum SelfTest {
         Settings.tabLayout = .horizontal
         Settings.addressBarMode = .perPane
         print(failures == 0 ? "layout: all ok" : "layout: \(failures) FAILED")
+    }
+
+    /// Welcome commands: only on the pane Rosa opens at launch, a click acts on that pane, hidden
+    /// while the pane is too small, gone once it loads a page. Posts no key events.
+    private static func runWelcome(_ controller: BrowserWindowController, outputDir: URL) async {
+        var failures = 0
+        func panes() -> [PaneView] { controller.debugContentRoot.tabContent?.paneLeaves ?? [] }
+        func shown() -> String { panes().map { $0.welcome.map { $0.isHidden ? "h" : "W" } ?? "-" }.joined() }
+        func check(_ label: String, _ ok: Bool) {
+            if !ok { failures += 1 }
+            print("\(ok ? "ok  " : "FAIL") \(label.padding(toLength: 40, withPad: " ", startingAt: 0)) panes=\(shown()) \(controller.debugDescriptionOfState)")
+        }
+        let shortcuts = WelcomeView.sections.flatMap(\.commands).map { "\($0.title)=\(WelcomeView.shortcut(for: $0.action) ?? "?")" }
+        print("shortcuts: \(shortcuts.joined(separator: ", "))")
+        check("every command has a shortcut", !shortcuts.contains { $0.hasSuffix("=?") })
+        check("launch pane shows welcome", shown() == "W")
+        await requestScreenCapture("welcome-launch", of: controller, in: outputDir)
+
+        panes().first?.welcome?.debugPerform("Split Right")
+        await pause(0.5)
+        check("row splits, new pane has none", shown() == "W-")
+
+        controller.newTab(nil)
+        await pause(0.5)
+        check("new tab has none", shown() == "-")
+        controller.selectTab(at: 0)
+        await pause(0.3)
+
+        let size = controller.window?.contentLayoutRect.size
+        controller.window?.setContentSize(NSSize(width: 900, height: 420))
+        await pause(0.5)
+        check("hidden in a small pane", shown() == "h-")
+        if let size { controller.window?.setContentSize(size) }
+        await pause(0.5)
+        check("back when large again", shown() == "W-")
+
+        panes().first?.load("data:text/html,<title>Page</title><h1>Page</h1>")
+        await pause(1)
+        check("gone after a page loads", shown() == "--")
+        panes().first?.webView.goBack()
+        await pause(0.5)
+        check("not back after going back", shown() == "--")
+        print(failures == 0 ? "welcome: all ok" : "welcome: \(failures) FAILED")
     }
 
     /// Bookmarks bar: layouts, live edits of bookmarks.json, overflow, ⌘⇧B, opening. Writes the

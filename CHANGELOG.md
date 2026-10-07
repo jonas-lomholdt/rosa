@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 👋 Welcome
+- **Rosa opens with a welcome page** listing handy commands and their shortcuts: search or enter an address, the command palette, settings, splitting panes, new tab and reopening a closed tab. Click one to run it. It goes away as soon as you open a page, and new tabs and panes stay blank.
+
 ## v0.6.0
 
 ✨ Jump to any bookmark by typing its name: ⌘⇧P.

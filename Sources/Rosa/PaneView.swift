@@ -162,6 +162,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     /// Rounded card that clips the web view.
     private let card = CardView()
     private let progressLine = ProgressLineView()
+    /// Commands and shortcuts; only the pane Rosa opens at launch has one (`showWelcome()`).
+    private(set) var welcome: WelcomeView?
     private let overlay = FocusOverlayView()
     let findBar = FindBar()
     let zoomIndicator = ZoomIndicator()
@@ -251,6 +253,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         }
         card.frame = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
         webView.frame = card.bounds
+        welcome?.frame = card.bounds
+        updateWelcome()
         progressLine.frame = NSRect(x: 0, y: 0, width: card.bounds.width * webView.estimatedProgress, height: 2)
         overlay.frame = card.frame
         findBar.frame = NSRect(
@@ -261,6 +265,40 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
             x: (card.frame.midX - ZoomIndicator.size.width / 2).rounded(), y: card.frame.minY + 10,
             width: ZoomIndicator.size.width, height: ZoomIndicator.size.height
         )
+    }
+
+    /// Nothing loaded or loading yet.
+    var isBlank: Bool {
+        guard !webView.isLoading else { return false }
+        return webView.url == nil || webView.url?.absoluteString == "about:blank"
+    }
+
+    /// Shows the welcome commands until this pane loads something (then they're removed for good).
+    func showWelcome() {
+        guard welcome == nil, isBlank else { return }
+        let welcome = WelcomeView()
+        welcome.onCommand = { [weak self] action in
+            guard let self else { return }
+            // Act on this pane even if another one had focus.
+            delegate?.paneDidBecomeFocused(self)
+            // Up this pane's own responder chain (reaches the window controller even when the
+            // window isn't key), then the app's for app-level actions like Settings.
+            if !tryToPerform(action, with: self) { NSApp.sendAction(action, to: nil, from: self) }
+        }
+        card.addSubview(welcome, positioned: .above, relativeTo: webView)
+        self.welcome = welcome
+        needsLayout = true
+    }
+
+    /// Hidden in panes too small to fit it.
+    private func updateWelcome() {
+        guard let welcome else { return }
+        guard isBlank else {
+            welcome.removeFromSuperview()
+            self.welcome = nil
+            return
+        }
+        welcome.isHidden = card.bounds.height < WelcomeView.contentHeight + 48 || card.bounds.width < 320
     }
 
     // MARK: - Actions
@@ -454,6 +492,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
 
     private func pageStateChanged() {
+        updateWelcome()
         addressBar.shieldState = shieldState
         if addressField.currentEditor() == nil {
             addressField.stringValue = displayURL
@@ -470,6 +509,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
 
     private func progressChanged() {
         progressLine.isHidden = !webView.isLoading
+        updateWelcome()
         needsLayout = true
     }
 

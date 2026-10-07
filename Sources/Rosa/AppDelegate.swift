@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         installKeyMonitor()
         newWindow(nil)
+        controllers.first?.focusedPane?.showWelcome()
         NSApp.activate()
         SelfTest.runIfRequested()
         Updater.shared.checkOnLaunch()
