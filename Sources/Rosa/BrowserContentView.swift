@@ -120,7 +120,7 @@ final class BrowserContentView: NSView {
         }
     }
 
-    /// Zen (presenter) mode: no tabs, address bar, bookmarks bar or traffic lights; the panes fill the window.
+    /// Zen (presenter) mode: no tabs, address bar, bookmarks bar or traffic lights; the panes take the whole window.
     var isZenMode = false {
         didSet {
             guard isZenMode != oldValue else { return }
@@ -218,8 +218,8 @@ final class BrowserContentView: NSView {
         super.layout()
         background.frame = bounds
         let chrome: [NSView] = [tabStrip, header, bookmarksBar, sidebarGlass, navigationButtons, resizeHandle, edgeHotZone, sidebarHoverZone]
-        (tabContent as? PaneContainerView)?.inset = isZenMode ? 0 : PaneContainerView.margin
         if isZenMode {
+            // The panes keep their margin, so the page sits just inside the window's edge.
             chrome.forEach { $0.isHidden = true }
             tabContent?.frame = bounds
             return

@@ -49,7 +49,7 @@ Settings (⌘,) and the View menu toggle **Vertical Tabs** and **Shared Address 
 
 ## Zen mode
 
-⌃⌘Z (View → Zen Mode) toggles `BrowserWindowController.isZenMode` for that window (not saved). `BrowserContentView` then hides the tab strip / sidebar, header, bookmarks bar, navigation buttons and traffic lights and gives the tab's `PaneContainerView` the whole window with no inset; panes drop their address bars and focus dimming, and split gaps stay. Anything that needs the chrome leaves zen mode first: focusing the address bar (⌘L, and ⌘T / ⌘D, which open blank panes), ⌘B's editor and ⌥⌘L's downloads popover; downloads that start in zen mode don't pop it open. Entering zen mode while typing an address moves focus to the page. `BROWSER_SELFTEST_ONLY=zen` covers it (posts key events; use a scratch `BROWSER_SETTINGS_FILE`, it changes layouts).
+⌃⌘Z (View → Zen Mode) toggles `BrowserWindowController.isZenMode` for that window (not saved). `BrowserContentView` then hides the tab strip / sidebar, header, bookmarks bar, navigation buttons and traffic lights and gives the tab's `PaneContainerView` the whole window (it keeps its margin, so the page sits just inside the edge); panes drop their address bars and focus dimming, and split gaps stay. Anything that needs the chrome leaves zen mode first: focusing the address bar (⌘L, and ⌘T / ⌘D, which open blank panes), ⌘B's editor and ⌥⌘L's downloads popover; downloads that start in zen mode don't pop it open. Entering zen mode while typing an address moves focus to the page. `BROWSER_SELFTEST_ONLY=zen` covers it (posts key events; use a scratch `BROWSER_SETTINGS_FILE`, it changes layouts).
 
 ## Welcome page
 
