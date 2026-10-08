@@ -32,7 +32,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return true
     }
 
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let menu = NSMenu()
+        let newWindowItem = item("New Window", #selector(newWindowFromDock(_:)))
+        newWindowItem.target = self
+        menu.addItem(newWindowItem)
+        return menu
+    }
+
     // MARK: - Windows
+
+    /// The Dock menu doesn't activate the app, so bring the new window to the front ourselves.
+    @objc private func newWindowFromDock(_ sender: Any?) {
+        newWindow(sender)
+        NSApp.activate()
+    }
 
     @objc func newWindow(_ sender: Any?) {
         let controller = BrowserWindowController()

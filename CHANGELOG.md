@@ -6,6 +6,8 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+- **New Window from the Dock**: right-click Rosa's Dock icon → New Window.
+
 ## v0.7.1
 
 🩹 Back, forward and reload now light up when you hover them.
