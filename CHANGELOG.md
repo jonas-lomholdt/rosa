@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.7.0
+
+✨ A friendly start: a welcome page on launch, and your pinned or recent sites on every blank pane.
+
 ### 👋 Welcome
 - **Rosa opens with a welcome page** listing handy commands and their shortcuts: search or enter an address, the command palette, settings, splitting panes, new tab and reopening a closed tab. Click one to run it. It goes away as soon as you open a page, and new tabs and panes stay blank.
 
