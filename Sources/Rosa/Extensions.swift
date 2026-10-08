@@ -83,6 +83,26 @@ final class Extensions: NSObject, WKWebExtensionControllerDelegate {
         }
     }
 
+    // MARK: - Toolbar
+
+    func isInToolbar(_ context: WKWebExtensionContext) -> Bool {
+        !Settings.hiddenToolbarExtensions.contains(context.uniqueIdentifier)
+    }
+
+    func setInToolbar(_ shown: Bool, _ context: WKWebExtensionContext) {
+        var hidden = Settings.hiddenToolbarExtensions.filter { $0 != context.uniqueIdentifier }
+        if !shown { hidden.append(context.uniqueIdentifier) }
+        Settings.hiddenToolbarExtensions = hidden
+    }
+
+    /// What its toolbar button does, for the focused pane (Rosa → Extensions → Open, or a hidden
+    /// extension). Its popup hangs from the pane's corner when there's no button.
+    func performAction(_ context: WKWebExtensionContext) {
+        let pane = focusedBrowserWindow?.focusedPane
+        if let pane { context.userGesturePerformed(in: pane) }
+        context.performAction(for: pane)
+    }
+
     static func name(of context: WKWebExtensionContext) -> String {
         context.webExtension.displayName ?? context.uniqueIdentifier
     }
@@ -245,6 +265,7 @@ final class Extensions: NSObject, WKWebExtensionControllerDelegate {
         try? controller.unload(context)
         contexts.removeAll { $0 === context }
         try? FileManager.default.removeItem(at: Self.directory.appendingPathComponent(context.uniqueIdentifier))
+        if !isInToolbar(context) { setInToolbar(true, context) }
         NotificationCenter.default.post(name: Self.didChange, object: nil)
     }
 
@@ -497,12 +518,15 @@ final class ExtensionToolbar: NSView {
 
     weak var pane: PaneView? { didSet { if pane !== oldValue { refresh() } } }
     private(set) var buttons: [ExtensionButton] = []
-    private var observer: NSObjectProtocol?
+    private var observers: [NSObjectProtocol] = []
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        observer = NotificationCenter.default.addObserver(forName: Extensions.didChange, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refresh() }
+        // Settings: buttons hidden or shown again (`Settings.hiddenToolbarExtensions`).
+        for name in [Extensions.didChange, Settings.didChange] {
+            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refresh() }
+            })
         }
         refresh()
     }
@@ -510,7 +534,7 @@ final class ExtensionToolbar: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     deinit {
-        if let observer { NotificationCenter.default.removeObserver(observer) }
+        observers.forEach(NotificationCenter.default.removeObserver)
     }
 
     var width: CGFloat {
@@ -519,7 +543,7 @@ final class ExtensionToolbar: NSView {
 
     /// Keeps existing buttons (an open popup stays anchored) and only rebuilds when the set changes.
     func refresh() {
-        let contexts = Extensions.shared.contexts
+        let contexts = Extensions.shared.contexts.filter(Extensions.shared.isInToolbar)
         if buttons.map(\.context) != contexts {
             buttons.forEach { $0.removeFromSuperview() }
             buttons = contexts.map { ExtensionButton(context: $0) }
@@ -584,10 +608,19 @@ final class ExtensionButton: NSButton {
             options.target = self
             menu.addItem(options)
         }
+        let hide = NSMenuItem(title: "Hide from Toolbar", action: #selector(hideFromToolbar(_:)), keyEquivalent: "")
+        hide.target = self
+        hide.toolTip = "Bring it back from Rosa → Extensions."
+        menu.addItem(hide)
+        menu.addItem(.separator())
         let remove = NSMenuItem(title: "Remove “\(Extensions.name(of: context))”…", action: #selector(removeExtension(_:)), keyEquivalent: "")
         remove.target = self
         menu.addItem(remove)
         NSMenu.popUpContextMenu(menu, with: event, for: self)
+    }
+
+    @objc private func hideFromToolbar(_ sender: Any?) {
+        Extensions.shared.setInToolbar(false, context)
     }
 
     @objc private func openOptions(_ sender: Any?) {
@@ -635,6 +668,16 @@ final class ExtensionsMenuDelegate: NSObject, NSMenuDelegate {
                 let item = NSMenuItem(title: Extensions.name(of: context), action: nil, keyEquivalent: "")
                 item.image = context.webExtension.icon(for: NSSize(width: 16, height: 16))
                 let submenu = NSMenu()
+                let open = NSMenuItem(title: "Open", action: #selector(openExtension(_:)), keyEquivalent: "")
+                open.target = self
+                open.representedObject = context
+                submenu.addItem(open)
+                let toolbar = NSMenuItem(title: "Show in Toolbar", action: #selector(toggleToolbar(_:)), keyEquivalent: "")
+                toolbar.target = self
+                toolbar.representedObject = context
+                toolbar.state = Extensions.shared.isInToolbar(context) ? .on : .off
+                submenu.addItem(toolbar)
+                submenu.addItem(.separator())
                 if context.optionsPageURL != nil {
                     let options = NSMenuItem(title: "Settings…", action: #selector(openOptions(_:)), keyEquivalent: "")
                     options.target = self
@@ -653,6 +696,20 @@ final class ExtensionsMenuDelegate: NSObject, NSMenuDelegate {
 
     @objc private func install(_ sender: Any?) {
         MainActor.assumeIsolated { Extensions.shared.chooseAndInstall() }
+    }
+
+    @objc private func openExtension(_ sender: NSMenuItem) {
+        MainActor.assumeIsolated {
+            guard let context = sender.representedObject as? WKWebExtensionContext else { return }
+            Extensions.shared.performAction(context)
+        }
+    }
+
+    @objc private func toggleToolbar(_ sender: NSMenuItem) {
+        MainActor.assumeIsolated {
+            guard let context = sender.representedObject as? WKWebExtensionContext else { return }
+            Extensions.shared.setInToolbar(!Extensions.shared.isInToolbar(context), context)
+        }
     }
 
     @objc private func importExtension(_ sender: NSMenuItem) {

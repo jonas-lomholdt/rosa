@@ -906,6 +906,17 @@ enum SelfTest {
             return
         }
         guard let pane = controller.focusedPane else { return print("FAIL: no pane") }
+        // Hiding a button and showing it again (Settings.hiddenToolbarExtensions).
+        if let context = extensions.contexts.first {
+            let count = { pane.extensionToolbar.buttons.count }
+            let before = count()
+            extensions.setInToolbar(false, context)
+            await pause(0.3)
+            let hidden = count()
+            extensions.setInToolbar(true, context)
+            await pause(0.3)
+            print("toolbar buttons: \(before) → hidden \(hidden) → shown \(count()) \(hidden == before - 1 && count() == before ? "OK" : "FAIL")")
+        }
         let site = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_URL"] ?? "https://github.com/login"
         // A script for the page's own world from document start, e.g. to trace events.
         if let script = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_PAGE_START_JS"] {
