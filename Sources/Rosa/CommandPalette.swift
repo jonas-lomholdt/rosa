@@ -621,11 +621,13 @@ struct BookmarksPaletteSource: CommandPaletteSource {
 /// Every enabled main menu command, with its shortcut and a checkmark when it's on, run as if
 /// picked from the menu (so new menu items show up here by themselves).
 struct MenuCommandsPaletteSource: CommandPaletteSource {
-    /// Text editing would act on the palette's own field, and the palette shouldn't list itself.
+    /// Text editing would act on the palette's own field, the palette shouldn't list itself, and
+    /// ⌘1–9 are quicker than nine "Select Tab" rows.
     private static let excluded: Set<Selector> = [
         Selector(("undo:")), Selector(("redo:")), #selector(NSText.cut(_:)), #selector(NSText.copy(_:)),
         #selector(NSText.paste(_:)), #selector(NSText.selectAll(_:)), Selector(("startDictation:")),
         #selector(NSApplication.orderFrontCharacterPalette(_:)), #selector(BrowserWindowController.showCommandPalette(_:)),
+        #selector(BrowserWindowController.selectTabByNumber(_:)),
     ]
     private static let checkmark = NSImage(systemSymbolName: "checkmark", accessibilityDescription: "On")
     /// Keeps titles aligned when there's no checkmark.
