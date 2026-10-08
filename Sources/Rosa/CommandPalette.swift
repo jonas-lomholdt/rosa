@@ -637,6 +637,7 @@ struct MenuCommandsPaletteSource: CommandPaletteSource {
         guard let main = NSApp.mainMenu else { return [] }
         var items: [CommandPaletteItem] = []
         func collect(_ menu: NSMenu, path: [String]) {
+            menu.delegate?.menuNeedsUpdate?(menu)  // menus filled when opened (Rosa → Extensions)
             menu.update()  // validates: enabled state, checkmarks, titles like "Exit Full Screen"
             for item in menu.items where !item.isSeparatorItem && !item.isHidden {
                 if let submenu = item.submenu {
