@@ -29,6 +29,7 @@ scripts/build.sh release --run   # builds build/Rosa.app and opens it
 | ⌥⌘B | Bookmarks manager window (`BookmarksManager.swift`): outline view, drag to reorder/nest, Return renames, ⌫ deletes, double-click opens in a new tab |
 | ⌘⇧P | Command palette (`CommandPalette.swift`), see below |
 | ⌃⌘S | Expand/collapse the auto-hiding vertical sidebar (collapsed, it is a rail of favicons; hovering it expands) |
+| ⌃⌘Z | Zen mode, see below |
 | ⌥⌘L | Downloads popover (`DownloadManager`, `DownloadsView`) |
 | F12 / ⌘⌥I | Toggle Web Inspector (also right-click → Inspect Element) |
 
@@ -45,6 +46,10 @@ Settings (⌘,) and the View menu toggle **Vertical Tabs** and **Shared Address 
 ## Command palette
 
 `CommandPaletteView` is an overlay (Liquid Glass) added to the window's `BrowserContentView`, not a separate window, so the browser window stays key and its menu shortcuts keep working. It knows nothing about bookmarks: it shows `CommandPaletteItem`s (title, subtitle, icon, keywords, a `perform(inBackground:)` closure) collected from `CommandPaletteSource`s when it opens. Today the only source is `BookmarksPaletteSource` (all links, folders flattened); open tabs, history or menu commands can be added as further sources. `CommandPaletteMatcher` folds case and accents once per opening, then scores each term against the title (prefix > word start > substring > letters in order, matched letters shown in bold) or the keywords (substring); ~2 ms per keystroke over 5,000 items. ↑/↓, ⌃N/⌃P and ⌃J/⌃K move (⌃J/⌃K via `handleVimPaneNavigation`), ↩ runs, ⌘↩ runs in the background, Esc closes and restores the previous first responder; the field losing focus (clicking the page) closes it. The self-test covers it in the bookmarks part.
+
+## Zen mode
+
+⌃⌘Z (View → Zen Mode) toggles `BrowserWindowController.isZenMode` for that window (not saved). `BrowserContentView` then hides the tab strip / sidebar, header, bookmarks bar, navigation buttons and traffic lights and gives the tab's `PaneContainerView` the whole window with no inset; panes drop their address bars and focus dimming, and split gaps stay. Anything that needs the chrome leaves zen mode first: focusing the address bar (⌘L, and ⌘T / ⌘D, which open blank panes), ⌘B's editor and ⌥⌘L's downloads popover; downloads that start in zen mode don't pop it open. Entering zen mode while typing an address moves focus to the page. `BROWSER_SELFTEST_ONLY=zen` covers it (posts key events; use a scratch `BROWSER_SETTINGS_FILE`, it changes layouts).
 
 ## Welcome page
 

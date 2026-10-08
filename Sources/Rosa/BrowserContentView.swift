@@ -120,6 +120,18 @@ final class BrowserContentView: NSView {
         }
     }
 
+    /// Zen (presenter) mode: no tabs, address bar, bookmarks bar or traffic lights; the panes fill the window.
+    var isZenMode = false {
+        didSet {
+            guard isZenMode != oldValue else { return }
+            for kind: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
+                window?.standardWindowButton(kind)?.isHidden = isZenMode
+            }
+            if isZenMode { hideWorkItem?.cancel(); isSidebarRevealed = false }
+            needsLayout = true
+        }
+    }
+
     /// Auto-hide mode only: whether the sidebar is expanded over the page (otherwise it's a favicon rail).
     private(set) var isSidebarRevealed = false
 
@@ -168,13 +180,13 @@ final class BrowserContentView: NSView {
     // MARK: - Sidebar
 
     func toggleSidebar() {
-        guard isVerticalAutoHide else { return }
+        guard isVerticalAutoHide, !isZenMode else { return }
         setSidebarRevealed(!isSidebarRevealed)
     }
 
     private func setSidebarRevealed(_ revealed: Bool) {
         hideWorkItem?.cancel()
-        guard isVerticalAutoHide, revealed != isSidebarRevealed else { return }
+        guard isVerticalAutoHide, !isZenMode || !revealed, revealed != isSidebarRevealed else { return }
         isSidebarRevealed = revealed
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.18
@@ -205,6 +217,16 @@ final class BrowserContentView: NSView {
     override func layout() {
         super.layout()
         background.frame = bounds
+        let chrome: [NSView] = [tabStrip, header, bookmarksBar, sidebarGlass, navigationButtons, resizeHandle, edgeHotZone, sidebarHoverZone]
+        (tabContent as? PaneContainerView)?.inset = isZenMode ? 0 : PaneContainerView.margin
+        if isZenMode {
+            chrome.forEach { $0.isHidden = true }
+            tabContent?.frame = bounds
+            return
+        }
+        tabStrip.isHidden = false
+        navigationButtons.isHidden = false
+        bookmarksBar.isHidden = !showsBookmarksBar
         let margin = PaneContainerView.margin
         let contentRect: NSRect
 

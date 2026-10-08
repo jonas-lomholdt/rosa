@@ -11,6 +11,10 @@ final class PaneContainerView: NSView, PaneParent {
     static let margin: CGFloat = 6
 
     private(set) var child: NSView
+    /// Space around the split tree; zero in zen mode, so the page fills the window.
+    var inset: CGFloat = PaneContainerView.margin {
+        didSet { if inset != oldValue { needsLayout = true } }
+    }
 
     init(child: NSView) {
         self.child = child
@@ -24,7 +28,7 @@ final class PaneContainerView: NSView, PaneParent {
 
     override func layout() {
         super.layout()
-        child.frame = bounds.insetBy(dx: Self.margin, dy: Self.margin)
+        child.frame = bounds.insetBy(dx: inset, dy: inset)
     }
 
     func replaceChild(_ old: NSView, with new: NSView) {

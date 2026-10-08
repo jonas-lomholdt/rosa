@@ -3,7 +3,7 @@ import SwiftUI
 import WebKit
 
 /// One browser window: a list of tabs, each holding a split tree of panes.
-final class BrowserWindowController: NSWindowController, NSWindowDelegate,
+final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMenuItemValidation,
     PaneViewDelegate, TabStripDelegate {
 
     enum Direction { case left, right, up, down }
@@ -25,6 +25,8 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         return popover
     }()
     private static var focusCounter = 0
+    /// ⌃⌘Z: only the pages, no browser chrome (for presenting). Per window, not saved.
+    private(set) var isZenMode = false
 
     private var selectedTab: Tab? { tabs.indices.contains(selectedIndex) ? tabs[selectedIndex] : nil }
     var focusedPane: PaneView? { selectedTab?.focusedPane }
@@ -175,7 +177,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     private func makePane(configuration: WKWebViewConfiguration? = nil) -> PaneView {
         let pane = PaneView(configuration: configuration ?? WebKitSupport.makeConfiguration())
         pane.delegate = self
-        pane.showsAddressBar = Settings.addressBarMode == .perPane
+        pane.showsAddressBar = Settings.addressBarMode == .perPane && !isZenMode
         return pane
     }
 
@@ -314,7 +316,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
         guard let tab = selectedTab else { return }
         let panes = tab.panes
         for pane in panes {
-            if panes.count < 2 {
+            if panes.count < 2 || isZenMode {
                 pane.highlight = .none
             } else {
                 pane.highlight = pane === tab.focusedPane ? .focused : .unfocused
@@ -386,6 +388,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     // MARK: - Address bar & settings
 
     private func focusAddressField() {
+        setZenMode(false)
         if Settings.addressBarMode == .shared {
             window?.makeFirstResponder(contentRoot.header.addressField)
         } else {
@@ -419,15 +422,32 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     private func applySettings() {
         let perPane = Settings.addressBarMode == .perPane
         for tab in tabs {
-            tab.panes.forEach { $0.showsAddressBar = perPane }
+            tab.panes.forEach { $0.showsAddressBar = perPane && !isZenMode }
         }
         contentRoot.tabLayout = Settings.tabLayout
         contentRoot.sidebarWidth = Settings.sidebarWidth
         contentRoot.sidebarAutoHide = Settings.sidebarAutoHide
         contentRoot.showsSharedAddressBar = !perPane
         contentRoot.showsBookmarksBar = Settings.showBookmarksBar
+        contentRoot.isZenMode = isZenMode
         syncSharedAddressField()
         refreshPaneHighlights()
+    }
+
+    private func setZenMode(_ on: Bool) {
+        guard on != isZenMode else { return }
+        isZenMode = on
+        if on {
+            bookmarkEditor.close()
+            if downloadsPopover.isShown { downloadsPopover.performClose(nil) }
+            // The address bar is about to disappear; keep typing out of it.
+            let editingAddress = contentRoot.header.addressField.currentEditor() != nil
+                || focusedPane?.addressField.currentEditor() != nil
+            if editingAddress { focusedPane?.focusWebView() }
+        }
+        applySettings()
+        // Callers leaving zen mode anchor popovers to (or focus) the chrome right away.
+        contentRoot.layoutSubtreeIfNeeded()
     }
 
     // MARK: - Menu actions
@@ -450,11 +470,18 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     @objc func toggleWebInspector(_ sender: Any?) { focusedPane?.toggleWebInspector() }
     @objc func showLinkHints(_ sender: Any?) { focusedPane?.showLinkHints() }
     @objc func toggleSidebar(_ sender: Any?) { contentRoot.toggleSidebar() }
+    @objc func toggleZenMode(_ sender: Any?) { setZenMode(!isZenMode) }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(toggleZenMode(_:)) { menuItem.state = isZenMode ? .on : .off }
+        return true
+    }
 
     @objc func toggleDownloads(_ sender: Any?) {
         if downloadsPopover.isShown {
             downloadsPopover.performClose(nil)
         } else {
+            setZenMode(false)
             showDownloads()
         }
     }
@@ -470,6 +497,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
     /// Adds `url` to the end of the bar (or finds its existing bookmark) and opens the editor,
     /// hanging from the right end of the address bar (where a star button would be).
     private func bookmark(_ url: URL, title: String, from pane: PaneView) {
+        setZenMode(false)  // the editor hangs from the address bar
         bookmarkEditor.close()  // applies its edits first, so the paths below are current
         let existing = Bookmarks.path(of: url)
         let path = existing ?? Bookmarks.add(Bookmark(title: title.isEmpty ? (url.host() ?? "") : title, kind: .link(url)))
@@ -611,7 +639,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate,
            tabs.count > 1 || (selectedTab?.panes.count ?? 0) > 1 {
             close(pane)
         }
-        if window?.isKeyWindow == true { showDownloads() }
+        if window?.isKeyWindow == true, !isZenMode { showDownloads() }
     }
 
     func pane(_ pane: PaneView, bookmark url: URL, title: String) {

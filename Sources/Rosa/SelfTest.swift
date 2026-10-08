@@ -38,6 +38,10 @@ enum SelfTest {
             await runQuickLinks(controller, outputDir: outputDir)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "zen" {
+            await runZen(controller, outputDir: outputDir)
+            return
+        }
         if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "welcome" {
             await runWelcome(controller, outputDir: outputDir)
             return
@@ -633,6 +637,96 @@ enum SelfTest {
         await requestScreenCapture("nav-feedback", of: controller, in: outputDir)
         root.navigationButtons.debugSetStates(hoverBack: false, pressReload: false)
         print(failures == 0 ? "layout: all ok" : "layout: \(failures) FAILED")
+    }
+
+    /// Zen mode (⌃⌘Z): no chrome in any layout, panes fill the window, the same key brings it all
+    /// back, and ⌘L leaves it with the address bar focused.
+    private static func runZen(_ controller: BrowserWindowController, outputDir: URL) async {
+        let root = controller.debugContentRoot
+        let window = controller.window
+        var failures = 0
+        func check(_ label: String, _ ok: Bool) {
+            if !ok { failures += 1 }
+            print("\(ok ? "ok  " : "FAIL") \(label.padding(toLength: 44, withPad: " ", startingAt: 0)) \(controller.debugDescriptionOfState)")
+        }
+        func key(_ characters: String, _ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags) async {
+            await ensureActive(window)
+            post(characters, keyCode: keyCode, modifiers: modifiers, window: window)
+            await pause(0.5)
+        }
+        func chromeHidden() -> Bool {
+            let views = [root.tabStrip, root.header, root.bookmarksBar, root.navigationButtons]
+            let bars = controller.debugPanes.map(\.addressBarView)
+            let lights = window?.standardWindowButton(.closeButton)?.isHidden ?? false
+            return views.allSatisfy(\.isHidden) && bars.allSatisfy(\.isHiddenOrHasHiddenAncestor) && lights
+        }
+        func fillsWindow() -> Bool {
+            guard let content = root.tabContent else { return false }
+            let panes = controller.debugPanes
+            let union = panes.map { $0.convert($0.bounds, to: root) }.reduce(NSRect.null) { $0.union($1) }
+            return content.frame == root.bounds && union == root.bounds
+        }
+        func toggle() async { await key("z", 6, [.command, .control]) }
+
+        controller.focusedPane?.load("data:text/html,<title>Zen</title><body style='background:%23fde'><h1>Zen</h1>")
+        Settings.tabLayout = .horizontal
+        Settings.addressBarMode = .perPane
+        Settings.showBookmarksBar = true
+        await pause(1)
+        controller.focusedPane?.focusWebView()
+        check("starts with chrome", !controller.isZenMode && !root.tabStrip.isHidden && !chromeHidden())
+
+        await toggle()
+        check("⌃⌘Z: zen on, chrome hidden", controller.isZenMode && chromeHidden())
+        check("page fills the window", fillsWindow())
+        snapshot(controller, to: outputDir.appendingPathComponent("zen-single.png"))
+
+        await key("d", 2, [.command])
+        check("⌘D leaves zen to type the address", !controller.isZenMode && controller.focusedPane?.addressField.currentEditor() != nil)
+        controller.focusedPane?.load("data:text/html,<title>Two</title><body style='background:%23def'><h1>Two</h1>")
+        await pause(0.8)
+        controller.focusedPane?.focusWebView()
+        await toggle()
+        check("split in zen: no pane chrome", controller.isZenMode && chromeHidden() && controller.debugPanes.count == 2)
+        check("split fills the window", fillsWindow())
+        check("panes not dimmed", controller.debugPanes.allSatisfy { $0.alphaValue == 1 })
+        snapshot(controller, to: outputDir.appendingPathComponent("zen-split.png"))
+
+        for (layout, mode) in [(TabLayout.vertical, AddressBarMode.perPane), (.vertical, .shared), (.horizontal, .shared)] {
+            Settings.tabLayout = layout
+            Settings.addressBarMode = mode
+            await pause(0.5)
+            check("\(layout) \(mode): chrome hidden", chromeHidden() && fillsWindow())
+        }
+        Settings.sidebarAutoHide = true
+        Settings.tabLayout = .vertical
+        await pause(0.5)
+        controller.toggleSidebar(nil)
+        await pause(0.5)
+        check("auto-hide sidebar can't reveal in zen", chromeHidden() && fillsWindow())
+        Settings.sidebarAutoHide = false
+        Settings.tabLayout = .horizontal
+        Settings.addressBarMode = .perPane
+        await pause(0.5)
+
+        await toggle()
+        let restored = !controller.isZenMode && !root.tabStrip.isHidden && !root.navigationButtons.isHidden
+            && !root.bookmarksBar.isHidden && window?.standardWindowButton(.closeButton)?.isHidden == false
+            && controller.debugPanes.allSatisfy { !$0.addressBarView.isHidden }
+        check("⌃⌘Z again: chrome back", restored)
+        check("panes inset again", root.tabContent.map { $0.subviews.first?.frame.minX == PaneContainerView.margin } ?? false)
+        snapshot(controller, to: outputDir.appendingPathComponent("zen-off.png"))
+
+        await toggle()
+        await key("l", 37, [.command])
+        let editing = controller.focusedPane?.addressField.currentEditor() != nil
+        check("⌘L leaves zen and edits the address", !controller.isZenMode && editing)
+
+        await toggle()
+        check("entering zen leaves the address field", controller.isZenMode && controller.focusedPane?.addressField.currentEditor() == nil)
+        await toggle()
+        Settings.showBookmarksBar = false
+        print(failures == 0 ? "zen: all ok" : "zen: \(failures) FAILED")
     }
 
     /// Welcome commands: only on the pane Rosa opens at launch, a click acts on that pane, hidden

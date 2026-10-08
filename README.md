@@ -50,6 +50,7 @@
 | `⌥⌘B` | Manage bookmarks (drag to reorder and nest folders) |
 | `⌘⇧P` | Command palette: type to find a bookmark, Return opens it |
 | `⌃⌘S` | Show sidebar (when auto-hiding) |
+| `⌃⌘Z` | Zen mode: hide tabs, address bar and bookmarks bar (press again to bring them back) |
 | `⌥⌘L` | Downloads |
 | `⌘,` | Settings |
 | `F12` / `⌘⌥I` | Web Inspector |
