@@ -876,7 +876,7 @@ enum SelfTest {
         if let page = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_EXT_PAGE"], let context = extensions.contexts.first {
             let url = URL(string: page, relativeTo: context.baseURL)!.absoluteURL
             let debugPane = controller.addTab(for: url, extensionContext: context, select: true)
-            await pause(6)
+            await pause(Double(ProcessInfo.processInfo.environment["BROWSER_SELFTEST_EXT_WAIT"] ?? "") ?? 6)
             let dump = "(window.__log || []).splice(0).join('\\n') + '\\n---\\n' + document.documentElement.innerText.slice(0, 1500)"
             let text = try? await debugPane.webView.evaluateJavaScript(dump)
             print("extension page \(debugPane.webView.url?.absoluteString ?? "-"):\n\(text ?? "?")")

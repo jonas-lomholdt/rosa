@@ -449,7 +449,7 @@ final class Extensions: NSObject, WKWebExtensionControllerDelegate {
         return NSRect(x: (right - width / 2).rounded(), y: anchorRect.minY, width: 1, height: anchorRect.height)
     }
 
-    // MARK: - Native messaging (not supported)
+    // MARK: - Native messaging (only Rosa's own: console forwarding, worker WebSockets)
 
     /// Where `BROWSER_EXTENSION_CONSOLE=1` forwards extension console output (`ExtensionCompatibility`).
     static let consoleApplicationID = "rosa.console"
@@ -469,6 +469,9 @@ final class Extensions: NSObject, WKWebExtensionControllerDelegate {
         _ controller: WKWebExtensionController, connectUsing port: WKWebExtension.MessagePort,
         for extensionContext: WKWebExtensionContext
     ) async throws {
+        if port.applicationIdentifier == ExtensionWebSocketBridge.applicationID {
+            return ExtensionWebSocketBridge.accept(port)
+        }
         throw InstallError(errorDescription: "Native messaging isn't supported.")
     }
 }
