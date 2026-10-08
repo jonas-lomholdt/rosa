@@ -104,6 +104,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
             MainActor.assumeIsolated { self?.applySettings() }
         }
         applySettings()
+        Extensions.shared.controller.didOpenWindow(self)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -121,6 +122,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         let pane = makePane(configuration: configuration)
         let index = nextToCurrent && !tabs.isEmpty ? selectedIndex + 1 : tabs.count
         tabs.insert(Tab(pane: pane), at: index)
+        Extensions.shared.didOpen(pane)
         if let request { pane.webView.load(request) }
 
         if select || tabs.count == 1 {
@@ -206,6 +208,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         split.frame = frame
         parent.replaceChild(pane, with: split)
         split.layoutSubtreeIfNeeded()
+        Extensions.shared.didOpen(newPane)
         if let request { newPane.webView.load(request) }
         if focusNew {
             focus(newPane, editAddress: request == nil && configuration == nil)
@@ -268,6 +271,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         let tab = Tab(root: restore(closed.layout), focusedPane: focused)
         let index = min(closed.index, tabs.count)
         tabs.insert(tab, at: index)
+        tab.panes.forEach(Extensions.shared.didOpen)
         selectTab(at: index)
     }
 
@@ -304,7 +308,11 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         guard let tab = tab(containing: pane) else { return }
         Self.focusCounter += 1
         pane.lastFocusSerial = Self.focusCounter
+        let previous = focusedPane
         tab.focusedPane = pane
+        if tab === selectedTab, previous !== pane {
+            Extensions.shared.controller.didActivateTab(pane, previousActiveTab: previous)
+        }
         if tab === selectedTab {
             refreshPaneHighlights()
             updateTitle()
@@ -407,6 +415,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         let field = contentRoot.header.addressField
         contentRoot.header.icon = focusedPane?.favicon
         contentRoot.header.shieldState = focusedPane?.shieldState ?? .hidden
+        contentRoot.header.extensionToolbar.pane = focusedPane
         if field.currentEditor() == nil {
             field.stringValue = focusedPane?.displayURL ?? ""
         }
@@ -764,13 +773,51 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     var debugPanes: [PaneView] { selectedTab?.panes ?? [] }
     var debugTabCenters: [NSPoint] { contentRoot.tabStrip.debugTabCenters }
 
+    // MARK: - Extensions
+
+    /// Every pane in every tab, in tab order: what extensions see as this window's tabs.
+    var allPanes: [PaneView] { tabs.flatMap(\.panes) }
+
+    /// A tab opened by an extension (`tabs.create`, its settings page). Its own pages need the
+    /// extension's web view configuration.
+    @discardableResult
+    func addTab(for url: URL?, extensionContext: WKWebExtensionContext, select: Bool) -> PaneView {
+        let configuration = url.flatMap { Extensions.shared.controller.extensionContext(for: $0) }?.webViewConfiguration
+        let pane = addTab(configuration: configuration, request: url.map { URLRequest(url: $0) }, nextToCurrent: true, select: select)
+        if select { window?.makeKeyAndOrderFront(nil) }
+        return pane
+    }
+
+    /// Selects `pane`'s tab and focuses it.
+    func reveal(_ pane: PaneView) {
+        guard let tab = tab(containing: pane), let index = tabs.firstIndex(where: { $0 === tab }) else { return }
+        if index != selectedIndex { selectTab(at: index) }
+        focus(pane)
+    }
+
+    func closeFromExtension(_ pane: PaneView) { close(pane) }
+
+    /// The visible toolbar button for `context` acting on `pane`, to anchor its popup.
+    func extensionButton(for context: WKWebExtensionContext, in pane: PaneView) -> NSView? {
+        let toolbars = [pane.extensionToolbar, contentRoot.header.extensionToolbar]
+        return toolbars.lazy
+            .filter { $0.pane === pane && $0.window != nil && !$0.isHiddenOrHasHiddenAncestor }
+            .compactMap { $0.buttons.first { $0.context === context } }
+            .first
+    }
+
     // MARK: - NSWindowDelegate
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        Extensions.shared.controller.didFocusWindow(self)
+    }
 
     func windowWillClose(_ notification: Notification) {
         for tab in tabs {
-            tab.panes.forEach { $0.teardown() }
+            tab.panes.forEach { $0.teardown(windowIsClosing: true) }
         }
         tabs.removeAll()
+        Extensions.shared.controller.didCloseWindow(self)
         if let settingsObserver { NotificationCenter.default.removeObserver(settingsObserver) }
         if let downloadsObserver { NotificationCenter.default.removeObserver(downloadsObserver) }
         if let bookmarksObserver { NotificationCenter.default.removeObserver(bookmarksObserver) }

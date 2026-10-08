@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         NSApp.mainMenu = buildMainMenu()
         applyAppearance()
         ContentBlocker.shared.start()
+        MainActor.assumeIsolated { Extensions.shared.loadInstalled() }
         settingsObserver = NotificationCenter.default.addObserver(
             forName: Settings.didChange, object: nil, queue: .main
         ) { [weak self] _ in
@@ -198,7 +199,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let isF12 = event.keyCode == 111
         guard isF12 || !event.modifierFlags.intersection([.command, .control]).isEmpty else { return false }
         if performVimPaneNavigation(event) { return true }
-        return priorityMenus.contains { $0.performKeyEquivalent(with: event) }
+        if priorityMenus.contains(where: { $0.performKeyEquivalent(with: event) }) { return true }
+        return MainActor.assumeIsolated { Extensions.shared.performCommand(for: event) }
     }
 
     /// ⌃H/J/K/L focus the neighbouring pane, like vim-tmux-navigator. Not menu items: a
@@ -227,6 +229,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         appMenu.addItem(item("Check for Updates…", #selector(checkForUpdates(_:))))
         appMenu.addItem(.separator())
         appMenu.addItem(item("Settings…", #selector(showSettings(_:)), ","))
+        let extensionsItem = NSMenuItem(title: "Extensions", action: nil, keyEquivalent: "")
+        extensionsItem.submenu = NSMenu(title: "Extensions")
+        extensionsItem.submenu?.delegate = ExtensionsMenuDelegate.shared
+        appMenu.addItem(extensionsItem)
         appMenu.addItem(.separator())
         appMenu.addItem(item("Hide Rosa", #selector(NSApplication.hide(_:)), "h"))
         appMenu.addItem(item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]))

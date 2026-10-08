@@ -4,6 +4,13 @@ import WebKit
 @MainActor
 enum WebKitSupport {
     static func makeConfiguration() -> WKWebViewConfiguration {
+        let configuration = makeBaseConfiguration()
+        configuration.webExtensionController = Extensions.shared.controller
+        return configuration
+    }
+
+    /// Without extensions (they derive their own pages' configuration from it).
+    static func makeBaseConfiguration() -> WKWebViewConfiguration {
         let configuration = WKWebViewConfiguration()
         // One shared data store so cookies and logins are shared by all panes and tabs.
         configuration.websiteDataStore = .default()
@@ -126,6 +133,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     var addressField: AddressField { addressBar.field }
     /// The address bar capsule (anchors the bookmark popover).
     var addressBarView: NSView { addressBar }
+    var extensionToolbar: ExtensionToolbar { addressBar.extensionToolbar }
     /// Increases every time the pane is focused; used to pick the most recently used pane.
     var lastFocusSerial = 0
 
@@ -230,6 +238,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         refreshContentBlocking()
         LinkHints.install(on: webView.configuration.userContentController)
         LinkHintsRouter.shared.register(self)
+        extensionToolbar.pane = self
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -345,7 +354,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
 
     /// Stops the page and breaks references before the pane is discarded.
-    func teardown() {
+    func teardown(windowIsClosing: Bool = false) {
+        Extensions.shared.controller.didCloseTab(self, windowIsClosing: windowIsClosing)
         blockerObservers.forEach(NotificationCenter.default.removeObserver)
         blockerObservers.removeAll()
         quickLinks?.removeFromSuperview()
@@ -513,7 +523,10 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
             webView.observe(\.isLoading) { [weak self] _, _ in
                 MainActor.assumeIsolated {
                     self?.progressChanged()
-                    self.map { $0.delegate?.paneDidChangeState($0) }
+                    self.map {
+                        Extensions.shared.controller.didChangeTabProperties(.loading, for: $0)
+                        $0.delegate?.paneDidChangeState($0)
+                    }
                 }
             },
             webView.observe(\.canGoBack) { [weak self] _, _ in MainActor.assumeIsolated { self.map { $0.delegate?.paneDidChangeState($0) } } },
@@ -522,6 +535,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
 
     private func pageStateChanged() {
+        Extensions.shared.controller.didChangeTabProperties([.URL, .title], for: self)
+        extensionToolbar.refresh()
         updateWelcome()
         updateQuickLinks()
         addressBar.shieldState = shieldState
@@ -569,7 +584,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
         if let url = navigationAction.request.url,
            let scheme = url.scheme?.lowercased(),
-           !["http", "https", "about", "data", "blob", "file", "javascript"].contains(scheme) {
+           !["http", "https", "about", "data", "blob", "file", "javascript", "webkit-extension"].contains(scheme) {
             NSWorkspace.shared.open(url)
             return .cancel
         }

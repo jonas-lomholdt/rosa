@@ -28,6 +28,8 @@ final class GlassAddressBar: NSView {
     static let height: CGFloat = 28
 
     let field = AddressField()
+    /// Extension buttons, before the shield.
+    let extensionToolbar = ExtensionToolbar()
     var onShieldClick: (() -> Void)?
     private let iconView = FaviconView()
     private let shieldButton = NSButton()
@@ -48,6 +50,8 @@ final class GlassAddressBar: NSView {
         content.addSubview(iconView)
         content.addSubview(field)
         content.addSubview(shieldButton)
+        content.addSubview(extensionToolbar)
+        extensionToolbar.onWidthChange = { [weak self] in self?.needsLayout = true }
         addSubview(glass)
         updateShield()
     }
@@ -84,9 +88,11 @@ final class GlassAddressBar: NSView {
         iconView.frame = NSRect(x: 10, y: ((bounds.height - 16) / 2).rounded(), width: 16, height: 16)
         let shieldWidth: CGFloat = shieldButton.isHidden ? 0 : 24
         shieldButton.frame = NSRect(x: bounds.width - 8 - 20, y: ((bounds.height - 20) / 2).rounded(), width: 20, height: 20)
+        let toolbarWidth = extensionToolbar.width
+        extensionToolbar.frame = NSRect(x: bounds.width - 8 - shieldWidth - toolbarWidth, y: 0, width: toolbarWidth, height: bounds.height)
         field.frame = NSRect(
             x: 32, y: ((bounds.height - fieldHeight) / 2).rounded(),
-            width: max(0, bounds.width - 44 - shieldWidth), height: fieldHeight
+            width: max(0, bounds.width - 44 - shieldWidth - toolbarWidth), height: fieldHeight
         )
     }
 }

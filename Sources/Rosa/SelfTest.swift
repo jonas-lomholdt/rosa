@@ -46,6 +46,10 @@ enum SelfTest {
             await runZen(controller, outputDir: outputDir)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "extensions" {
+            await runExtensions(controller, outputDir: outputDir)
+            return
+        }
         if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "welcome" {
             await runWelcome(controller, outputDir: outputDir)
             return
@@ -846,6 +850,54 @@ enum SelfTest {
 
     /// Welcome commands: only on the pane Rosa opens at launch, a click acts on that pane, hidden
     /// while the pane is too small, gone once it loads a page. Posts no key events.
+    /// Loads the extensions installed beside the settings file, opens a page and each
+    /// extension's popup, and reports what they show. `BROWSER_SELFTEST_URL` picks the page.
+    private static func runExtensions(_ controller: BrowserWindowController, outputDir: URL) async {
+        let extensions = Extensions.shared
+        for _ in 0..<40 where extensions.contexts.isEmpty { await pause(0.25) }
+        print("extensions: \(extensions.contexts.map { Extensions.name(of: $0) })")
+        for context in extensions.contexts {
+            print("  \(Extensions.name(of: context)) loaded=\(context.isLoaded) base=\(context.baseURL)")
+            for error in context.webExtension.errors + context.errors { print("  error: \(error as NSError) \((error as NSError).userInfo)") }
+        }
+        if let page = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_EXT_PAGE"], let context = extensions.contexts.first {
+            let debugPane = controller.addTab(for: context.baseURL.appendingPathComponent(page), extensionContext: context, select: true)
+            await pause(6)
+            let text = try? await debugPane.webView.evaluateJavaScript("(window.__log || []).join('\\n') + '\\n---\\n' + document.documentElement.innerText.slice(0, 1500)")
+            print("extension page \(debugPane.webView.url?.absoluteString ?? "-"):\n\(text ?? "?")")
+            return
+        }
+        guard let pane = controller.focusedPane else { return print("FAIL: no pane") }
+        let site = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_URL"] ?? "https://github.com/login"
+        pane.load(site)
+        for _ in 0..<40 { await pause(0.25); if !pane.webView.isLoading, pane.webView.url != nil { break } }
+        await pause(2)
+        print("page: \(pane.webView.url?.absoluteString ?? "-") panes=\(controller.allPanes.map { $0.webView.url?.absoluteString ?? "-" })")
+        let injected = try? await pane.webView.evaluateJavaScript(
+            "[...document.querySelectorAll('*')].map(e => e.tagName).filter(t => t.startsWith('COM-1PASSWORD')).join(',') || 'none'"
+        )
+        print("1Password elements in page: \(injected ?? "?")")
+        snapshot(controller, to: outputDir.appendingPathComponent("ext-1-page.png"))
+        for context in extensions.contexts {
+            context.performAction(for: pane)
+            await pause(4)
+            let action = context.action(for: pane)
+            let popup = action?.popupWebView
+            print("popup \(Extensions.name(of: context)): shown=\(action?.popupPopover?.isShown ?? false) url=\(popup?.url?.absoluteString ?? "-")")
+            print("after action: presentsPopup=\(action?.presentsPopup ?? false) panes=\(controller.allPanes.map { $0.webView.url?.absoluteString ?? "-" })")
+            if let opened = controller.allPanes.last, opened !== pane {
+                await pause(3)
+                let text = try? await opened.webView.evaluateJavaScript("document.body ? document.body.innerText.slice(0, 600) : '(no body)'")
+                print("opened tab text: \(String(describing: text ?? "?").replacingOccurrences(of: "\n", with: " | "))")
+            }
+            if let popup {
+                let text = try? await popup.evaluateJavaScript("document.body ? document.body.innerText.slice(0, 600) : '(no body)'")
+                print("popup text: \(String(describing: text ?? "?").replacingOccurrences(of: "\n", with: " | "))")
+            }
+            action?.closePopup()
+        }
+    }
+
     private static func runWelcome(_ controller: BrowserWindowController, outputDir: URL) async {
         var failures = 0
         func panes() -> [PaneView] { controller.debugContentRoot.tabContent?.paneLeaves ?? [] }
