@@ -55,6 +55,10 @@ enum SelfTest {
             await runWelcome(controller, outputDir: outputDir)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "sidebar" {
+            await runSidebar(controller)
+            return
+        }
         if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "history" {
             runHistorySearch()
             return
@@ -437,52 +441,7 @@ enum SelfTest {
             }
         }
 
-        // Vertical sidebar: resize by dragging its edge, double-click resets, auto-hide + ⌃⌘S.
-        if let window = controller.window {
-            let root = controller.debugContentRoot
-            Settings.sidebarAutoHide = false
-            Settings.tabLayout = .vertical
-            await pause(0.5)
-            func mouse(_ type: NSEvent.EventType, x: CGFloat, clicks: Int = 1) -> NSEvent? {
-                let edge = root.debugSidebarFrame
-                let point = root.convert(NSPoint(x: x, y: edge.midY), to: nil)
-                return NSEvent.mouseEvent(
-                    with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: clicks,
-                    pressure: type == .leftMouseUp ? 0 : 1
-                )
-            }
-            if let pane = controller.focusedPane {
-                let paneFrame = pane.convert(pane.bounds, to: root), side = root.debugSidebarFrame
-                print("sidebar vs pane (top/bottom)       sidebar=\(Int(side.minY))/\(Int(side.maxY)) pane=\(Int(paneFrame.minY))/\(Int(paneFrame.maxY))")
-            }
-            let handleX = root.debugSidebarFrame.maxX + 2
-            print("sidebar width before               \(Int(Settings.sidebarWidth))")
-            for event in [mouse(.leftMouseDown, x: handleX), mouse(.leftMouseDragged, x: 280), mouse(.leftMouseDragged, x: 300),
-                          mouse(.leftMouseUp, x: 300)].compactMap({ $0 }) {
-                window.sendEvent(event)
-                await pause(0.05)
-            }
-            await pause(0.3)
-            print("sidebar dragged to 300             setting=\(Int(Settings.sidebarWidth)) frame=\(Int(root.debugSidebarFrame.maxX))")
-            let resetX = root.debugSidebarFrame.maxX + 2
-            for event in [mouse(.leftMouseDown, x: resetX, clicks: 2), mouse(.leftMouseUp, x: resetX, clicks: 2)].compactMap({ $0 }) {
-                window.sendEvent(event)
-            }
-            await pause(0.3)
-            print("sidebar double-click reset         setting=\(Int(Settings.sidebarWidth))")
-            Settings.sidebarAutoHide = true
-            await pause(0.5)
-            print("auto-hide on                       sidebar width=\(Int(root.debugSidebarFrame.width))")
-            controller.toggleSidebar(nil)
-            await pause(0.5)
-            print("⌃⌘S reveal                         sidebar width=\(Int(root.debugSidebarFrame.width)) revealed=\(root.isSidebarRevealed)")
-            controller.toggleSidebar(nil)
-            await pause(0.5)
-            print("⌃⌘S hide                           sidebar width=\(Int(root.debugSidebarFrame.width)) revealed=\(root.isSidebarRevealed)")
-            Settings.sidebarAutoHide = false
-            Settings.tabLayout = .horizontal
-        }
+        await runSidebar(controller)
 
         // Downloads (into BROWSER_DOWNLOADS_DIR): a download-attribute link twice, then a zip attachment.
         if let pane = controller.focusedPane {
@@ -974,6 +933,74 @@ enum SelfTest {
             }
             action?.closePopup()
         }
+    }
+
+    /// Vertical sidebar: resize by dragging its edge (pinned and auto-hiding), double-click
+    /// resets, auto-hide + ⌃⌘S. Sends mouse events to the window, no key events.
+    private static func runSidebar(_ controller: BrowserWindowController) async {
+        guard let window = controller.window else { return }
+        let root = controller.debugContentRoot
+        Settings.sidebarAutoHide = false
+        Settings.tabLayout = .vertical
+        await pause(0.5)
+        func mouse(_ type: NSEvent.EventType, x: CGFloat, clicks: Int = 1) -> NSEvent? {
+            let edge = root.debugSidebarFrame
+            let point = root.convert(NSPoint(x: x, y: edge.midY), to: nil)
+            return NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: clicks,
+                pressure: type == .leftMouseUp ? 0 : 1
+            )
+        }
+        if let pane = controller.focusedPane {
+            let paneFrame = pane.convert(pane.bounds, to: root), side = root.debugSidebarFrame
+            print("sidebar vs pane (top/bottom)       sidebar=\(Int(side.minY))/\(Int(side.maxY)) pane=\(Int(paneFrame.minY))/\(Int(paneFrame.maxY))")
+        }
+        func hit(_ x: CGFloat) -> String {
+            let point = root.convert(NSPoint(x: x, y: root.debugSidebarFrame.midY), to: nil)
+            return window.contentView?.hitTest(window.contentView!.convert(point, from: nil)).map { "\(type(of: $0))" } ?? "nil"
+        }
+        func drag(to target: CGFloat) async {
+            let start = root.debugSidebarFrame.maxX + 2
+            print("drag from \(Int(start)) hits                 \(hit(start))")
+            for event in [mouse(.leftMouseDown, x: start), mouse(.leftMouseDragged, x: (start + target) / 2), mouse(.leftMouseDragged, x: target),
+                          mouse(.leftMouseUp, x: target)].compactMap({ $0 }) {
+                window.sendEvent(event)
+                await pause(0.05)
+            }
+            await pause(0.3)
+        }
+        controller.focusedPane?.load("data:text/html,<title>Sidebar</title><h1>Sidebar</h1>")
+        await pause(0.5)
+        let handleX = root.debugSidebarFrame.maxX + 2
+        print("sidebar width before               \(Int(Settings.sidebarWidth)) hits=\(hit(handleX))")
+        for event in [mouse(.leftMouseDown, x: handleX), mouse(.leftMouseDragged, x: 280), mouse(.leftMouseDragged, x: 300),
+                      mouse(.leftMouseUp, x: 300)].compactMap({ $0 }) {
+            window.sendEvent(event)
+            await pause(0.05)
+        }
+        await pause(0.3)
+        print("sidebar dragged to 300             setting=\(Int(Settings.sidebarWidth)) frame=\(Int(root.debugSidebarFrame.maxX))")
+        let resetX = root.debugSidebarFrame.maxX + 2
+        for event in [mouse(.leftMouseDown, x: resetX, clicks: 2), mouse(.leftMouseUp, x: resetX, clicks: 2)].compactMap({ $0 }) {
+            window.sendEvent(event)
+        }
+        await pause(0.3)
+        print("sidebar double-click reset         setting=\(Int(Settings.sidebarWidth))")
+        Settings.sidebarAutoHide = true
+        await pause(0.5)
+        print("auto-hide on                       sidebar width=\(Int(root.debugSidebarFrame.width))")
+        controller.toggleSidebar(nil)
+        await pause(0.5)
+        print("⌃⌘S reveal                         sidebar width=\(Int(root.debugSidebarFrame.width)) revealed=\(root.isSidebarRevealed)")
+        await drag(to: 340)
+        let resized = Int(Settings.sidebarWidth) == 340 && root.isSidebarRevealed
+        print("\(resized ? "ok  " : "FAIL") auto-hide dragged to 340      setting=\(Int(Settings.sidebarWidth)) frame=\(Int(root.debugSidebarFrame.maxX)) revealed=\(root.isSidebarRevealed)")
+        controller.toggleSidebar(nil)
+        await pause(0.5)
+        print("⌃⌘S hide                           sidebar width=\(Int(root.debugSidebarFrame.width)) revealed=\(root.isSidebarRevealed)")
+        Settings.sidebarAutoHide = false
+        Settings.tabLayout = .horizontal
     }
 
     /// Address bar history matching and ranking: every word in any order, fuzzy matches, learned

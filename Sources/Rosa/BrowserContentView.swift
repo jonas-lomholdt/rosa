@@ -280,20 +280,24 @@ final class BrowserContentView: NSView {
             sidebarGlass.isHidden = false
             // The glass panel lines up with the panes (top of their address bars to their bottom);
             // the strip's top row (+ and downloads) sits above it, beside the traffic lights.
+            // Frames below come from these, not from the views: while the auto-hide sidebar
+            // animates open, reading a view's frame back still gives the collapsed one.
             let paneTop = HeaderView.height
-            sidebarGlass.frame = NSRect(x: sidebarX, y: paneTop, width: width - margin,
-                                        height: max(0, bounds.height - paneTop - margin))
-            tabStrip.frame = NSRect(x: sidebarX, y: 0, width: width - margin, height: bounds.height - margin)
+            let glassFrame = NSRect(x: sidebarX, y: paneTop, width: width - margin,
+                                    height: max(0, bounds.height - paneTop - margin))
+            let stripFrame = NSRect(x: sidebarX, y: 0, width: width - margin, height: bounds.height - margin)
+            sidebarGlass.frame = glassFrame
+            tabStrip.frame = stripFrame
             sidebarGlass.shadow = autoHide && !collapsed ? Self.floatingShadow : nil
 
             resizeHandle.isHidden = collapsed
-            resizeHandle.frame = NSRect(x: sidebarGlass.frame.maxX - 2, y: sidebarGlass.frame.minY, width: 8, height: sidebarGlass.frame.height)
+            resizeHandle.frame = NSRect(x: glassFrame.maxX - 2, y: glassFrame.minY, width: 8, height: glassFrame.height)
 
             edgeHotZone.isHidden = !collapsed
             edgeHotZone.frame = NSRect(x: 0, y: HeaderView.height, width: railWidth,
                                        height: max(0, bounds.height - HeaderView.height))
             sidebarHoverZone.isHidden = !autoHide || !isSidebarRevealed
-            sidebarHoverZone.frame = tabStrip.frame.insetBy(dx: -margin, dy: -margin)
+            sidebarHoverZone.frame = stripFrame.insetBy(dx: -margin, dy: -margin)
 
             header.isHidden = false
             header.leadingInset = autoHide ? max(0, Self.trafficLightInset - contentX) : 0

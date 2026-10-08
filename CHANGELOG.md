@@ -10,6 +10,9 @@ release notes (`scripts/release-notes.sh`).
 - **↩ opens the page you mean**: the top suggestion is selected as you type when it's a page you opened for that input before, or when what you typed starts its address or title (`gma` → Gmail). Press ↑ to search for what you typed instead.
 - **Completes addresses that redirect**: type `gmail.com` once and next time `gm` fills in the rest, even though Gmail lives at mail.google.com.
 
+### 🩹 Fixes
+- The auto-hiding sidebar can be resized again: drag its edge while it's expanded.
+
 ## v0.10.0
 
 ✨ Extensions are here: 1Password works in Rosa, with autofill and passkeys. Plus an address bar that finds what you mean.
