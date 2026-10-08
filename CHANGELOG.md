@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.7.1
+
+🩹 Back, forward and reload now light up when you hover them.
+
 ### 🐛 Fixes
 - **Back, forward and reload now react to the mouse**: a rounded highlight on hover, a stronger one while pressed, so they no longer look dead.
 
