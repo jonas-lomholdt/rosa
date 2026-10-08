@@ -6,6 +6,12 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🧠 Address bar
+- **Search history with several words, in any order**: `rust async` now finds "Asynchronous Programming in Rust", and `github swift` finds the Swift repo on GitHub.
+- **Forgiving matches**: typos (`postgers`), skipped letters (`gthb`), first letters (`rlb` for Rust Language Book) and accents (`brod` finds "Brød") all find the page.
+- **Learns what you pick**: open a suggestion after typing `rb` and next time `rb` puts that page first, ready for ↩. Pages you type in rank above pages you only clicked to.
+- Turning off **Remember browsing history** also stops it learning, and clearing history clears what it learned.
+
 ### 🧩 Extensions
 - **Browser extensions (preview)**: Rosa can run Chrome-style extensions, 1Password included. Rosa → Extensions → Import from Another Browser installs one you already have in Chrome, Edge, Brave, Arc or Vivaldi; Install Extension… takes a folder, .crx or .zip. Extension buttons sit at the end of the address bar; right-click one for its settings, to hide it from the toolbar or to remove it (Rosa → Extensions → its name → Show in Toolbar brings it back, Open opens it without a button), and their shortcuts work (⌘⇧X opens 1Password). Extensions sign in on their own; connecting to desktop apps (like 1Password's Touch ID unlock) isn't supported yet.
 

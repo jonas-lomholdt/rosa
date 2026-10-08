@@ -55,6 +55,10 @@ enum SelfTest {
             await runWelcome(controller, outputDir: outputDir)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "history" {
+            runHistorySearch()
+            return
+        }
 
         func page(_ name: String, _ color: String) {
             controller.focusedPane?.load("data:text/html,<title>\(name)</title><body style='background:\(color)'><h1>\(name)</h1>")
@@ -849,8 +853,6 @@ enum SelfTest {
         print(failures == 0 ? "zen: all ok" : "zen: \(failures) FAILED")
     }
 
-    /// Welcome commands: only on the pane Rosa opens at launch, a click acts on that pane, hidden
-    /// while the pane is too small, gone once it loads a page. Posts no key events.
     /// Loads the extensions installed beside the settings file, opens a page and each
     /// extension's popup, and reports what they show. `BROWSER_SELFTEST_URL` picks the page.
     private static func runExtensions(_ controller: BrowserWindowController, outputDir: URL) async {
@@ -963,6 +965,72 @@ enum SelfTest {
         }
     }
 
+    /// Address bar history matching and ranking: every word in any order, fuzzy matches, learned
+    /// picks, typed visits, the history setting and clearing. No key events; clears history, so
+    /// it needs a scratch `BROWSER_HISTORY_DB`.
+    private static func runHistorySearch() {
+        guard ProcessInfo.processInfo.environment["BROWSER_HISTORY_DB"] != nil else {
+            print("FAIL: history needs BROWSER_HISTORY_DB (it clears history)")
+            return
+        }
+        let store = HistoryStore.shared
+        var failures = 0
+        func check(_ query: String, _ expected: [String], learned: Bool = false) {
+            let actual = store.search(query, limit: expected.count).map(\.displayURL)
+            let isLearned = store.search(query).first.map { store.isLearnedPick($0.url, for: query) } ?? false
+            let ok = actual == expected && isLearned == learned
+            if !ok { failures += 1 }
+            print("\(ok ? "ok  " : "FAIL") \(query.padding(toLength: 16, withPad: " ", startingAt: 0)) \(actual)\(learned ? " learned" : "")"
+                  + (ok ? "" : "  (expected \(expected)\(learned ? " learned" : ""))"))
+        }
+        Settings.historyEnabled = true
+        store.clear(since: nil)
+        let visits = [
+            ("https://rust-lang.github.io/async-book/", "Asynchronous Programming in Rust - The Async Book", 2),
+            ("https://tokio.rs/tokio/tutorial", "Tutorial | Tokio - An asynchronous Rust runtime", 3),
+            ("https://doc.rust-lang.org/book/", "The Rust Programming Language", 5),
+            ("https://github.com/", "GitHub", 20),
+            ("https://github.com/apple/swift", "GitHub - apple/swift: The Swift Programming Language", 4),
+            ("https://www.postgresql.org/docs/current/indexes.html", "PostgreSQL: Documentation: 17: Chapter 11. Indexes", 1),
+            ("https://news.ycombinator.com/", "Hacker News", 30),
+            ("https://www.dr.dk/mad/opskrift/rugbroed", "Rugbrød – nem opskrift | DR", 1),
+            ("https://www.rbc.com/", "RBC Royal Bank", 6),
+        ]
+        for (url, title, count) in visits {
+            for _ in 0..<count { store.recordVisit(url: URL(string: url)!, title: title) }
+        }
+        check("gi", ["github.com", "github.com/apple/swift"])
+        check("async rust", ["rust-lang.github.io/async-book", "tokio.rs/tokio/tutorial"])
+        check("github swift", ["github.com/apple/swift"])
+        check("rust zzz", [])
+        check("gthb", ["github.com"])
+        check("rlb", ["doc.rust-lang.org/book"])
+        check("postgers", ["postgresql.org/docs/current/indexes.html"])
+        check("RUGBRØD", ["dr.dk/mad/opskrift/rugbroed"])
+        check("brod", ["dr.dk/mad/opskrift/rugbroed"])
+        check("rb", ["rbc.com"])
+
+        for _ in 0..<2 { store.recordPick(input: "rb", url: URL(string: "https://doc.rust-lang.org/book/")!) }
+        check("rb", ["doc.rust-lang.org/book", "rbc.com"], learned: true)
+        check("r", ["doc.rust-lang.org/book"])
+
+        for _ in 0..<3 { store.recordVisit(url: URL(string: "https://tokio.rs/tokio/tutorial")!, title: "", typed: true) }
+        check("rust", ["rust-lang.github.io/async-book", "tokio.rs/tokio/tutorial", "doc.rust-lang.org/book"])
+
+        Settings.historyEnabled = false
+        store.recordPick(input: "news", url: URL(string: "https://www.rbc.com/")!)
+        store.recordVisit(url: URL(string: "https://example.com/")!, title: "Example")
+        Settings.historyEnabled = true
+        check("news", ["news.ycombinator.com"])
+        check("example", [])
+
+        store.clear(since: nil)
+        check("rb", [])
+        print(failures == 0 ? "history: all ok" : "history: \(failures) FAILED")
+    }
+
+    /// Welcome commands: only on the pane Rosa opens at launch, a click acts on that pane, hidden
+    /// while the pane is too small, gone once it loads a page. Posts no key events.
     private static func runWelcome(_ controller: BrowserWindowController, outputDir: URL) async {
         var failures = 0
         func panes() -> [PaneView] { controller.debugContentRoot.tabContent?.paneLeaves ?? [] }
