@@ -911,6 +911,15 @@ final class ExtensionEventTrace: NSObject, WKScriptMessageHandler {
         }
         try { Object.defineProperty(credentials, "__rosaTraced", { value: true }); } catch {}
       };
+      // Extension in-page scripts often talk over window messages (1Password's passkey hook does):
+      // names, types and error reasons only.
+      window.addEventListener("message", (event) => {
+        const data = event.data;
+        if (!data || typeof data !== "object" || !data.msgId || !data.name) return;
+        const inner = data.message && typeof data.message === "object" ? data.message : null;
+        const detail = inner ? ` ${inner.type ?? ""} ${inner.data?.reason ?? ""}`.trimEnd() : "";
+        send(`pm ${data.name} ${data.type}${detail}`);
+      }, true);
       document.addEventListener("DOMContentLoaded", wrapCredentials);
       setTimeout(wrapCredentials, 1500);
     })();
