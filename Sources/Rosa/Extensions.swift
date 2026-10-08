@@ -750,3 +750,39 @@ extension BrowserWindowController: WKWebExtensionWindow {
         window?.close()
     }
 }
+
+// MARK: - Debugging
+
+/// With `BROWSER_EXTENSION_CONSOLE=1`, pages report the names of custom events they and extension
+/// scripts exchange (`B5…` for 1Password; never their contents), to see where a handshake stops.
+@MainActor
+final class ExtensionEventTrace: NSObject, WKScriptMessageHandler {
+    private static let shared = ExtensionEventTrace()
+    private static let enabled = ProcessInfo.processInfo.environment["BROWSER_EXTENSION_CONSOLE"] == "1"
+    private static let script = """
+    (() => {
+      const send = (what) => { try { window.webkit.messageHandlers.rosaEventTrace.postMessage(what); } catch {} };
+      const original = EventTarget.prototype.dispatchEvent;
+      EventTarget.prototype.dispatchEvent = function (event) {
+        if (/^B5/.test(String(event.type))) send(`page dispatched ${event.type}`);
+        return original.call(this, event);
+      };
+      for (const type of ["B5OPXReady", "B5InitializeSession", "B5InitializeDevice", "B5TrustedDeviceUpgradeRequest", "B5RequestDelegatedSession"]) {
+        document.addEventListener(type, () => send(`page heard ${type}`), true);
+      }
+    })();
+    """
+
+    /// Re-added by `LinkHints.install`, which clears every user script.
+    static let userScript: WKUserScript? = enabled
+        ? WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page) : nil
+
+    static func install(on controller: WKUserContentController) {
+        guard enabled else { return }
+        controller.add(shared, contentWorld: .page, name: "rosaEventTrace")
+    }
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        print("[event \(message.frameInfo.request.url?.host() ?? "?")\(message.frameInfo.request.url?.path() ?? "")] \(message.body)")
+    }
+}
