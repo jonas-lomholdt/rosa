@@ -48,7 +48,7 @@
 | `⌘B` | Bookmark this page (rename, pick a folder, or remove) |
 | `⌘⇧B` | Show / hide bookmarks bar |
 | `⌥⌘B` | Manage bookmarks (drag to reorder and nest folders) |
-| `⌘⇧P` | Command palette: type to find a bookmark, Return opens it |
+| `⌘⇧P` | Command palette: type to find a bookmark, or `>` to run any menu command |
 | `⌃⌘S` | Show sidebar (when auto-hiding) |
 | `⌃⌘Z` | Zen mode: hide tabs, address bar and bookmarks bar (press again to bring them back) |
 | `⌥⌘L` | Downloads |

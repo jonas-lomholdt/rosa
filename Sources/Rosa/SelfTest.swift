@@ -38,6 +38,10 @@ enum SelfTest {
             await runQuickLinks(controller, outputDir: outputDir)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "commands" {
+            await runPaletteCommands(controller, outputDir: outputDir)
+            return
+        }
         if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "zen" {
             await runZen(controller, outputDir: outputDir)
             return
@@ -639,6 +643,91 @@ enum SelfTest {
         print(failures == 0 ? "layout: all ok" : "layout: \(failures) FAILED")
     }
 
+    /// ⌘⇧P then `>`: menu commands with shortcuts and checkmarks, run on the focused pane;
+    /// deleting the `>` goes back to bookmarks.
+    private static func runPaletteCommands(_ controller: BrowserWindowController, outputDir: URL) async {
+        let palette = controller.debugCommandPalette
+        let window = controller.window
+        var failures = 0
+        func check(_ label: String, _ ok: Bool) {
+            if !ok { failures += 1 }
+            print("\(ok ? "ok  " : "FAIL") \(label.padding(toLength: 40, withPad: " ", startingAt: 0)) shown=\(palette.isShown) "
+                  + "query=\"\(palette.debugQuery)\" results=\(palette.debugResults.prefix(6)) zen=\(controller.isZenMode) \(controller.debugDescriptionOfState)")
+        }
+        let keyCodes: [Character: UInt16] = [
+            ">": 47, "r": 15, "v": 9, "i": 34, "z": 6, "e": 14, "n": 45, "s": 1, "l": 37, "c": 8, "t": 17, "2": 19, "o": 31, "p": 35, "y": 16, " ": 49, "\u{7f}": 51,
+        ]
+        func type(_ text: String) async {
+            for character in text {
+                post(String(character), keyCode: keyCodes[character] ?? 0, modifiers: character == ">" ? [.shift] : [], window: window)
+                await pause(0.1)
+            }
+            await pause(0.3)
+        }
+        func open() async {
+            await ensureActive(window)
+            post("P", keyCode: 35, modifiers: [.command, .shift], window: window)
+            await pause(0.5)
+        }
+        func enter() async {
+            post("\r", keyCode: 36, modifiers: [], window: window)
+            await pause(0.6)
+        }
+
+        controller.focusedPane?.load("data:text/html,<title>One</title><h1>One</h1>")
+        await pause(1)
+        controller.focusedPane?.focusWebView()
+        await open()
+        check("⌘⇧P: bookmarks mode", palette.isShown && !palette.debugResults.contains("Zen Mode"))
+        await type(">")
+        let all = palette.debugResults
+        print("commands: \(zip(all, palette.debugShortcuts).map { $0.1.isEmpty ? $0.0 : "\($0.0) \($0.1)" })")
+        check("'>' lists menu commands", all.contains("Zen Mode") && all.contains("Split Right") && all.contains("Find…"))
+        check("no text editing or palette itself", !all.contains { ["Copy", "Paste", "Undo", "Select All", "Command Palette…"].contains($0) })
+        check("app menu last", all.last == "Quit Rosa")
+        let zenShortcut = zip(all, palette.debugShortcuts).first { $0.0 == "Zen Mode" }?.1
+        let leftShortcut = zip(all, palette.debugShortcuts).first { $0.0 == "Focus Pane Left" }?.1
+        check("shortcuts shown (⌃⌘Z, ⌥⌘←)", zenShortcut == "⌃⌘Z" && leftShortcut == "⌥⌘←")
+        await requestScreenCapture("palette-commands", of: controller, in: outputDir)
+        await type("v")
+        snapshot(controller, to: outputDir.appendingPathComponent("palette-commands-v.png"))
+        await type("\u{7f}zen")
+        check("'>zen' finds Zen Mode first", palette.debugSelectedTitle == "Zen Mode")
+        await enter()
+        check("↩ runs it, focus back on the page", !palette.isShown && controller.isZenMode
+              && window?.firstResponder === controller.focusedPane?.webView)
+        await open()
+        await type("> zen")
+        await enter()
+        check("'> zen' (space) runs it again", !controller.isZenMode)
+
+        await open()
+        await type(">split r")
+        check("'>split r' finds Split Right", palette.debugSelectedTitle == "Split Right")
+        await enter()
+        check("Split Right splits", controller.debugPanes.count == 2 && controller.debugDescriptionOfState.contains("H0.50"))
+        controller.focusedPane?.load("data:text/html,<title>Two</title><h1>Two</h1>")
+        await pause(0.8)
+        controller.focusedPane?.focusWebView()
+        controller.newTab(nil)
+        await pause(0.5)
+        controller.focusedPane?.load("data:text/html,<title>Three</title><h1>Three</h1>")
+        await pause(0.8)
+        controller.focusedPane?.focusWebView()
+        await open()
+        await type(">tab 1")
+        check("'>tab 1' finds Select Tab 1", palette.debugSelectedTitle == "Select Tab 1")
+        await enter()
+        check("Select Tab 1 selects the first tab", controller.selectedTabIndex == 0)
+
+        await open()
+        await type(">\u{7f}")
+        check("deleting '>' goes back to bookmarks", palette.isShown && !palette.debugResults.contains("Zen Mode"))
+        post("\u{1b}", keyCode: 53, modifiers: [], window: window)
+        await pause(0.3)
+        print(failures == 0 ? "commands: all ok" : "commands: \(failures) FAILED")
+    }
+
     /// Zen mode (⌃⌘Z): no chrome in any layout, panes fill the window, the same key brings it all
     /// back, and ⌘L leaves it with the address bar focused.
     private static func runZen(_ controller: BrowserWindowController, outputDir: URL) async {
@@ -664,7 +753,8 @@ enum SelfTest {
             guard let content = root.tabContent else { return false }
             let panes = controller.debugPanes
             let union = panes.map { $0.convert($0.bounds, to: root) }.reduce(NSRect.null) { $0.union($1) }
-            return content.frame == root.bounds && union == root.bounds
+            let margin = PaneContainerView.margin
+            return content.frame == root.bounds && union == root.bounds.insetBy(dx: margin, dy: margin)
         }
         func toggle() async { await key("z", 6, [.command, .control]) }
 

@@ -9,15 +9,32 @@ struct CommandPaletteItem {
     var loadIcon: (@MainActor () async -> NSImage?)?
     /// Matched as well as the title (a URL, a folder), but ranked below title matches.
     var keywords = ""
+    /// Shown at the right edge, e.g. "⌃⌘Z".
+    var shortcut = ""
+    /// Hand focus back to where it was before running (menu commands act on the focused pane).
+    var restoresFocus = false
     /// Runs the item; `inBackground` is ⌘↩ (e.g. open a bookmark where ⌘-clicked links go).
     var perform: (_ inBackground: Bool) -> Void
 }
 
-/// Supplies palette items. Only bookmarks for now; open tabs, history or menu commands can
+/// Supplies palette items: bookmarks and menu commands today; open tabs or history can
 /// become further sources without touching the palette itself.
 @MainActor
 protocol CommandPaletteSource {
     func items() -> [CommandPaletteItem]
+}
+
+/// What the palette searches. The first mode is the default; typing another mode's prefix
+/// switches to it (`>` for commands, as in VS Code), and deleting the prefix switches back.
+struct CommandPaletteMode {
+    /// Typed first to enter this mode; empty for the default mode.
+    var prefix = ""
+    var sources: [CommandPaletteSource]
+    /// Shown in the empty field (only the default mode's is ever visible).
+    var placeholder = ""
+    var emptyText: String
+    /// SF Symbol in front of the field.
+    var symbol = "magnifyingglass"
 }
 
 // MARK: - Matching
@@ -148,9 +165,11 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
     private let table = NSTableView()
     private let emptyLabel = NSTextField(labelWithString: "")
 
-    private var candidates: [CommandPaletteMatcher.Candidate] = []
+    /// Each mode with its items, collected once per opening.
+    private var modes: [(mode: CommandPaletteMode, candidates: [CommandPaletteMatcher.Candidate])] = []
+    private var modeIndex = 0
+    private var candidates: [CommandPaletteMatcher.Candidate] { modes.indices.contains(modeIndex) ? modes[modeIndex].candidates : [] }
     private var results: [CommandPaletteMatcher.Match] = []
-    private var emptyText = ""
     /// Whoever had focus before opening, to give it back on Esc.
     private weak var previousResponder: NSResponder?
     private var isClosing = false
@@ -174,8 +193,6 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
         glass.contentView = content
         addSubview(glass)
 
-        let symbol = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
-        searchIcon.image = symbol?.withSymbolConfiguration(.init(pointSize: 17, weight: .regular))
         searchIcon.contentTintColor = .secondaryLabelColor
 
         field.isBordered = false
@@ -220,13 +237,17 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
 
     // MARK: Showing
 
-    /// Opens over `container` (a flipped view) with the sources' current items.
-    func show(in container: NSView, sources: [CommandPaletteSource], placeholder: String, emptyText: String) {
+    /// Opens over `container` (a flipped view) with the sources' current items, in the first mode.
+    func show(in container: NSView, modes: [CommandPaletteMode]) {
         if isShown { close(restoringFocus: false) }
-        let items = sources.flatMap { $0.items() }
-        candidates = items.enumerated().map { CommandPaletteMatcher.Candidate($1, order: $0) }
-        self.emptyText = emptyText
-        field.placeholderString = placeholder
+        // Collected before the field takes focus, so menu commands validate against the page.
+        self.modes = modes.map { mode in
+            let items = mode.sources.flatMap { $0.items() }
+            return (mode, items.enumerated().map { CommandPaletteMatcher.Candidate($1, order: $0) })
+        }
+        modeIndex = 0
+        setSymbol(modes.first?.symbol)
+        field.placeholderString = modes.first?.placeholder
         field.stringValue = ""
 
         let window = container.window
@@ -245,7 +266,7 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
         isClosing = true
         let window = self.window
         removeFromSuperview()
-        candidates = []
+        modes = []
         results = []
         table.reloadData()
         if restoringFocus, let previous = previousResponder, let window,
@@ -299,15 +320,29 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
     // MARK: Filtering & selection
 
     private func filter() {
-        results = CommandPaletteMatcher.matches(field.stringValue, in: candidates)
+        var query = field.stringValue
+        let index = modes.lastIndex { !$0.mode.prefix.isEmpty && query.hasPrefix($0.mode.prefix) } ?? 0
+        if index != modeIndex, modes.indices.contains(index) {
+            modeIndex = index
+            setSymbol(modes[index].mode.symbol)
+        }
+        if let prefix = modes.indices.contains(modeIndex) ? modes[modeIndex].mode.prefix : nil {
+            query.removeFirst(min(prefix.count, query.count))
+        }
+        results = CommandPaletteMatcher.matches(query, in: candidates)
         table.reloadData()
         let hasList = !results.isEmpty
         scrollView.isHidden = !hasList
         emptyLabel.isHidden = hasList
-        emptyLabel.stringValue = candidates.isEmpty ? emptyText : "No matches"
+        emptyLabel.stringValue = candidates.isEmpty ? (modes.indices.contains(modeIndex) ? modes[modeIndex].mode.emptyText : "") : "No matches"
         separator.isHidden = !hasList && candidates.isEmpty && field.stringValue.isEmpty
         if hasList { select(0) }
         updateFrame()
+    }
+
+    private func setSymbol(_ name: String?) {
+        let symbol = NSImage(systemSymbolName: name ?? "magnifyingglass", accessibilityDescription: nil)
+        searchIcon.image = symbol?.withSymbolConfiguration(.init(pointSize: 17, weight: .regular))
     }
 
     private func select(_ row: Int) {
@@ -331,7 +366,7 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
         guard results.indices.contains(row) else { return NSSound.beep() }
         let item = results[row].candidate.item
         // In the background, focus goes back to where it was; otherwise the item takes it.
-        close(restoringFocus: inBackground)
+        close(restoringFocus: inBackground || item.restoresFocus)
         item.perform(inBackground)
     }
 
@@ -403,6 +438,7 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
 
     var debugQuery: String { field.stringValue }
     var debugResults: [String] { results.map(\.candidate.item.title) }
+    var debugShortcuts: [String] { results.map(\.candidate.item.shortcut) }
     var debugSelectedTitle: String? {
         results.indices.contains(table.selectedRow) ? results[table.selectedRow].candidate.item.title : nil
     }
@@ -426,6 +462,7 @@ private final class PaletteCellView: NSTableCellView {
     private let iconView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
+    private let shortcutLabel = NSTextField(labelWithString: "")
     private var title = ""
     private var highlights = Set<Int>()
 
@@ -437,9 +474,9 @@ private final class PaletteCellView: NSTableCellView {
             label.cell?.truncatesLastVisibleLine = true
         }
         subtitleLabel.font = .systemFont(ofSize: 11)
-        addSubview(iconView)
-        addSubview(titleLabel)
-        addSubview(subtitleLabel)
+        shortcutLabel.font = .systemFont(ofSize: 13)
+        shortcutLabel.alignment = .right
+        for view in [iconView, titleLabel, subtitleLabel, shortcutLabel] { addSubview(view) }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -451,6 +488,8 @@ private final class PaletteCellView: NSTableCellView {
         self.highlights = highlights
         subtitleLabel.stringValue = item.subtitle
         subtitleLabel.isHidden = item.subtitle.isEmpty
+        shortcutLabel.stringValue = item.shortcut
+        shortcutLabel.isHidden = item.shortcut.isEmpty
         iconView.image = icon
         applyColors()
         needsLayout = true
@@ -473,6 +512,7 @@ private final class PaletteCellView: NSTableCellView {
         }
         titleLabel.attributedStringValue = attributed
         subtitleLabel.textColor = selected ? .alternateSelectedControlTextColor.withAlphaComponent(0.8) : .secondaryLabelColor
+        shortcutLabel.textColor = subtitleLabel.textColor
         iconView.contentTintColor = selected ? .alternateSelectedControlTextColor : .secondaryLabelColor
     }
 
@@ -481,7 +521,13 @@ private final class PaletteCellView: NSTableCellView {
         let insetX: CGFloat = 18
         iconView.frame = NSRect(x: insetX, y: ((bounds.height - 18) / 2).rounded(), width: 18, height: 18)
         let textX = insetX + 18 + 12
-        let textWidth = max(0, bounds.width - textX - insetX)
+        var textWidth = max(0, bounds.width - textX - insetX)
+        if !shortcutLabel.isHidden {
+            let size = shortcutLabel.intrinsicContentSize
+            shortcutLabel.frame = NSRect(x: bounds.width - insetX - size.width, y: ((bounds.height - size.height) / 2).rounded(),
+                                         width: size.width, height: size.height)
+            textWidth = max(0, shortcutLabel.frame.minX - 12 - textX)
+        }
         let titleHeight = titleLabel.intrinsicContentSize.height
         if subtitleLabel.isHidden {
             titleLabel.frame = NSRect(x: textX, y: ((bounds.height - titleHeight) / 2).rounded(), width: textWidth, height: titleHeight)
@@ -533,5 +579,82 @@ struct BookmarksPaletteSource: CommandPaletteSource {
         if text.hasPrefix("www.") { text.removeFirst(4) }
         if text.hasSuffix("/") { text.removeLast() }
         return text
+    }
+}
+
+/// Every enabled main menu command, with its shortcut and a checkmark when it's on, run as if
+/// picked from the menu (so new menu items show up here by themselves).
+struct MenuCommandsPaletteSource: CommandPaletteSource {
+    /// Text editing would act on the palette's own field, and the palette shouldn't list itself.
+    private static let excluded: Set<Selector> = [
+        Selector(("undo:")), Selector(("redo:")), #selector(NSText.cut(_:)), #selector(NSText.copy(_:)),
+        #selector(NSText.paste(_:)), #selector(NSText.selectAll(_:)), Selector(("startDictation:")),
+        #selector(NSApplication.orderFrontCharacterPalette(_:)), #selector(BrowserWindowController.showCommandPalette(_:)),
+    ]
+    private static let checkmark = NSImage(systemSymbolName: "checkmark", accessibilityDescription: "On")
+    /// Keeps titles aligned when there's no checkmark.
+    private static let noIcon = NSImage(size: NSSize(width: 18, height: 18))
+
+    func items() -> [CommandPaletteItem] {
+        guard let main = NSApp.mainMenu else { return [] }
+        var items: [CommandPaletteItem] = []
+        func collect(_ menu: NSMenu, path: [String]) {
+            menu.update()  // validates: enabled state, checkmarks, titles like "Exit Full Screen"
+            for item in menu.items where !item.isSeparatorItem && !item.isHidden {
+                if let submenu = item.submenu {
+                    collect(submenu, path: path + [item.title])
+                    continue
+                }
+                // Window list entries target their window; private actions come from AppKit's own items.
+                guard let action = item.action, item.isEnabled, !Self.excluded.contains(action),
+                      !NSStringFromSelector(action).hasPrefix("_"), !(item.target is NSWindow) else { continue }
+                let folder = path.joined(separator: " › ")
+                items.append(CommandPaletteItem(
+                    title: item.title,
+                    subtitle: folder,
+                    icon: item.state == .on ? Self.checkmark : Self.noIcon,
+                    keywords: folder,
+                    shortcut: item.shortcutText ?? "",
+                    restoresFocus: true,
+                    perform: { [weak item] _ in
+                        guard let item, let menu = item.menu else { return }
+                        menu.performActionForItem(at: menu.index(of: item))
+                    }
+                ))
+            }
+        }
+        // The app menu (About, Quit) last: it's the least useful.
+        let holders = main.items.dropFirst() + main.items.prefix(1)
+        for holder in holders {
+            if let submenu = holder.submenu { collect(submenu, path: [holder.title]) }
+        }
+        return items
+    }
+}
+
+extension NSMenuItem {
+    /// Menu-style shortcut text, e.g. "⌃⌘Z" or "⌥⌘←"; nil without a key equivalent.
+    var shortcutText: String? {
+        guard !keyEquivalent.isEmpty else { return nil }
+        var modifiers = keyEquivalentModifierMask
+        var key = keyEquivalent
+        // An uppercase key equivalent implies Shift.
+        if key != key.lowercased() { modifiers.insert(.shift) }
+        let names: [Int: String] = [
+            NSLeftArrowFunctionKey: "←", NSRightArrowFunctionKey: "→", NSUpArrowFunctionKey: "↑",
+            NSDownArrowFunctionKey: "↓", NSF12FunctionKey: "F12", NSBackTabCharacter: "⇥", 0x09: "⇥", 0x0d: "↩",
+        ]
+        if let scalar = key.unicodeScalars.first, key.unicodeScalars.count == 1, let name = names[Int(scalar.value)] {
+            key = name
+        } else {
+            key = key.uppercased()
+        }
+        // macOS moves some shortcuts to the Globe key (Enter Full Screen becomes 🌐F).
+        var text = modifiers.contains(.function) ? "🌐" : ""
+        if modifiers.contains(.control) { text += "⌃" }
+        if modifiers.contains(.option) { text += "⌥" }
+        if modifiers.contains(.shift) { text += "⇧" }
+        if modifiers.contains(.command) { text += "⌘" }
+        return text + key
     }
 }

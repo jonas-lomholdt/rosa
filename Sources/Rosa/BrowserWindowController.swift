@@ -519,13 +519,17 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     /// For the self-test.
     var debugBookmarkEditor: BookmarkEditor { bookmarkEditor }
 
-    /// ⌘⇧P: search bookmarks and open one in the focused pane. Pressing it again closes the palette.
+    /// ⌘⇧P: search bookmarks and open one in the focused pane, or type `>` to run a menu command.
+    /// Pressing it again closes the palette.
     @objc func showCommandPalette(_ sender: Any?) {
         if commandPalette.isShown { return commandPalette.close(restoringFocus: true) }
         bookmarkEditor.close()
         let bookmarks = BookmarksPaletteSource { [weak self] url, background in self?.openBookmark(url, background: background) }
-        commandPalette.show(in: contentRoot, sources: [bookmarks], placeholder: "Search bookmarks",
-                            emptyText: "No bookmarks yet. Press ⌘B to bookmark the current page.")
+        commandPalette.show(in: contentRoot, modes: [
+            CommandPaletteMode(sources: [bookmarks], placeholder: "Search bookmarks, or type > for commands",
+                               emptyText: "No bookmarks yet. Press ⌘B to bookmark the current page, or type > for commands."),
+            CommandPaletteMode(prefix: ">", sources: [MenuCommandsPaletteSource()], emptyText: "No commands", symbol: "command"),
+        ])
     }
 
     /// For the self-test.

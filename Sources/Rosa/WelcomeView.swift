@@ -148,17 +148,7 @@ final class WelcomeView: NSView {
             return nil
         }
         guard let menu = NSApp.mainMenu, let item = find(in: menu) else { return nil }
-        var modifiers = item.keyEquivalentModifierMask
-        var key = item.keyEquivalent
-        // An uppercase key equivalent implies Shift.
-        if key != key.lowercased() { modifiers.insert(.shift) }
-        key = key.uppercased()
-        var text = ""
-        if modifiers.contains(.control) { text += "⌃" }
-        if modifiers.contains(.option) { text += "⌥" }
-        if modifiers.contains(.shift) { text += "⇧" }
-        if modifiers.contains(.command) { text += "⌘" }
-        return text + key
+        return item.shortcutText
     }
 }
 

@@ -7,6 +7,9 @@ release notes (`scripts/release-notes.sh`).
 ## Unreleased
 
 - **New Window from the Dock**: right-click Rosa's Dock icon → New Window.
+### ⌨️ Command palette
+- **Type `>` in the ⌘⇧P palette to run any menu command**: Zen Mode, Split Right, Reopen Closed Tab, Vertical Tabs… Each shows its shortcut, and settings that are on get a checkmark. Delete the `>` to go back to bookmarks.
+
 ### 🧘 Zen mode
 - **⌃⌘Z hides everything but the page**: tabs, address bar, bookmarks bar and the window buttons disappear, and the page fills the window, with a slim margin around it. Handy for presenting. Press ⌃⌘Z again to bring it all back (also in View → Zen Mode).
 - Split panes stay side by side in zen mode. ⌘L, ⌘T, ⌘D and ⌘B bring the browser back so you can type an address.
