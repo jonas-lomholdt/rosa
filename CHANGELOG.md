@@ -7,6 +7,9 @@ release notes (`scripts/release-notes.sh`).
 ## Unreleased
 
 - **New Window from the Dock**: right-click Rosa's Dock icon → New Window.
+### 🐛 Fixes
+- **New tabs and panes are no longer plain white** when quick links are turned off: they get the same themed background as the welcome page.
+
 ### ⌨️ Command palette
 - **Type `>` in the ⌘⇧P palette to run any menu command**: Zen Mode, Split Right, Reopen Closed Tab, Vertical Tabs… Each shows its shortcut, and settings that are on get a checkmark. Delete the `>` to go back to bookmarks.
 - **Type an address or a search in ⌘⇧P too**: `github.com` gets an "Open github.com" row at the top, anything else a "Search Google for …" row below your bookmarks.

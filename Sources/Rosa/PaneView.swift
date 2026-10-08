@@ -164,7 +164,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     private let progressLine = ProgressLineView()
     /// Commands and shortcuts; only the pane Rosa opens at launch has one (`showWelcome()`).
     private(set) var welcome: WelcomeView?
-    /// Pinned bookmarks / recent sites on every other blank pane (`Settings.showQuickLinks`).
+    /// Every other blank pane's background, with pinned bookmarks / recent sites (`Settings.showQuickLinks`).
     private(set) var quickLinks: QuickLinksView?
     private let overlay = FocusOverlayView()
     let findBar = FindBar()
@@ -307,8 +307,9 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
 
     /// Added while the pane is blank (and has no welcome page), removed once it loads something.
+    /// Also with quick links turned off: it draws the themed background a blank web view lacks.
     private func updateQuickLinks() {
-        guard isBlank, welcome == nil, Settings.showQuickLinks else {
+        guard isBlank, welcome == nil else {
             quickLinks?.removeFromSuperview()
             quickLinks = nil
             return

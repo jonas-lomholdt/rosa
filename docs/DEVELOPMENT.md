@@ -57,7 +57,7 @@ Settings (⌘,) and the View menu toggle **Vertical Tabs** and **Shared Address 
 
 ## Quick links
 
-Every other blank pane gets a `QuickLinksView` (`PaneView.updateQuickLinks`, removed once the pane loads anything; `Settings.showQuickLinks` turns it off). `QuickLink.current()` returns pinned bookmarks (`"pinned": true` in bookmarks.json, depth first, up to 12), else the six most recently visited hosts (`HistoryStore.recentSites`, nothing when history is off). The view reloads itself on bookmark, history and settings changes, and hides its tiles when the pane can't fit a row. Pins are set from the ⌘B editor, the bar's and manager's context menus, and a tile's menu (Pin on a recent site adds a pinned bookmark). `BROWSER_SELFTEST_ONLY=quicklinks` covers it (needs `BROWSER_SETTINGS_FILE` and `BROWSER_HISTORY_DB` scratch locations; it clears history).
+Every other blank pane gets a `QuickLinksView` (`PaneView.updateQuickLinks`, removed once the pane loads anything). It also draws the pane's themed background (a blank web view is white), so it stays when `Settings.showQuickLinks` is off; only the tiles go. `QuickLink.current()` returns pinned bookmarks (`"pinned": true` in bookmarks.json, depth first, up to 12), else the six most recently visited hosts (`HistoryStore.recentSites`, nothing when history is off). The view reloads itself on bookmark, history and settings changes, and hides its tiles when the pane can't fit a row. Pins are set from the ⌘B editor, the bar's and manager's context menus, and a tile's menu (Pin on a recent site adds a pinned bookmark). `BROWSER_SELFTEST_ONLY=quicklinks` covers it (needs `BROWSER_SETTINGS_FILE` and `BROWSER_HISTORY_DB` scratch locations; it clears history).
 
 ## Content blocking
 

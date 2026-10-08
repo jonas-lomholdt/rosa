@@ -948,7 +948,7 @@ enum SelfTest {
 
         Settings.showQuickLinks = false
         await pause(0.3)
-        check("setting off", "none")
+        check("setting off: background, no tiles", "no tiles")
         Settings.showQuickLinks = true
         await pause(0.3)
         check("setting on", "RECENTLY VISITED: example.com, Swift.org, MDN, Hacker News, Swift repo, Wikipedia")

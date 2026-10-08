@@ -89,7 +89,7 @@ final class QuickLinksView: NSView {
     }
 
     func reload() {
-        let (heading, links) = QuickLink.current()
+        let (heading, links) = Settings.showQuickLinks ? QuickLink.current() : ("", [])
         // History changes with every page load elsewhere; rebuilding unchanged tiles would drop a click in progress.
         guard heading != self.heading || links.map(\.identity) != tiles.map(\.link.identity) else { return }
         self.heading = heading
