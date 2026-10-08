@@ -65,9 +65,9 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         updateDownloadsButton()
 
         let sharedField = contentRoot.header.addressField
-        sharedField.onSubmit = { [weak self] text in
+        sharedField.onSubmit = { [weak self] text, pickedFor in
             guard let pane = self?.focusedPane else { return }
-            pane.load(text)
+            pane.loadFromAddressBar(text, pickedFor: pickedFor)
             pane.focusWebView()
         }
         contentRoot.header.onShieldClick = { [weak self] in

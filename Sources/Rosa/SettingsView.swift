@@ -300,7 +300,7 @@ struct SettingsView: View {
             } header: {
                 Text("History")
             } footer: {
-                Text("History powers address bar suggestions. It never leaves this Mac.")
+                Text("History powers address bar suggestions, which learn from the ones you pick. Turned off, nothing new is saved. It never leaves this Mac.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

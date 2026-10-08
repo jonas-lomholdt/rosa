@@ -4,8 +4,9 @@ import AppKit
 /// match plus a suggestions dropdown navigable with ↑/↓.
 final class AddressField: NSTextField, NSTextFieldDelegate {
     var onFocus: (() -> Void)?
-    /// Called with the text or URL to load when the user presses ↩ or picks a suggestion.
-    var onSubmit: ((String) -> Void)?
+    /// Called with the text or URL to load when the user presses ↩ or picks a suggestion, plus
+    /// what they had typed when it came from history (so the address bar can learn the pick).
+    var onSubmit: ((_ text: String, _ pickedFor: String?) -> Void)?
     /// Called on Escape when no suggestions are open.
     var onCancel: (() -> Void)?
     /// Called when the field stops being edited (after submit or cancel, or a click elsewhere).
@@ -43,6 +44,7 @@ final class AddressField: NSTextField, NSTextFieldDelegate {
         let accepted = super.becomeFirstResponder()
         if accepted {
             typedText = stringValue
+            HistoryStore.shared.prepareSearch()
             onFocus?()
         }
         return accepted
@@ -100,7 +102,13 @@ final class AddressField: NSTextField, NSTextFieldDelegate {
         entries = HistoryStore.shared.search(query)
         suggestions.show(entries, below: anchorView)
 
-        if !isDeleting, let completion = HistoryStore.inlineCompletion(for: text, in: entries) {
+        // A page picked for exactly this input before is preselected, so ↩ opens it again.
+        if let top = entries.first, HistoryStore.shared.isLearnedPick(top.url, for: query) {
+            suggestions.selectedIndex = 0
+            return
+        }
+        // Only the top suggestion completes inline, so ↩ never skips over a better match.
+        if !isDeleting, let completion = HistoryStore.inlineCompletion(for: text, in: Array(entries.prefix(1))) {
             let typedLength = (text as NSString).length
             editor.string = completion.text
             editor.setSelectedRange(NSRange(location: typedLength, length: (completion.text as NSString).length - typedLength))
@@ -119,15 +127,18 @@ final class AddressField: NSTextField, NSTextFieldDelegate {
 
     private func submit() {
         let text: String
+        var pickedFor: String?
         if suggestions.selectedIndex >= 0, entries.indices.contains(suggestions.selectedIndex) {
             text = entries[suggestions.selectedIndex].url.absoluteString
+            pickedFor = typedText
         } else if let inlineCompletion, editor?.string == inlineCompletion.text {
             text = inlineCompletion.url.absoluteString
+            pickedFor = typedText
         } else {
             text = editor?.string ?? stringValue
         }
         hideSuggestions()
-        onSubmit?(text)
+        onSubmit?(text, pickedFor)
     }
 
     private func hideSuggestions() {

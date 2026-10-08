@@ -8,6 +8,9 @@ release notes (`scripts/release-notes.sh`).
 
 ### 🧠 Address bar
 - **Search history with several words, in any order**: `rust async` now finds "Asynchronous Programming in Rust", and `github swift` finds the Swift repo on GitHub.
+- **Forgiving matches**: typos (`postgers`), skipped letters (`gthb`), first letters (`rlb` for Rust Language Book) and accents (`brod` finds "Brød") all find the page.
+- **Learns what you pick**: open a suggestion after typing `rb` and next time `rb` puts that page first, ready for ↩. Pages you type in rank above pages you only clicked to.
+- Turning off **Remember browsing history** also stops it learning, and clearing history clears what it learned.
 
 ## v0.9.0
 

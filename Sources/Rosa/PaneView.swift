@@ -142,6 +142,15 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
     /// Bumped on every navigation so a slow favicon fetch can't overwrite a newer page's icon.
     private var faviconGeneration = 0
+    /// The last load from the address bar, so its visit is recorded as typed, and what was
+    /// typed when it was a picked suggestion, learned once the page commits (after redirects).
+    private var typedNavigation: WKNavigation?
+    private var typedNavigationPickedFor: String?
+
+    /// Whether this pane writes browsing history (visits, titles, address bar picks). Every
+    /// history write from a pane goes through here, so a private (incognito) pane only needs to
+    /// return false.
+    var recordsHistory: Bool { Settings.historyEnabled }
     private var blockerObservers: [NSObjectProtocol] = []
 
     var shieldState: ShieldState { ContentBlocker.shared.shieldState(forHost: webView.url?.host()) }
@@ -188,8 +197,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         webView.onBookmark = { [weak self] url, title in self.map { $0.delegate?.pane($0, bookmark: url, title: title) } }
 
         addressField.onFocus = { [weak self] in self.map { $0.delegate?.paneDidBecomeFocused($0) } }
-        addressField.onSubmit = { [weak self] text in
-            self?.load(text)
+        addressField.onSubmit = { [weak self] text, pickedFor in
+            self?.loadFromAddressBar(text, pickedFor: pickedFor)
             self?.focusWebView()
         }
         addressField.onCancel = { [weak self] in
@@ -334,6 +343,15 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     func load(_ input: String) {
         guard let url = Settings.url(fromUserInput: input) else { return }
         webView.load(URLRequest(url: url))
+    }
+
+    /// Loads what was entered in an address bar: the visit counts as typed (ranks higher in
+    /// suggestions), and when it was a suggestion picked after typing `pickedFor`, the address
+    /// bar learns that pick.
+    func loadFromAddressBar(_ input: String, pickedFor: String?) {
+        guard let url = Settings.url(fromUserInput: input) else { return }
+        typedNavigation = webView.load(URLRequest(url: url))
+        typedNavigationPickedFor = pickedFor
     }
 
     func focusWebView() {
@@ -532,7 +550,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
 
     private func titleChanged() {
-        if let url = webView.url, let title = webView.title {
+        if let url = webView.url, let title = webView.title, recordsHistory {
             HistoryStore.shared.updateTitle(url: url, title: title)
         }
         pageStateChanged()
@@ -548,8 +566,12 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     // MARK: - WKNavigationDelegate
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-        if let url = webView.url {
-            HistoryStore.shared.recordVisit(url: url, title: webView.title ?? "")
+        let typed = navigation != nil && navigation === typedNavigation
+        let pickedFor = typed ? typedNavigationPickedFor : nil
+        if typed { typedNavigation = nil; typedNavigationPickedFor = nil }
+        if let url = webView.url, recordsHistory {
+            HistoryStore.shared.recordVisit(url: url, title: webView.title ?? "", typed: typed)
+            if let pickedFor { HistoryStore.shared.recordPick(input: pickedFor, url: url) }
         }
         faviconGeneration += 1
         favicon = FaviconStore.shared.cachedIcon(forHost: webView.url?.host())
