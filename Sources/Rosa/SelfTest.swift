@@ -997,9 +997,12 @@ enum SelfTest {
         controller.window?.setContentSize(NSSize(width: 900, height: 420))
         await pause(0.5)
         check("hidden in a small pane", shown() == "h-")
+        // A blank web view is white: the hidden welcome page's pane gets the blank-pane background.
+        check("…with the blank-pane background", panes().first?.quickLinks != nil)
         if let size { controller.window?.setContentSize(size) }
         await pause(0.5)
         check("back when large again", shown() == "W-")
+        check("…without it", panes().first?.quickLinks == nil)
 
         panes().first?.load("data:text/html,<title>Page</title><h1>Page</h1>")
         await pause(1)

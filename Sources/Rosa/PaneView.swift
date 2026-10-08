@@ -316,10 +316,11 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         welcome.isHidden = card.bounds.height < WelcomeView.contentHeight + 48 || card.bounds.width < 320
     }
 
-    /// Added while the pane is blank (and has no welcome page), removed once it loads something.
-    /// Also with quick links turned off: it draws the themed background a blank web view lacks.
+    /// Added while the pane is blank (and shows no welcome page), removed once it loads something.
+    /// Also with quick links turned off: it draws the themed background a blank web view lacks,
+    /// so it stands in for the welcome page while that's hidden (a pane too small for it).
     private func updateQuickLinks() {
-        guard isBlank, welcome == nil else {
+        guard isBlank, welcome?.isHidden ?? true else {
             quickLinks?.removeFromSuperview()
             quickLinks = nil
             return
