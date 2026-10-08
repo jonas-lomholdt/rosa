@@ -151,6 +151,7 @@ enum ExtensionCompatibility {
       };
       const define = (name, value) => add(api, name, value);
       const manifest = api.runtime && api.runtime.getManifest ? api.runtime.getManifest() : {};
+      const isWorkerScope = typeof ServiceWorkerGlobalScope !== "undefined" && globalThis instanceof ServiceWorkerGlobalScope;
 
       // Events Chrome has in namespaces WebKit does provide.
       const missingEvents = {
@@ -230,10 +231,88 @@ enum ExtensionCompatibility {
         onCreated: event(), onChanged: event(), onErased: event(), onDeterminingFilename: event(),
       });
 
+      // WebKit delivers each message on a port opened from an extension page twice (worker and
+      // page both see doubles). Between the worker and the extension's own pages (both shimmed),
+      // messages are numbered and repeats dropped. Content scripts aren't shimmed: their ports
+      // don't double, and pass through untouched.
+      const SEQ = "__rosaPortSeq";
+      // `connect` (pages only) lets a port that WebKit drops right after opening, before anything
+      // came back, be reopened: it does that now and then to ports opened from extension iframes
+      // in web pages, without the worker ever seeing them. Messages sent meanwhile are replayed.
+      const wrapPort = (initialPort, numberOutgoing, connect) => {
+        let port = initialPort, sent = 0, received = 0, heardBack = false, closedByUs = false, retries = 0;
+        const opened = Date.now();
+        const outbox = [];
+        const messageListeners = new Map(), disconnectListeners = new Map();
+        const wrapped = {
+          get name() { return port.name; },
+          get sender() { return port.sender; },
+          get error() { return port.error; },
+          disconnect: () => { closedByUs = true; port.disconnect(); },
+          postMessage: (message) => {
+            const framed = numberOutgoing ? { [SEQ]: ++sent, message } : message;
+            if (connect && !heardBack) outbox.push(framed);
+            port.postMessage(framed);
+          },
+        };
+        const onMessage = (message) => {
+          heardBack = true;
+          outbox.length = 0;
+          if (message && typeof message === "object" && SEQ in message) {
+            if (message[SEQ] <= received) return;
+            received = message[SEQ];
+            message = message.message;
+          }
+          for (const listener of [...messageListeners.keys()]) listener(message, wrapped);
+        };
+        const onDisconnect = () => {
+          if (connect && !closedByUs && !heardBack && retries < 3 && Date.now() - opened < 3000) {
+            retries++;
+            setTimeout(() => {
+              port = connect();
+              attach();
+              for (const framed of outbox) port.postMessage(framed);
+            }, 50 * retries);
+            return;
+          }
+          for (const listener of [...disconnectListeners.keys()]) listener(wrapped);
+        };
+        const attach = () => {
+          port.onMessage.addListener(onMessage);
+          port.onDisconnect.addListener(onDisconnect);
+        };
+        attach();
+        const event = (listeners) => ({
+          addListener: (listener) => { listeners.set(listener, true); },
+          removeListener: (listener) => { listeners.delete(listener); },
+          hasListener: (listener) => listeners.has(listener),
+          hasListeners: () => listeners.size > 0,
+        });
+        wrapped.onMessage = event(messageListeners);
+        wrapped.onDisconnect = event(disconnectListeners);
+        return wrapped;
+      };
+      const extensionOrigin = api.runtime?.getURL ? new URL(api.runtime.getURL("/")).origin : null;
+      if (isWorkerScope && api.runtime?.onConnect) {
+        const onConnect = api.runtime.onConnect;
+        const original = { add: onConnect.addListener.bind(onConnect), remove: onConnect.removeListener.bind(onConnect), has: onConnect.hasListener.bind(onConnect) };
+        const listeners = new Map();
+        onConnect.addListener = (listener) => {
+          const w = (port) => listener(wrapPort(port, !!port.sender?.url && new URL(port.sender.url).origin === extensionOrigin));
+          listeners.set(listener, w);
+          original.add(w);
+        };
+        onConnect.removeListener = (listener) => { const w = listeners.get(listener); if (w) { original.remove(w); listeners.delete(listener); } };
+        onConnect.hasListener = (listener) => listeners.has(listener);
+        patched.add(onConnect);
+      } else if (!isWorkerScope && api.runtime?.connect && globalThis.location?.origin === extensionOrigin) {
+        const connect = api.runtime.connect.bind(api.runtime);
+        api.runtime.connect = (...args) => wrapPort(connect(...args), true, () => connect(...args));
+      }
+
       // WebSockets in a background worker freeze it in WebKit; Rosa runs them natively instead
       // (ExtensionWebSocketBridge), over a native-messaging port.
-      const isWorker = typeof ServiceWorkerGlobalScope !== "undefined" && globalThis instanceof ServiceWorkerGlobalScope;
-      if (isWorker && typeof globalThis.WebSocket === "function") {
+      if (isWorkerScope && typeof globalThis.WebSocket === "function") {
         const toBase64 = (bytes) => { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
         const fromBase64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
         class RosaWebSocket extends EventTarget {
