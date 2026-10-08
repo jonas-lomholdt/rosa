@@ -6,14 +6,21 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.10.0
+
+✨ Extensions are here: 1Password works in Rosa, with autofill and passkeys. Plus an address bar that finds what you mean.
+
 ### 🧠 Address bar
 - **Search history with several words, in any order**: `rust async` now finds "Asynchronous Programming in Rust", and `github swift` finds the Swift repo on GitHub.
 - **Forgiving matches**: typos (`postgers`), skipped letters (`gthb`), first letters (`rlb` for Rust Language Book) and accents (`brod` finds "Brød") all find the page.
 - **Learns what you pick**: open a suggestion after typing `rb` and next time `rb` puts that page first, ready for ↩. Pages you type in rank above pages you only clicked to.
 - Turning off **Remember browsing history** also stops it learning, and clearing history clears what it learned.
 
-### 🧩 Extensions
-- **Browser extensions (preview)**: Rosa can run Chrome-style extensions, 1Password included. Rosa → Extensions → Import from Another Browser installs one you already have in Chrome, Edge, Brave, Arc or Vivaldi; Install Extension… takes a folder, .crx or .zip. Extension buttons sit at the end of the address bar; right-click one for its settings, to hide it from the toolbar or to remove it (Rosa → Extensions → its name → Show in Toolbar brings it back, Open opens it without a button), and their shortcuts work (⌘⇧X opens 1Password). Extensions sign in on their own; connecting to desktop apps (like 1Password's Touch ID unlock) isn't supported yet.
+### 🧩 Extensions (preview)
+- **1Password in Rosa**: install it from Rosa → Extensions → Import from Another Browser (if you have it in Chrome, Edge, Brave, Arc or Vivaldi), click its button and sign in. Autofill, the inline suggestion menu and the popup all work, and so do **passkeys**: save new ones to 1Password and sign in with them. Without the 1Password app connection, it asks for your account password once each time Rosa starts.
+- **Other extensions**: Install Extension… takes an unpacked folder, a .crx or a .zip. Most Chrome extensions run as they are; Rosa fills in the Chrome APIs Safari's engine lacks.
+- **Toolbar buttons** at the end of the address bar. Right-click one for its settings, to hide it or to remove it. Rosa → Extensions → its name brings a hidden one back (Show in Toolbar) or opens it without a button. Extension shortcuts work too (⌘⇧X opens 1Password).
+- Not yet: connecting to desktop apps (1Password's Touch ID unlock), and passkeys stored in Apple Passwords or on a security key.
 
 ### 🩹 Fixes
 - Splitting the first window's pane so the welcome page no longer fits no longer leaves a white pane.
