@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🧠 Address bar
+- **Search history with several words, in any order**: `rust async` now finds "Asynchronous Programming in Rust", and `github swift` finds the Swift repo on GitHub.
+
 ## v0.9.0
 
 ✨ Canary builds: opt in to get every new feature as soon as it lands.

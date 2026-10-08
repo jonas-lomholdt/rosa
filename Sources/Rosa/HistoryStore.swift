@@ -135,21 +135,26 @@ final class HistoryStore {
 
     // MARK: - Suggestions
 
-    /// History entries matching `query`, best first.
+    /// History entries matching every word of `query` (in the URL or title, in any order), best first.
     func search(_ query: String, limit: Int = 8) -> [HistoryEntry] {
-        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !needle.isEmpty else { return [] }
-        let pattern = "%" + needle
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "%", with: "\\%")
-            .replacingOccurrences(of: "_", with: "\\_") + "%"
+        let terms = Array(query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init).prefix(8))
+        guard !terms.isEmpty else { return [] }
+        let patterns = terms.map { term in
+            "%" + term
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "%", with: "\\%")
+                .replacingOccurrences(of: "_", with: "\\_") + "%"
+        }
+        let conditions = patterns.indices
+            .map { "(url LIKE ?\($0 + 1) ESCAPE '\\' OR title LIKE ?\($0 + 1) ESCAPE '\\')" }
+            .joined(separator: " AND ")
 
         let candidates = rows("""
             SELECT url, title, visit_count, last_visit FROM pages
-            WHERE url LIKE ?1 ESCAPE '\\' OR title LIKE ?1 ESCAPE '\\'
+            WHERE \(conditions)
             ORDER BY visit_count DESC, last_visit DESC
             LIMIT 300
-            """, [.text(pattern)]) { statement -> HistoryEntry? in
+            """, patterns.map { .text($0) }) { statement -> HistoryEntry? in
             guard let url = URL(string: Self.text(statement, 0)) else { return nil }
             return HistoryEntry(
                 url: url,
@@ -161,7 +166,7 @@ final class HistoryStore {
 
         let now = Date()
         return candidates
-            .map { ($0, Self.score($0, query: needle, now: now)) }
+            .map { ($0, Self.score($0, terms: terms, now: now)) }
             .sorted { $0.1 > $1.1 }
             .prefix(limit)
             .map(\.0)
@@ -191,18 +196,22 @@ final class HistoryStore {
         return nil
     }
 
-    /// Frequency and recency, plus big boosts for prefix matches; shorter URLs win ties
-    /// so "github.com" ranks above "github.com/some/deep/page".
-    private static func score(_ entry: HistoryEntry, query: String, now: Date) -> Double {
+    /// Frequency and recency, plus big boosts for each word that starts the host, the URL or a
+    /// title word; shorter URLs win ties so "github.com" ranks above "github.com/some/deep/page".
+    private static func score(_ entry: HistoryEntry, terms: [String], now: Date) -> Double {
         let days = max(0, now.timeIntervalSince(entry.lastVisit) / 86_400)
         var score = log2(Double(entry.visitCount) + 1) * 10 / (1 + days / 14)
+        let host = entry.displayHost.lowercased()
         let display = entry.displayURL.lowercased()
-        if entry.displayHost.lowercased().hasPrefix(query) {
-            score += 100
-        } else if display.hasPrefix(query) {
-            score += 60
-        } else if entry.title.lowercased().split(separator: " ").contains(where: { $0.hasPrefix(query) }) {
-            score += 30
+        let titleWords = entry.title.lowercased().split { !$0.isLetter && !$0.isNumber }
+        for term in terms {
+            if host.hasPrefix(term) {
+                score += 100
+            } else if display.hasPrefix(term) {
+                score += 60
+            } else if titleWords.contains(where: { $0.hasPrefix(term) }) {
+                score += 30
+            }
         }
         return score - Double(display.count) * 0.05
     }
