@@ -241,11 +241,47 @@ final class HistoryStore {
         _ = loadPicks()
     }
 
-    /// Whether `url` was picked for exactly this input before, so ↩ should open it.
+    /// Whether `url` was picked for this input before, or for longer input starting with it
+    /// ("gm" when it was picked after typing "gmail"), so ↩ should open it.
     func isLearnedPick(_ url: URL, for query: String) -> Bool {
         let key = Self.inputKey(query)
         let urlString = url.absoluteString
-        return loadPicks().contains { $0.input == key && $0.url == urlString }
+        return !key.isEmpty && loadPicks().contains { $0.input.starts(with: key) && $0.url == urlString }
+    }
+
+    /// What ↩ opens before the user moves through the suggestions, decided from the top one only,
+    /// so ↩ never skips over a better match.
+    struct DefaultMatch {
+        /// Text to complete inline; ↩ opens its URL.
+        var completion: InlineCompletion?
+        /// Whether the top suggestion is selected; ↩ opens it.
+        var selectsTop = false
+    }
+
+    /// The top suggestion becomes the default when it was picked for this input before, when what
+    /// was typed is the start of its address (completed inline, unless `completes` is false, as
+    /// while deleting) or the start of its title ("gma" → Gmail). Otherwise ↩ loads what was typed.
+    func defaultMatch(for typed: String, in entries: [HistoryEntry], completes: Bool = true) -> DefaultMatch {
+        guard let top = entries.first else { return DefaultMatch() }
+        let query = typed.trimmingCharacters(in: .whitespaces)
+        let completion = completes ? Self.inlineCompletion(for: typed, in: [top]) : nil
+        // Completing "github.com" while the top row is a page on it: ↩ opens the site, not the row.
+        let completesTop = completion.map { Self.sameAddress($0.url, top.url) } ?? false
+        if isLearnedPick(top.url, for: query) {
+            return DefaultMatch(completion: completesTop ? completion : nil, selectsTop: true)
+        }
+        if let completion { return DefaultMatch(completion: completion, selectsTop: completesTop) }
+        let folded = HistoryMatcher.fold(query)
+        let selectsTop = !folded.isEmpty && HistoryMatcher.fold(top.title).starts(with: folded)
+        return DefaultMatch(selectsTop: selectsTop)
+    }
+
+    private static func sameAddress(_ a: URL, _ b: URL) -> Bool {
+        func trimmed(_ url: URL) -> String {
+            let text = url.absoluteString
+            return text.hasSuffix("/") ? String(text.dropLast()) : text
+        }
+        return trimmed(a) == trimmed(b)
     }
 
     /// Safari-style inline completion: completes to a host first ("gi" → "github.com"),

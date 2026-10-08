@@ -102,18 +102,14 @@ final class AddressField: NSTextField, NSTextFieldDelegate {
         entries = HistoryStore.shared.search(query)
         suggestions.show(entries, below: anchorView)
 
-        // A page picked for exactly this input before is preselected, so ↩ opens it again.
-        if let top = entries.first, HistoryStore.shared.isLearnedPick(top.url, for: query) {
-            suggestions.selectedIndex = 0
-            return
-        }
-        // Only the top suggestion completes inline, so ↩ never skips over a better match.
-        if !isDeleting, let completion = HistoryStore.inlineCompletion(for: text, in: Array(entries.prefix(1))) {
+        let match = HistoryStore.shared.defaultMatch(for: text, in: entries, completes: !isDeleting)
+        if let completion = match.completion {
             let typedLength = (text as NSString).length
             editor.string = completion.text
             editor.setSelectedRange(NSRange(location: typedLength, length: (completion.text as NSString).length - typedLength))
             inlineCompletion = completion
         }
+        if match.selectsTop { suggestions.selectedIndex = 0 }
     }
 
     private func moveSelection(by delta: Int) -> Bool {

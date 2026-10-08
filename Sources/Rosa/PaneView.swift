@@ -154,7 +154,12 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     /// The last load from the address bar, so its visit is recorded as typed, and what was
     /// typed when it was a picked suggestion, learned once the page commits (after redirects).
     private var typedNavigation: WKNavigation?
+    private var typedNavigationURL: URL?
     private var typedNavigationPickedFor: String?
+    /// The typed address the current page was redirected from when it is on another site
+    /// ("gmail.com" → mail.google.com). It is recorded too, with this page's title, so typing
+    /// "gm" completes to gmail.com like it would in Chrome.
+    private var redirectSource: URL?
 
     /// Whether this pane writes browsing history (visits, titles, address bar picks). Every
     /// history write from a pane goes through here, so a private (incognito) pane only needs to
@@ -362,6 +367,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     func loadFromAddressBar(_ input: String, pickedFor: String?) {
         guard let url = Settings.url(fromUserInput: input) else { return }
         typedNavigation = webView.load(URLRequest(url: url))
+        // A search that redirects (a "!w" bang) is not an address to complete.
+        typedNavigationURL = Settings.addressURL(fromUserInput: input) == nil ? nil : url
         typedNavigationPickedFor = pickedFor
     }
 
@@ -569,6 +576,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     private func titleChanged() {
         if let url = webView.url, let title = webView.title, recordsHistory {
             HistoryStore.shared.updateTitle(url: url, title: title)
+            if let redirectSource { HistoryStore.shared.updateTitle(url: redirectSource, title: title) }
         }
         pageStateChanged()
     }
@@ -580,15 +588,32 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         needsLayout = true
     }
 
+    /// Whether a redirect from `source` to `destination` left the site ("www." aside).
+    private static func isOtherSite(_ source: URL, _ destination: URL) -> Bool {
+        func site(_ url: URL) -> String? {
+            guard let host = url.host()?.lowercased() else { return nil }
+            return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        }
+        guard ["http", "https"].contains(source.scheme?.lowercased() ?? ""), let from = site(source) else { return false }
+        return from != site(destination)
+    }
+
     // MARK: - WKNavigationDelegate
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         let typed = navigation != nil && navigation === typedNavigation
         let pickedFor = typed ? typedNavigationPickedFor : nil
-        if typed { typedNavigation = nil; typedNavigationPickedFor = nil }
+        let requested = typed ? typedNavigationURL : nil
+        if typed { typedNavigation = nil; typedNavigationURL = nil; typedNavigationPickedFor = nil }
+        redirectSource = nil
         if let url = webView.url, recordsHistory {
             HistoryStore.shared.recordVisit(url: url, title: webView.title ?? "", typed: typed)
-            if let pickedFor { HistoryStore.shared.recordPick(input: pickedFor, url: url) }
+            if let requested, Self.isOtherSite(requested, url) {
+                redirectSource = requested
+                HistoryStore.shared.recordVisit(url: requested, title: webView.title ?? "", typed: true)
+            }
+            // Learn the suggestion that was picked, not where it redirected to.
+            if let pickedFor { HistoryStore.shared.recordPick(input: pickedFor, url: redirectSource ?? url) }
         }
         faviconGeneration += 1
         favicon = FaviconStore.shared.cachedIcon(forHost: webView.url?.host())

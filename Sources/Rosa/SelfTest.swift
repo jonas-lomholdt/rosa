@@ -994,6 +994,16 @@ enum SelfTest {
             print("\(ok ? "ok  " : "FAIL") \(query.padding(toLength: 16, withPad: " ", startingAt: 0)) \(actual)\(learned ? " learned" : "")"
                   + (ok ? "" : "  (expected \(expected)\(learned ? " learned" : ""))"))
         }
+        /// What ↩ opens right after typing: `completion` is the field's completed text, `top` whether
+        /// the top suggestion is selected.
+        func checkDefault(_ typed: String, completion: String?, top: Bool) {
+            let match = store.defaultMatch(for: typed, in: store.search(typed))
+            let ok = match.completion?.text == completion && match.selectsTop == top
+            if !ok { failures += 1 }
+            let describe = { (text: String?, top: Bool) in "\(text ?? "-")\(top ? " +top" : "")" }
+            print("\(ok ? "ok  " : "FAIL") default \(typed.padding(toLength: 13, withPad: " ", startingAt: 0)) \(describe(match.completion?.text, match.selectsTop))"
+                  + (ok ? "" : "  (expected \(describe(completion, top)))"))
+        }
         Settings.historyEnabled = true
         store.clear(since: nil)
         let visits = [
@@ -1020,10 +1030,23 @@ enum SelfTest {
         check("RUGBRØD", ["dr.dk/mad/opskrift/rugbroed"])
         check("brod", ["dr.dk/mad/opskrift/rugbroed"])
         check("rb", ["rbc.com"])
+        checkDefault("gi", completion: "github.com", top: true)
+        checkDefault("github.com/a", completion: "github.com/apple/swift", top: true)
+        checkDefault("hack", completion: nil, top: true)
+        checkDefault("async rust", completion: nil, top: false)
+        checkDefault("zzz", completion: nil, top: false)
 
         for _ in 0..<2 { store.recordPick(input: "rb", url: URL(string: "https://doc.rust-lang.org/book/")!) }
         check("rb", ["doc.rust-lang.org/book", "rbc.com"], learned: true)
-        check("r", ["doc.rust-lang.org/book"])
+        check("r", ["doc.rust-lang.org/book"], learned: true)
+        checkDefault("rb", completion: nil, top: true)
+
+        // A typed address that redirected to another site is recorded under what was typed too.
+        store.recordVisit(url: URL(string: "https://mail.google.com/mail/u/0/")!, title: "Inbox - Gmail", typed: true)
+        store.recordVisit(url: URL(string: "https://gmail.com/")!, title: "Inbox - Gmail", typed: true)
+        checkDefault("gm", completion: "gmail.com", top: true)
+        store.recordPick(input: "gmail", url: URL(string: "https://gmail.com/")!)
+        checkDefault("gma", completion: "gmail.com", top: true)
 
         for _ in 0..<3 { store.recordVisit(url: URL(string: "https://tokio.rs/tokio/tutorial")!, title: "", typed: true) }
         check("rust", ["rust-lang.github.io/async-book", "tokio.rs/tokio/tutorial", "doc.rust-lang.org/book"])
