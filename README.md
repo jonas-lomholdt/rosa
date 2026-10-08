@@ -22,6 +22,7 @@
 - 🧾 **JSON viewer** — JSON responses are pretty-printed and colour-coded, with a Raw / Pretty switch
 - 🗂️ **Tabs** — horizontal, or a resizable vertical sidebar that can auto-hide
 - 🛡️ **Ad & tracker blocking** — on by default, one click to allow a site
+- 🧩 **Extensions (preview)** — run Chrome extensions like 1Password; import them from Chrome, Edge, Brave, Arc or Vivaldi
 - 🧠 **Smart address bar** — autocompletes from your history as you type
 - 🔖 **Bookmarks** — ⌘B or right-click to bookmark, a bar with nested folders, and a manager to organise them, and ⌘⇧P to jump to any of them by typing
 - ⬇️ **Downloads** — progress, cancel, show in Finder, right from the tab bar

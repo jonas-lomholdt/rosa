@@ -11,6 +11,7 @@ final class HeaderView: ChromeView {
     var addressField: AddressField { addressBar.field }
     /// The address bar capsule (anchors the bookmark popover).
     var addressBarView: NSView { addressBar }
+    var extensionToolbar: ExtensionToolbar { addressBar.extensionToolbar }
 
     var icon: NSImage? {
         get { addressBar.icon }
