@@ -769,7 +769,7 @@ extension BrowserWindowController: WKWebExtensionWindow {
 @MainActor
 final class ExtensionEventTrace: NSObject, WKScriptMessageHandler {
     private static let shared = ExtensionEventTrace()
-    private static let enabled = ProcessInfo.processInfo.environment["BROWSER_EXTENSION_CONSOLE"] == "1"
+    static let enabled = ProcessInfo.processInfo.environment["BROWSER_EXTENSION_CONSOLE"] == "1"
     private static let script = """
     (() => {
       const send = (what) => { try { window.webkit.messageHandlers.rosaEventTrace.postMessage(what); } catch {} };

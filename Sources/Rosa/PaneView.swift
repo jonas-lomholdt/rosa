@@ -583,6 +583,9 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
+        if ExtensionEventTrace.enabled, navigationAction.request.url?.scheme == "webkit-extension" {
+            print("[frame] \(navigationAction.targetFrame?.isMainFrame == true ? "main" : "sub") \(navigationAction.request.url?.path() ?? "?") in \(webView.url?.host() ?? "-")")
+        }
         if let url = navigationAction.request.url,
            let scheme = url.scheme?.lowercased(),
            !["http", "https", "about", "data", "blob", "file", "javascript", "webkit-extension"].contains(scheme) {
