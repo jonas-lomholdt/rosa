@@ -635,62 +635,100 @@ final class ExtensionButton: NSButton {
 
 // MARK: - Extensions menu
 
-/// Rosa → Extensions: install, and each extension's settings / removal. Rebuilt when opened.
+/// Rosa → Extensions: install, and each extension's settings / removal. Items are only rebuilt
+/// when the extensions (or the importable ones) change, and checkmarks updated in place: the
+/// command palette holds on to menu items and runs them later, and AppKit asks for an update on
+/// every shortcut, so rebuilding each time left the palette with dead items.
 final class ExtensionsMenuDelegate: NSObject, NSMenuDelegate {
     static let shared = ExtensionsMenuDelegate()
+    private var builtFor: [String]?
+    private var importBuiltFor: [URL]?
+    private let importMenu = NSMenu()
+
+    override init() {
+        super.init()
+        importMenu.delegate = self
+    }
+
+    /// No shortcuts in here: without this, AppKit fills the menu on every key press to look for one.
+    func menuHasKeyEquivalent(
+        _ menu: NSMenu, for event: NSEvent, target: AutoreleasingUnsafeMutablePointer<AnyObject?>,
+        action: UnsafeMutablePointer<Selector?>
+    ) -> Bool {
+        false
+    }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         MainActor.assumeIsolated {
-            menu.removeAllItems()
-            let install = NSMenuItem(title: "Install Extension…", action: #selector(install(_:)), keyEquivalent: "")
-            install.target = self
-            menu.addItem(install)
-            let importItem = NSMenuItem(title: "Import from Another Browser", action: nil, keyEquivalent: "")
-            let importMenu = NSMenu()
-            let importable = Extensions.importable()
-            for found in importable.sorted(by: { ($0.browser, $0.name) < ($1.browser, $1.name) }) {
-                let item = NSMenuItem(title: "\(found.name) (\(found.browser))", action: #selector(importExtension(_:)), keyEquivalent: "")
-                item.target = self
-                item.representedObject = found.folder
-                importMenu.addItem(item)
+            if menu === importMenu { return updateImportMenu() }
+            let ids = Extensions.shared.contexts.map(\.uniqueIdentifier)
+            if ids != builtFor {
+                builtFor = ids
+                rebuild(menu)
             }
-            if importable.isEmpty {
-                importMenu.addItem(NSMenuItem(title: "No Chrome, Edge, Brave, Arc or Vivaldi extensions found", action: nil, keyEquivalent: ""))
-            }
-            importItem.submenu = importMenu
-            menu.addItem(importItem)
-            let reveal = NSMenuItem(title: "Show Extensions Folder", action: #selector(revealFolder(_:)), keyEquivalent: "")
-            reveal.target = self
-            menu.addItem(reveal)
-            let contexts = Extensions.shared.contexts
-            if !contexts.isEmpty { menu.addItem(.separator()) }
-            for context in contexts {
-                let item = NSMenuItem(title: Extensions.name(of: context), action: nil, keyEquivalent: "")
-                item.image = context.webExtension.icon(for: NSSize(width: 16, height: 16))
-                let submenu = NSMenu()
-                let open = NSMenuItem(title: "Open", action: #selector(openExtension(_:)), keyEquivalent: "")
-                open.target = self
-                open.representedObject = context
-                submenu.addItem(open)
-                let toolbar = NSMenuItem(title: "Show in Toolbar", action: #selector(toggleToolbar(_:)), keyEquivalent: "")
-                toolbar.target = self
-                toolbar.representedObject = context
-                toolbar.state = Extensions.shared.isInToolbar(context) ? .on : .off
-                submenu.addItem(toolbar)
-                submenu.addItem(.separator())
-                if context.optionsPageURL != nil {
-                    let options = NSMenuItem(title: "Settings…", action: #selector(openOptions(_:)), keyEquivalent: "")
-                    options.target = self
-                    options.representedObject = context
-                    submenu.addItem(options)
+            for item in menu.items {
+                for entry in item.submenu?.items ?? [] where entry.action == #selector(toggleToolbar(_:)) {
+                    guard let context = entry.representedObject as? WKWebExtensionContext else { continue }
+                    entry.state = Extensions.shared.isInToolbar(context) ? .on : .off
                 }
-                let remove = NSMenuItem(title: "Remove…", action: #selector(remove(_:)), keyEquivalent: "")
-                remove.target = self
-                remove.representedObject = context
-                submenu.addItem(remove)
-                item.submenu = submenu
-                menu.addItem(item)
             }
+        }
+    }
+
+    @MainActor private func updateImportMenu() {
+        let importable = Extensions.importable().sorted { ($0.browser, $0.name) < ($1.browser, $1.name) }
+        guard importable.map(\.folder) != importBuiltFor else { return }
+        importBuiltFor = importable.map(\.folder)
+        importMenu.removeAllItems()
+        for found in importable {
+            let item = NSMenuItem(title: "\(found.name) (\(found.browser))", action: #selector(importExtension(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = found.folder
+            importMenu.addItem(item)
+        }
+        if importable.isEmpty {
+            importMenu.addItem(NSMenuItem(title: "No Chrome, Edge, Brave, Arc or Vivaldi extensions found", action: nil, keyEquivalent: ""))
+        }
+    }
+
+    @MainActor private func rebuild(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let install = NSMenuItem(title: "Install Extension…", action: #selector(install(_:)), keyEquivalent: "")
+        install.target = self
+        menu.addItem(install)
+        let importItem = NSMenuItem(title: "Import from Another Browser", action: nil, keyEquivalent: "")
+        importItem.submenu = importMenu
+        menu.addItem(importItem)
+        let reveal = NSMenuItem(title: "Show Extensions Folder", action: #selector(revealFolder(_:)), keyEquivalent: "")
+        reveal.target = self
+        menu.addItem(reveal)
+        let contexts = Extensions.shared.contexts
+        if !contexts.isEmpty { menu.addItem(.separator()) }
+        for context in contexts {
+            let item = NSMenuItem(title: Extensions.name(of: context), action: nil, keyEquivalent: "")
+            item.image = context.webExtension.icon(for: NSSize(width: 16, height: 16))
+            let submenu = NSMenu()
+            let open = NSMenuItem(title: "Open", action: #selector(openExtension(_:)), keyEquivalent: "")
+            open.target = self
+            open.representedObject = context
+            submenu.addItem(open)
+            let toolbar = NSMenuItem(title: "Show in Toolbar", action: #selector(toggleToolbar(_:)), keyEquivalent: "")
+            toolbar.target = self
+            toolbar.representedObject = context
+            submenu.addItem(toolbar)
+            submenu.addItem(.separator())
+            if context.optionsPageURL != nil {
+                let options = NSMenuItem(title: "Settings…", action: #selector(openOptions(_:)), keyEquivalent: "")
+                options.target = self
+                options.representedObject = context
+                submenu.addItem(options)
+            }
+            let remove = NSMenuItem(title: "Remove…", action: #selector(remove(_:)), keyEquivalent: "")
+            remove.target = self
+            remove.representedObject = context
+            submenu.addItem(remove)
+            item.submenu = submenu
+            menu.addItem(item)
         }
     }
 
@@ -827,7 +865,7 @@ extension BrowserWindowController: WKWebExtensionWindow {
 final class ExtensionEventTrace: NSObject, WKScriptMessageHandler {
     private static let shared = ExtensionEventTrace()
     static let enabled = ProcessInfo.processInfo.environment["BROWSER_EXTENSION_CONSOLE"] == "1"
-    private static let script = """
+    private static let script = #"""
     (() => {
       const send = (what) => { try { window.webkit.messageHandlers.rosaEventTrace.postMessage(what); } catch {} };
       const original = EventTarget.prototype.dispatchEvent;
@@ -838,8 +876,45 @@ final class ExtensionEventTrace: NSObject, WKScriptMessageHandler {
       for (const type of ["B5OPXReady", "B5InitializeSession", "B5InitializeDevice", "B5TrustedDeviceUpgradeRequest", "B5RequestDelegatedSession"]) {
         document.addEventListener(type, () => send(`page heard ${type}`), true);
       }
+      // Passkey requests, wrapped once page and extension scripts have patched navigator.credentials:
+      // timing, whether the response answers this request's challenge, and field sizes (no contents).
+      const b64url = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      const size = (value) => value == null ? "null" : (value.byteLength ?? (typeof value === "string" ? `str${value.length}` : typeof value));
+      let requests = 0;
+      const wrapCredentials = () => {
+        const credentials = navigator.credentials;
+        if (!credentials || credentials.__rosaTraced) return;
+        for (const method of ["get", "create"]) {
+          const original = credentials[method]?.bind(credentials);
+          if (!original) continue;
+          credentials[method] = async (options) => {
+            const id = ++requests, started = Date.now();
+            const key = options?.publicKey;
+            const challenge = key?.challenge ? b64url(key.challenge.buffer ?? key.challenge) : "none";
+            send(`webauthn ${method} #${id} start mediation=${options?.mediation ?? "-"} allow=${key?.allowCredentials?.length ?? "-"} rpId=${key?.rpId ?? (key?.rp?.id) ?? "-"} signal=${!!options?.signal}`);
+            options?.signal?.addEventListener?.("abort", () => send(`webauthn ${method} #${id} aborted by page after ${Date.now() - started}ms`));
+            try {
+              const credential = await original(options);
+              const response = credential?.response;
+              let matches = "?", type = "?", origin = "?";
+              try {
+                const client = JSON.parse(new TextDecoder().decode(response.clientDataJSON));
+                matches = client.challenge === challenge; type = client.type; origin = client.origin;
+              } catch (error) { matches = `unreadable (${error})`; }
+              send(`webauthn ${method} #${id} resolved after ${Date.now() - started}ms: ${credential?.constructor?.name} type=${credential?.type} rawId=${size(credential?.rawId)} clientData=${size(response?.clientDataJSON)} authData=${size(response?.authenticatorData ?? response?.attestationObject)} signature=${size(response?.signature)} userHandle=${size(response?.userHandle)} challengeMatches=${matches} clientType=${type} origin=${origin} instanceOfPKC=${typeof PublicKeyCredential !== "undefined" && credential instanceof PublicKeyCredential}`);
+              return credential;
+            } catch (error) {
+              send(`webauthn ${method} #${id} rejected after ${Date.now() - started}ms: ${error?.name}: ${error?.message}`);
+              throw error;
+            }
+          };
+        }
+        try { Object.defineProperty(credentials, "__rosaTraced", { value: true }); } catch {}
+      };
+      document.addEventListener("DOMContentLoaded", wrapCredentials);
+      setTimeout(wrapCredentials, 1500);
     })();
-    """
+    """#
 
     /// Re-added by `LinkHints.install`, which clears every user script.
     static let userScript: WKUserScript? = enabled

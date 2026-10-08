@@ -918,6 +918,17 @@ enum SelfTest {
             extensions.setInToolbar(true, context)
             await pause(0.3)
             print("toolbar buttons: \(before) → hidden \(hidden) → shown \(count()) \(hidden == before - 1 && count() == before ? "OK" : "FAIL")")
+            // From the command palette: its items outlive a menu update (AppKit asks for one on
+            // every shortcut), which used to rebuild the Extensions menu under them.
+            extensions.setInToolbar(false, context)
+            let item = MenuCommandsPaletteSource().items().first { $0.title == "Show in Toolbar" }
+            if let menu = NSApp.mainMenu?.items.first?.submenu?.items.first(where: { $0.title == "Extensions" })?.submenu {
+                menu.delegate?.menuNeedsUpdate?(menu)
+            }
+            item?.perform(false)
+            await pause(0.3)
+            print("palette Show in Toolbar: \(item == nil ? "item missing" : "") \(count() == before ? "OK" : "FAIL")")
+            extensions.setInToolbar(true, context)
         }
         let site = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_URL"] ?? "https://github.com/login"
         // A script for the page's own world from document start, e.g. to trace events.
