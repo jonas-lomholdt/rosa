@@ -6,6 +6,13 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.8.1
+
+🩹 Zen mode is on the welcome page.
+
+### 👋 Welcome
+- **The welcome page lists Zen Mode (⌃⌘Z)**: click it to hide everything but the page.
+
 ## v0.8.0
 
 ✨ Zen mode for presenting (⌃⌘Z), and a command palette that runs any command (⌘⇧P, then `>`).
