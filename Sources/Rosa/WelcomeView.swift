@@ -19,6 +19,7 @@ final class WelcomeView: NSView {
         Section(title: "Get Started", commands: [
             Command(title: "Search or Enter Address", symbol: "magnifyingglass", action: #selector(BrowserWindowController.openLocation(_:))),
             Command(title: "Open Command Palette", symbol: "command", action: #selector(BrowserWindowController.showCommandPalette(_:))),
+            Command(title: "Zen Mode", symbol: "eye.slash", action: #selector(BrowserWindowController.toggleZenMode(_:))),
             Command(title: "Settings", symbol: "gearshape", action: #selector(AppDelegate.showSettings(_:))),
         ]),
         Section(title: "Panes & Tabs", commands: [

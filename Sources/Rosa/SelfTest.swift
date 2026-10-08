@@ -859,6 +859,12 @@ enum SelfTest {
         check("every command has a shortcut", !shortcuts.contains { $0.hasSuffix("=?") })
         check("launch pane shows welcome", shown() == "W")
         await requestScreenCapture("welcome-launch", of: controller, in: outputDir)
+        panes().first?.welcome?.debugPerform("Zen Mode")
+        await pause(0.3)
+        check("Zen Mode row turns zen on", controller.isZenMode && shown() == "W")
+        panes().first?.welcome?.debugPerform("Zen Mode")
+        await pause(0.3)
+        check("and off again", !controller.isZenMode)
 
         if let point = panes().first?.welcome?.debugTitlePoint("Split Right") { await click(at: point, in: controller.window) }
         await pause(0.5)
