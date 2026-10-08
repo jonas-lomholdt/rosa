@@ -31,6 +31,9 @@ final class SettingsModel: ObservableObject {
     @Published var formatJSON: Bool {
         didSet { if Settings.formatJSON != formatJSON { Settings.formatJSON = formatJSON } }
     }
+    @Published var showQuickLinks: Bool {
+        didSet { if Settings.showQuickLinks != showQuickLinks { Settings.showQuickLinks = showQuickLinks } }
+    }
     @Published var vimKeysEnabled: Bool {
         didSet { if Settings.vimKeysEnabled != vimKeysEnabled { Settings.vimKeysEnabled = vimKeysEnabled } }
     }
@@ -84,6 +87,7 @@ final class SettingsModel: ObservableObject {
         vimKeysEnabled = Settings.vimKeysEnabled
         findHighlightColor = Settings.findHighlightColor
         formatJSON = Settings.formatJSON
+        showQuickLinks = Settings.showQuickLinks
         linkHintsAllPanes = Settings.linkHintsAllPanes
         historyEnabled = Settings.historyEnabled
         historyPageCount = HistoryStore.shared.pageCount
@@ -129,6 +133,7 @@ final class SettingsModel: ObservableObject {
         vimKeysEnabled = Settings.vimKeysEnabled
         findHighlightColor = Settings.findHighlightColor
         formatJSON = Settings.formatJSON
+        showQuickLinks = Settings.showQuickLinks
         linkHintsAllPanes = Settings.linkHintsAllPanes
         historyEnabled = Settings.historyEnabled
         adBlockEnabled = Settings.adBlockEnabled
@@ -219,6 +224,10 @@ struct SettingsView: View {
                     }
                 }
                 Toggle("Format JSON responses", isOn: $model.formatJSON)
+                Toggle(isOn: $model.showQuickLinks) {
+                    Text("Quick links on blank panes")
+                    Text("Pinned bookmarks, or your most recently visited sites when none are pinned.")
+                }
             }
 
             Section {

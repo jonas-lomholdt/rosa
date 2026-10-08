@@ -313,6 +313,11 @@ final class BookmarksManagerController: NSWindowController, NSOutlineViewDataSou
         }
     }
 
+    @objc func togglePinned(_ sender: Any?) {
+        guard let node = targetNode, node.url != nil else { return }
+        Bookmarks.setPinned(at: node.path, !node.bookmark.pinned)
+    }
+
     @objc func delete(_ sender: Any?) {
         guard let node = targetNode else { return }
         let count = node.children?.count ?? 0
@@ -420,6 +425,7 @@ extension BookmarksManagerController: NSMenuDelegate {
             menu.addItem(.separator())
             add("Rename", #selector(rename(_:)))
             add("Edit Address", #selector(editAddress(_:)))
+            add(node.bookmark.pinned ? "Unpin from Quick Links" : "Pin to Quick Links", #selector(togglePinned(_:)))
         } else {
             add("Rename", #selector(rename(_:)))
         }

@@ -34,6 +34,10 @@ enum SelfTest {
             await runLayout(controller, outputDir: outputDir)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "quicklinks" {
+            await runQuickLinks(controller, outputDir: outputDir)
+            return
+        }
         if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "welcome" {
             await runWelcome(controller, outputDir: outputDir)
             return
@@ -667,6 +671,89 @@ enum SelfTest {
         await pause(0.5)
         check("not back after going back", shown() == "--")
         print(failures == 0 ? "welcome: all ok" : "welcome: \(failures) FAILED")
+    }
+
+    /// Quick links on blank panes: recent sites (one per host), pinned bookmarks taking over, the
+    /// setting, and opening a tile. Writes history and bookmarks, so it needs scratch locations.
+    private static func runQuickLinks(_ controller: BrowserWindowController, outputDir: URL) async {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["BROWSER_SETTINGS_FILE"] != nil, environment["BROWSER_HISTORY_DB"] != nil else {
+            print("FAIL: quicklinks needs BROWSER_SETTINGS_FILE and BROWSER_HISTORY_DB (it writes bookmarks and history)")
+            return
+        }
+        var failures = 0
+        func pane() -> PaneView? { controller.focusedPane }
+        func state() -> String {
+            guard let links = pane()?.quickLinks else { return "none" }
+            return links.isShowingTiles ? "\(links.debugHeading): \(links.debugTitles.joined(separator: ", "))" : "no tiles"
+        }
+        func check(_ label: String, _ expected: String) {
+            let actual = state()
+            if actual != expected { failures += 1 }
+            print("\(actual == expected ? "ok  " : "FAIL") \(label.padding(toLength: 34, withPad: " ", startingAt: 0)) \(actual)\(actual == expected ? "" : "  (expected \(expected))")")
+        }
+        Settings.historyEnabled = true
+        Settings.showQuickLinks = true
+        HistoryStore.shared.clear(since: nil)
+        await pause(0.3)
+        check("launch pane (welcome instead)", "none")
+
+        controller.newTab(nil)
+        await pause(0.5)
+        check("no history, nothing pinned", "no tiles")
+
+        let visits = [
+            ("https://github.com/", "GitHub"), ("https://www.apple.com/", "Apple"), ("https://www.wikipedia.org/", "Wikipedia"),
+            ("https://github.com/apple/swift", "Swift repo"), ("https://news.ycombinator.com/", "Hacker News"),
+            ("https://developer.mozilla.org/", "MDN"), ("https://www.swift.org/", "Swift.org"), ("https://example.com/", ""),
+        ]
+        for (url, title) in visits {
+            HistoryStore.shared.recordVisit(url: URL(string: url)!, title: title)
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        await pause(0.3)
+        check("recent: last 6 sites, one per host", "RECENTLY VISITED: example.com, Swift.org, MDN, Hacker News, Swift repo, Wikipedia")
+        await requestScreenCapture("quicklinks-recent", of: controller, in: outputDir)
+
+        Bookmarks.add(Bookmark(title: "Rosa", kind: .link(URL(string: "https://github.com/jonas-lomholdt/rosa")!), pinned: true))
+        Bookmarks.add(Bookmark(title: "Not pinned", kind: .link(URL(string: "https://example.org/")!)))
+        await pause(0.3)
+        check("pinned replaces recent", "PINNED: Rosa")
+        let stored = (try? String(contentsOf: Bookmarks.fileURL, encoding: .utf8)) ?? ""
+        let storesPin = stored.contains("\"pinned\" : true") || stored.contains("\"pinned\":true")
+        if !storesPin { failures += 1 }
+        print("\(storesPin ? "ok  " : "FAIL") pinned stored in bookmarks.json")
+
+        if let path = Bookmarks.path(of: URL(string: "https://example.org/")!) { Bookmarks.setPinned(at: path, true) }
+        await pause(0.3)
+        check("second pin", "PINNED: Rosa, Not pinned")
+        await requestScreenCapture("quicklinks-pinned", of: controller, in: outputDir)
+        for (path, _) in Bookmarks.pinned.reversed() { Bookmarks.setPinned(at: path, false) }
+        await pause(0.3)
+        check("unpinned all: back to recent", "RECENTLY VISITED: example.com, Swift.org, MDN, Hacker News, Swift repo, Wikipedia")
+
+        Settings.showQuickLinks = false
+        await pause(0.3)
+        check("setting off", "none")
+        Settings.showQuickLinks = true
+        await pause(0.3)
+        check("setting on", "RECENTLY VISITED: example.com, Swift.org, MDN, Hacker News, Swift repo, Wikipedia")
+
+        controller.splitRight(nil)
+        await pause(0.5)
+        check("new split pane has them too", "RECENTLY VISITED: example.com, Swift.org, MDN, Hacker News, Swift repo, Wikipedia")
+        // A visit elsewhere must not rebuild unchanged tiles (that would drop a click in progress).
+        let tileBefore = pane()?.quickLinks?.subviews.last
+        HistoryStore.shared.updateTitle(url: URL(string: "https://example.com/")!, title: "")
+        NotificationCenter.default.post(name: HistoryStore.didChange, object: nil)
+        let kept = pane()?.quickLinks?.subviews.last === tileBefore
+        if !kept { failures += 1 }
+        print("\(kept ? "ok  " : "FAIL") unchanged tiles survive a history change")
+        if let point = pane()?.quickLinks?.debugTileCenter(0) { await click(at: point, in: controller.window) }
+        await pause(0.3)
+        check("clicking a tile's icon loads it", "none")
+        print("pane url: \(pane()?.webView.url?.absoluteString ?? "-")")
+        print(failures == 0 ? "quicklinks: all ok" : "quicklinks: \(failures) FAILED")
     }
 
     /// Bookmarks bar: layouts, live edits of bookmarks.json, overflow, ⌘⇧B, opening. Writes the

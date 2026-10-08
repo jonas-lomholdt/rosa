@@ -126,6 +126,7 @@ enum Settings {
             "vimKeysEnabled": vimKeysEnabled,
             "findHighlightColor": findHighlightColor,
             "formatJSON": formatJSON,
+            "showQuickLinks": showQuickLinks,
             "askWhereToSaveDownloads": askWhereToSaveDownloads,
             "checkForUpdatesOnLaunch": checkForUpdatesOnLaunch,
             "searchEngine": searchEngine.rawValue,
@@ -244,6 +245,12 @@ enum Settings {
     static var formatJSON: Bool {
         get { value("formatJSON") ?? true }
         set { set(newValue, "formatJSON") }
+    }
+
+    /// Blank panes show pinned bookmarks, or recently visited sites when none are pinned (`QuickLinksView`).
+    static var showQuickLinks: Bool {
+        get { value("showQuickLinks") ?? true }
+        set { set(newValue, "showQuickLinks") }
     }
 
     /// Show a save panel for each download instead of saving straight to Downloads.

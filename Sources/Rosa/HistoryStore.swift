@@ -115,6 +115,24 @@ final class HistoryStore {
         rows("SELECT COUNT(*) FROM pages") { Int(sqlite3_column_int64($0, 0)) }.first ?? 0
     }
 
+    /// The most recently visited page of each of the last `limit` sites (quick links on blank panes).
+    func recentSites(limit: Int) -> [HistoryEntry] {
+        var hosts = Set<String>()
+        return rows("SELECT url, title, visit_count, last_visit FROM pages ORDER BY last_visit DESC LIMIT 300") { statement -> HistoryEntry? in
+            guard let url = URL(string: Self.text(statement, 0)) else { return nil }
+            return HistoryEntry(
+                url: url,
+                title: Self.text(statement, 1),
+                visitCount: Int(sqlite3_column_int64(statement, 2)),
+                lastVisit: Date(timeIntervalSince1970: sqlite3_column_double(statement, 3))
+            )
+        }
+        .compactMap { $0 }
+        .filter { hosts.insert($0.displayHost).inserted }
+        .prefix(limit)
+        .map { $0 }
+    }
+
     // MARK: - Suggestions
 
     /// History entries matching `query`, best first.

@@ -131,6 +131,9 @@ final class BookmarksBarView: ChromeView {
             menu.addItem(ClosureMenuItem("Edit…") { [weak self, weak anchor] in
                 if let anchor { self?.onEdit?(path, anchor) }
             })
+            menu.addItem(ClosureMenuItem(bookmark.pinned ? "Unpin from Quick Links" : "Pin to Quick Links") {
+                Bookmarks.setPinned(at: path, !bookmark.pinned)
+            })
             menu.addItem(ClosureMenuItem("Delete") { Bookmarks.remove(at: path) })
         case .folder(let children):
             menu.addItem(ClosureMenuItem("Rename…") { [weak self, weak anchor] in

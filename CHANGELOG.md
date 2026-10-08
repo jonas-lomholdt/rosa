@@ -9,6 +9,11 @@ release notes (`scripts/release-notes.sh`).
 ### 👋 Welcome
 - **Rosa opens with a welcome page** listing handy commands and their shortcuts: search or enter an address, the command palette, settings, splitting panes, new tab and reopening a closed tab. Click one to run it. It goes away as soon as you open a page, and new tabs and panes stay blank.
 
+### 📌 Quick links
+- **Blank panes show your pinned sites** as tiles. Pin a bookmark from the ⌘B panel, by right-clicking it in the bookmarks bar or the bookmarks manager, or right-click a tile → Pin.
+- **Nothing pinned? You get your 6 most recently visited sites** instead, one per site.
+- Click a tile to open it in that pane, ⌘-click to open it in the background. Turn quick links off in Settings → Appearance.
+
 ## v0.6.0
 
 ✨ Jump to any bookmark by typing its name: ⌘⇧P.

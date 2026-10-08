@@ -16,12 +16,14 @@ final class BookmarkEditorModel: ObservableObject {
     let folderChoices: [FolderChoice]
     @Published var title: String
     @Published var folderIndex: Int
+    @Published var pinned: Bool
     var onDone: () -> Void = {}
     var onRemove: () -> Void = {}
 
-    init(mode: Mode, title: String, folder: Bookmarks.Path) {
+    init(mode: Mode, title: String, folder: Bookmarks.Path, pinned: Bool = false) {
         self.mode = mode
         self.title = title
+        self.pinned = pinned
         let choices = [FolderChoice(path: [], label: "Bookmarks Bar")]
             + Bookmarks.folders.map { FolderChoice(path: $0.path, label: String(repeating: "    ", count: $0.depth + 1) + $0.title) }
         folderChoices = choices
@@ -56,6 +58,8 @@ struct BookmarkEditorView: View {
                         Text(model.folderChoices[index].label).tag(index)
                     }
                 }
+                Toggle("Pin to quick links", isOn: $model.pinned)
+                    .help("Pinned bookmarks show on blank panes.")
             }
             HStack {
                 Button("Remove", role: .destructive) { model.onRemove() }
@@ -131,7 +135,7 @@ private final class Session {
         if case .folder = bookmark.kind { isFolder = true } else { isFolder = false }
         model = BookmarkEditorModel(
             mode: isFolder ? .editFolder : (added ? .added : .edit),
-            title: bookmark.title, folder: Array(path.dropLast())
+            title: bookmark.title, folder: Array(path.dropLast()), pinned: bookmark.pinned
         )
         panel = AnchoredPanel(content: NSHostingView(rootView: BookmarkEditorView(model: model)))
         panel.onDismiss = { [weak self] in self?.finish() }
@@ -155,6 +159,7 @@ private final class Session {
             Bookmarks.rename(at: path, to: title.isEmpty && model.mode == .editFolder ? "Folder" : title)
         }
         if model.mode != .editFolder {
+            if model.pinned != Bookmarks.bookmark(at: path)?.pinned { Bookmarks.setPinned(at: path, model.pinned) }
             Bookmarks.move(path, to: model.folder)
         }
     }

@@ -50,6 +50,10 @@ Settings (⌘,) and the View menu toggle **Vertical Tabs** and **Shared Address 
 
 `WelcomeView` sits over the web view of the one pane Rosa opens at launch (`PaneView.showWelcome()`, called from `applicationDidFinishLaunching`); new tabs, splits and windows never get it. It is removed for good once that pane loads anything (`PaneView.isBlank`: no URL or `about:blank`, not loading), and hidden while the pane is smaller than its column. The commands live in `WelcomeView.sections` as menu selectors; their shortcuts are read from the main menu, so they can't drift. A click focuses that pane and sends the action up its responder chain (then the app's, for Settings). Only rows take clicks; the rest falls through to the web view. `BROWSER_SELFTEST_ONLY=welcome` checks all of this (no key events).
 
+## Quick links
+
+Every other blank pane gets a `QuickLinksView` (`PaneView.updateQuickLinks`, removed once the pane loads anything; `Settings.showQuickLinks` turns it off). `QuickLink.current()` returns pinned bookmarks (`"pinned": true` in bookmarks.json, depth first, up to 12), else the six most recently visited hosts (`HistoryStore.recentSites`, nothing when history is off). The view reloads itself on bookmark, history and settings changes, and hides its tiles when the pane can't fit a row. Pins are set from the ⌘B editor, the bar's and manager's context menus, and a tile's menu (Pin on a recent site adds a pinned bookmark). `BROWSER_SELFTEST_ONLY=quicklinks` covers it (needs `BROWSER_SETTINGS_FILE` and `BROWSER_HISTORY_DB` scratch locations; it clears history).
+
 ## Content blocking
 
 On by default (Settings → Content Blocking). EasyList + EasyPrivacy (and optionally the EasyList Cookie List) are downloaded on first launch, refreshed weekly, converted by `FilterListConverter` (a subset of Adblock Plus syntax) and compiled into WebKit `WKContentRuleList`s, which WebKit caches. The shield in the address bar turns blocking off for one site.

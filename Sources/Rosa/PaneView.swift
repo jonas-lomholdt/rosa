@@ -164,6 +164,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     private let progressLine = ProgressLineView()
     /// Commands and shortcuts; only the pane Rosa opens at launch has one (`showWelcome()`).
     private(set) var welcome: WelcomeView?
+    /// Pinned bookmarks / recent sites on every other blank pane (`Settings.showQuickLinks`).
+    private(set) var quickLinks: QuickLinksView?
     private let overlay = FocusOverlayView()
     let findBar = FindBar()
     let zoomIndicator = ZoomIndicator()
@@ -221,6 +223,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
                 MainActor.assumeIsolated {
                     self?.refreshContentBlocking()
                     self?.refreshLinkHints()
+                    self?.updateQuickLinks()
                 }
             })
         }
@@ -255,6 +258,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         webView.frame = card.bounds
         welcome?.frame = card.bounds
         updateWelcome()
+        updateQuickLinks()
+        quickLinks?.frame = card.bounds
         progressLine.frame = NSRect(x: 0, y: 0, width: card.bounds.width * webView.estimatedProgress, height: 2)
         overlay.frame = card.frame
         findBar.frame = NSRect(
@@ -301,6 +306,28 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         welcome.isHidden = card.bounds.height < WelcomeView.contentHeight + 48 || card.bounds.width < 320
     }
 
+    /// Added while the pane is blank (and has no welcome page), removed once it loads something.
+    private func updateQuickLinks() {
+        guard isBlank, welcome == nil, Settings.showQuickLinks else {
+            quickLinks?.removeFromSuperview()
+            quickLinks = nil
+            return
+        }
+        guard quickLinks == nil else { return }
+        let view = QuickLinksView(frame: card.bounds)
+        view.onOpen = { [weak self] url, background in
+            guard let self else { return }
+            if background {
+                delegate?.pane(self, openLinkInBackground: URLRequest(url: url))
+            } else {
+                webView.load(URLRequest(url: url))
+                focusWebView()
+            }
+        }
+        card.addSubview(view, positioned: .above, relativeTo: webView)
+        quickLinks = view
+    }
+
     // MARK: - Actions
 
     func load(_ input: String) {
@@ -320,6 +347,8 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     func teardown() {
         blockerObservers.forEach(NotificationCenter.default.removeObserver)
         blockerObservers.removeAll()
+        quickLinks?.removeFromSuperview()
+        quickLinks = nil
         observations.removeAll()
         webView.stopLoading()
         webView.pauseAllMediaPlayback(completionHandler: nil)
@@ -493,6 +522,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
 
     private func pageStateChanged() {
         updateWelcome()
+        updateQuickLinks()
         addressBar.shieldState = shieldState
         if addressField.currentEditor() == nil {
             addressField.stringValue = displayURL
@@ -510,6 +540,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     private func progressChanged() {
         progressLine.isHidden = !webView.isLoading
         updateWelcome()
+        updateQuickLinks()
         needsLayout = true
     }
 

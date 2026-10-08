@@ -9,6 +9,8 @@ struct Bookmark {
 
     var title: String
     var kind: Kind
+    /// Shown as a quick link on blank panes (links only).
+    var pinned = false
     /// Stable while the app runs (not stored), so views can keep selection and expansion across edits.
     var id = UUID()
 }
@@ -18,11 +20,12 @@ struct Bookmark {
 /// Format:
 ///
 ///     { "bookmarks": [
-///         { "title": "GitHub", "url": "https://github.com" },
+///         { "title": "GitHub", "url": "https://github.com", "pinned": true },
 ///         { "title": "Work", "children": [ { "title": "Jira", "url": "jira.example.com" } ] }
 ///     ] }
 ///
 /// `title` may be omitted (links then show just their favicon); `url` may leave out the scheme.
+/// `pinned` links are the quick links on blank panes.
 enum Bookmarks {
     static let didChange = Notification.Name("BrowserBookmarksDidChange")
 
@@ -80,6 +83,19 @@ enum Bookmarks {
         return search(items, [])
     }
 
+    /// Pinned links, depth first (the quick links on blank panes).
+    static var pinned: [(path: Path, bookmark: Bookmark)] {
+        func collect(_ list: [Bookmark], _ prefix: Path) -> [(path: Path, bookmark: Bookmark)] {
+            list.enumerated().flatMap { index, bookmark -> [(path: Path, bookmark: Bookmark)] in
+                switch bookmark.kind {
+                case .link: bookmark.pinned ? [(prefix + [index], bookmark)] : []
+                case .folder(let children): collect(children, prefix + [index])
+                }
+            }
+        }
+        return collect(items, [])
+    }
+
     /// Every folder, depth first, for pickers.
     static var folders: [(path: Path, title: String, depth: Int)] {
         func collect(_ list: [Bookmark], _ prefix: Path) -> [(path: Path, title: String, depth: Int)] {
@@ -127,6 +143,14 @@ enum Bookmarks {
         guard let last = path.last else { return }
         modify(Array(path.dropLast())) { list in
             if list.indices.contains(last), case .link = list[last].kind { list[last].kind = .link(url) }
+        }
+        save()
+    }
+
+    static func setPinned(at path: Path, _ pinned: Bool) {
+        guard let last = path.last else { return }
+        modify(Array(path.dropLast())) { list in
+            if list.indices.contains(last), case .link = list[last].kind { list[last].pinned = pinned }
         }
         save()
     }
@@ -186,7 +210,9 @@ enum Bookmarks {
                 var entry: [String: Any] = [:]
                 if !bookmark.title.isEmpty { entry["title"] = bookmark.title }
                 switch bookmark.kind {
-                case .link(let url): entry["url"] = url.absoluteString
+                case .link(let url):
+                    entry["url"] = url.absoluteString
+                    if bookmark.pinned { entry["pinned"] = true }
                 case .folder(let children): entry["children"] = encode(children)
                 }
                 return entry
@@ -205,7 +231,7 @@ enum Bookmarks {
                 return Bookmark(title: title.isEmpty ? "Folder" : title, kind: .folder(parse(children)))
             }
             guard let text = entry["url"] as? String, let url = linkURL(text) else { return nil }
-            return Bookmark(title: title, kind: .link(url))
+            return Bookmark(title: title, kind: .link(url), pinned: entry["pinned"] as? Bool ?? false)
         }
     }
 
