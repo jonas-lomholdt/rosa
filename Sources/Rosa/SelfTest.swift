@@ -907,6 +907,11 @@ enum SelfTest {
         }
         guard let pane = controller.focusedPane else { return print("FAIL: no pane") }
         let site = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_URL"] ?? "https://github.com/login"
+        // A script for the page's own world from document start, e.g. to trace events.
+        if let script = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_PAGE_START_JS"] {
+            pane.webView.configuration.userContentController.addUserScript(
+                WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+        }
         pane.load(site)
         for _ in 0..<40 { await pause(0.25); if !pane.webView.isLoading, pane.webView.url != nil { break } }
         await pause(2)
@@ -929,6 +934,10 @@ enum SelfTest {
             let popup = action?.popupWebView
             print("popup \(Extensions.name(of: context)): shown=\(action?.popupPopover?.isShown ?? false) url=\(popup?.url?.absoluteString ?? "-")")
             print("after action: presentsPopup=\(action?.presentsPopup ?? false) panes=\(controller.allPanes.map { $0.webView.url?.absoluteString ?? "-" })")
+            if let popover = action?.popupPopover {
+                let frame = popover.contentViewController?.view.window?.frame ?? .zero
+                print("popover: shown=\(popover.isShown) size=\(popover.contentSize) frame=\(frame) window=\(controller.window?.frame ?? .zero) screen=\(controller.window?.screen?.frame ?? .zero)")
+            }
             if let opened = controller.allPanes.last, opened !== pane {
                 await pause(3)
                 let text = try? await opened.webView.evaluateJavaScript("document.body ? document.body.innerText.slice(0, 600) : '(no body)'")

@@ -24,6 +24,7 @@ enum LinkHints {
         // JSON viewer are (re)added here too.
         controller.addUserScript(FindInPage.userScript)
         if Settings.formatJSON { controller.addUserScript(JSONViewer.userScript) }
+        if let trace = ExtensionEventTrace.userScript { controller.addUserScript(trace) }
         // Popups share their opener's controller; a handler name may only be added once.
         if !controllersWithHandler.contains(controller) {
             controller.add(LinkHintsRouter.shared, contentWorld: contentWorld, name: messageName)

@@ -6,6 +6,7 @@ enum WebKitSupport {
     static func makeConfiguration() -> WKWebViewConfiguration {
         let configuration = makeBaseConfiguration()
         configuration.webExtensionController = Extensions.shared.controller
+        ExtensionEventTrace.install(on: configuration.userContentController)
         return configuration
     }
 
