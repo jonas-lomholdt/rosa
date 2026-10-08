@@ -406,47 +406,55 @@ final class Extensions: NSObject, WKWebExtensionControllerDelegate {
     ) async throws {
         guard let popover = action.popupPopover else { return }
         let pane = (action.associatedTab as? PaneView) ?? focusedBrowserWindow?.focusedPane
-        guard let pane, let browserWindow = pane.browserWindow else { return }
-        // No toolbar (zen mode): hang it from the pane's top-right corner.
-        let anchor: NSView = browserWindow.extensionButton(for: context, in: pane) ?? pane
-        let anchorRect = anchor === pane
-            ? NSRect(x: pane.bounds.maxX - 8, y: pane.bounds.minY, width: 0, height: 0)
-            : anchor.bounds
+        guard let pane, let browserWindow = pane.browserWindow, let content = browserWindow.window?.contentView else { return }
+        // Where it hangs from, in the window's content view: under the toolbar button, or the
+        // pane's top-right corner without a toolbar (zen mode).
+        let hook: NSRect = if let button = browserWindow.extensionButton(for: context, in: pane) {
+            content.convert(button.bounds, from: button)
+        } else {
+            content.convert(NSRect(x: pane.bounds.maxX - 8, y: pane.bounds.minY, width: 8, height: 8), from: pane)
+        }
         // Like Chrome: no arrow, right edge lined up with the button, kept inside the window.
         if popover.responds(to: Selector(("setShouldHideAnchor:"))) {
             popover.setValue(true, forKey: "shouldHideAnchor")
         }
-        let edge: NSRectEdge = anchor.isFlipped ? .maxY : .minY
-        popover.show(relativeTo: positioningRect(for: popover, anchor: anchor, anchorRect: anchorRect), of: anchor, preferredEdge: edge)
-        // The popup page sizes itself after loading; keep the right edge where it is.
+        let edge: NSRectEdge = content.isFlipped ? .maxY : .minY
+        popover.show(relativeTo: positioningRect(for: popover, hook: hook, in: content), of: content, preferredEdge: edge)
+        // The popup page sizes itself after loading (WebKit resizes the popover's window, without
+        // KVO on contentSize): keep the right edge where it is.
         let key = ObjectIdentifier(popover)
-        let resize = popover.observe(\.contentSize) { [weak self, weak anchor] popover, _ in
-            MainActor.assumeIsolated {
-                guard let self, let anchor, popover.isShown else { return }
-                popover.positioningRect = self.positioningRect(for: popover, anchor: anchor, anchorRect: anchorRect)
-            }
+        let reposition = { [weak self, weak popover, weak content] in
+            guard let self, let popover, let content, popover.isShown else { return }
+            let rect = self.positioningRect(for: popover, hook: hook, in: content)
+            if popover.positioningRect != rect { popover.positioningRect = rect }
         }
-        let close = NotificationCenter.default.addObserver(forName: NSPopover.didCloseNotification, object: popover, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, let observation = self.popupObservations.removeValue(forKey: key) else { return }
-                NotificationCenter.default.removeObserver(observation.close)
-            }
+        reposition()
+        var observers: [NSObjectProtocol] = []
+        if let window = popover.contentViewController?.view.window {
+            observers.append(NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: window, queue: .main) { _ in
+                MainActor.assumeIsolated { reposition() }
+            })
         }
-        popupObservations[key] = (resize, close)
+        observers.append(NotificationCenter.default.addObserver(forName: NSPopover.didCloseNotification, object: popover, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.popupObservers.removeValue(forKey: key)?.forEach(NotificationCenter.default.removeObserver)
+            }
+        })
+        popupObservers[key] = observers
     }
 
-    private var popupObservations: [ObjectIdentifier: (resize: NSKeyValueObservation, close: NSObjectProtocol)] = [:]
+    private var popupObservers: [ObjectIdentifier: [NSObjectProtocol]] = [:]
 
-    /// A sliver whose centre puts the popover's right edge at the anchor's right edge, or further
-    /// left when the window's edge is closer. (A popover centres itself on its positioning rect.)
-    private func positioningRect(for popover: NSPopover, anchor: NSView, anchorRect: NSRect) -> NSRect {
-        let width = popover.contentSize.width
-        var right = anchorRect.maxX
-        if let content = anchor.window?.contentView {
-            let windowRight = anchor.convert(NSPoint(x: content.bounds.maxX - 8, y: 0), from: content).x
-            right = min(right, windowRight)
-        }
-        return NSRect(x: (right - width / 2).rounded(), y: anchorRect.minY, width: 1, height: anchorRect.height)
+    /// A sliver of the window's content view whose centre puts the popover's right edge at the
+    /// hook's right edge, or further left so it stays inside the window. (A popover centres itself
+    /// on its positioning rect, and won't show at all for a rect outside its view, which is why
+    /// this isn't relative to the small button.)
+    private func positioningRect(for popover: NSPopover, hook: NSRect, in content: NSView) -> NSRect {
+        let width = popover.contentViewController?.view.window?.frame.width ?? popover.contentSize.width
+        let margin: CGFloat = 8
+        var centre = min(hook.maxX, content.bounds.maxX - margin) - width / 2
+        centre = max(centre, content.bounds.minX + margin + width / 2)
+        return NSRect(x: centre.rounded(), y: hook.minY, width: 1, height: hook.height)
     }
 
     // MARK: - Native messaging (only Rosa's own: console forwarding, worker WebSockets)
