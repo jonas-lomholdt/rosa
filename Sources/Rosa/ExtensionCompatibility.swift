@@ -229,6 +229,89 @@ enum ExtensionCompatibility {
         show: method(() => {}),
         onCreated: event(), onChanged: event(), onErased: event(), onDeterminingFilename: event(),
       });
+
+      // WebSockets in a background worker freeze it in WebKit; Rosa runs them natively instead
+      // (ExtensionWebSocketBridge), over a native-messaging port.
+      const isWorker = typeof ServiceWorkerGlobalScope !== "undefined" && globalThis instanceof ServiceWorkerGlobalScope;
+      if (isWorker && typeof globalThis.WebSocket === "function") {
+        const toBase64 = (bytes) => { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
+        const fromBase64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+        class RosaWebSocket extends EventTarget {
+          static CONNECTING = 0; static OPEN = 1; static CLOSING = 2; static CLOSED = 3;
+          CONNECTING = 0; OPEN = 1; CLOSING = 2; CLOSED = 3;
+          constructor(url, protocols) {
+            super();
+            this.url = new URL(url, globalThis.location?.href).href;
+            this.readyState = 0;
+            this.protocol = "";
+            this.extensions = "";
+            this.binaryType = "blob";
+            this.bufferedAmount = 0;
+            this.onopen = this.onmessage = this.onerror = this.onclose = null;
+            let port;
+            try { port = api.runtime.connectNative("rosa.websocket"); } catch {}
+            if (!port) { setTimeout(() => { this._emit(new Event("error")); this._closed(1006, "", false); }); return; }
+            this._port = port;
+            port.onMessage.addListener((message) => this._receive(message));
+            port.onDisconnect.addListener(() => {
+              if (this.readyState === 3) return;
+              this._emit(new Event("error"));
+              this._closed(1006, "", false);
+            });
+            this._connect = { type: "connect", url: this.url, protocols: [].concat(protocols ?? []) };
+          }
+          _emit(event) {
+            this.dispatchEvent(event);
+            const handler = this["on" + event.type];
+            if (typeof handler === "function") handler.call(this, event);
+          }
+          _closed(code, reason, wasClean) {
+            if (this.readyState === 3) return;
+            this.readyState = 3;
+            try { this._port?.disconnect(); } catch {}
+            this._emit(new CloseEvent("close", { code, reason, wasClean }));
+          }
+          _receive(message) {
+            if (!message) return;
+            if (message.type === "ready") {
+              if (this._connect) this._port.postMessage(this._connect);
+              this._connect = null;
+            } else if (message.type === "open") {
+              this.readyState = 1;
+              this.protocol = message.protocol || "";
+              this._emit(new Event("open"));
+            } else if (message.type === "message") {
+              let data = message.data;
+              if (message.binary) {
+                const bytes = fromBase64(data);
+                data = this.binaryType === "arraybuffer" ? bytes.buffer : new Blob([bytes]);
+              }
+              this._emit(new MessageEvent("message", { data, origin: new URL(this.url).origin }));
+            } else if (message.type === "error") {
+              this._emit(new Event("error"));
+            } else if (message.type === "close") {
+              this._closed(message.code ?? 1006, message.reason ?? "", !!message.clean);
+            }
+          }
+          send(data) {
+            if (this.readyState === 0) throw new DOMException("Still in CONNECTING state.", "InvalidStateError");
+            if (this.readyState !== 1) return;
+            if (typeof data === "string") return this._port.postMessage({ type: "send", data, binary: false });
+            if (data instanceof Blob) {
+              data.arrayBuffer().then((buffer) => this._port.postMessage({ type: "send", data: toBase64(new Uint8Array(buffer)), binary: true }));
+              return;
+            }
+            const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+            this._port.postMessage({ type: "send", data: toBase64(bytes), binary: true });
+          }
+          close(code = 1000, reason = "") {
+            if (this.readyState >= 2) return;
+            this.readyState = 2;
+            this._port?.postMessage({ type: "close", code, reason });
+          }
+        }
+        globalThis.WebSocket = RosaWebSocket;
+      }
     })();
     """#
 }
