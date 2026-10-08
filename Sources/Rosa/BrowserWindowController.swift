@@ -25,7 +25,8 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         return popover
     }()
     private static var focusCounter = 0
-    /// ⌃⌘Z: only the pages, no browser chrome (for presenting). Per window, not saved.
+    /// ⌃⌘Z: only the pages, no browser chrome (for presenting). Per window, not saved. ⌘L still
+    /// works: the shared address bar shows until the address is entered.
     private(set) var isZenMode = false
 
     private var selectedTab: Tab? { tabs.indices.contains(selectedIndex) ? tabs[selectedIndex] : nil }
@@ -72,6 +73,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         contentRoot.header.onShieldClick = { [weak self] in
             self?.focusedPane?.toggleContentBlockingForSite()
         }
+        sharedField.onEndEditing = { [weak self] in self?.contentRoot.showsZenAddressBar = false }
         sharedField.onCancel = { [weak self] in
             guard let self else { return }
             contentRoot.header.addressField.stringValue = focusedPane?.displayURL ?? ""
@@ -388,8 +390,13 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     // MARK: - Address bar & settings
 
     private func focusAddressField() {
-        setZenMode(false)
-        if Settings.addressBarMode == .shared {
+        if isZenMode {
+            // Zen mode shows the shared address bar just while typing; it goes again once editing ends.
+            contentRoot.showsZenAddressBar = true
+            contentRoot.layoutSubtreeIfNeeded()
+            syncSharedAddressField()
+            window?.makeFirstResponder(contentRoot.header.addressField)
+        } else if Settings.addressBarMode == .shared {
             window?.makeFirstResponder(contentRoot.header.addressField)
         } else {
             focusedPane?.focusAddressField()
@@ -519,15 +526,18 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     /// For the self-test.
     var debugBookmarkEditor: BookmarkEditor { bookmarkEditor }
 
-    /// ⌘⇧P: search bookmarks and open one in the focused pane, or type `>` to run a menu command.
+    /// ⌘⇧P: search bookmarks and open one in the focused pane, enter an address or search, or type
+    /// `>` to run a menu command.
     /// Pressing it again closes the palette.
     @objc func showCommandPalette(_ sender: Any?) {
         if commandPalette.isShown { return commandPalette.close(restoringFocus: true) }
         bookmarkEditor.close()
-        let bookmarks = BookmarksPaletteSource { [weak self] url, background in self?.openBookmark(url, background: background) }
+        let open: (URL, Bool) -> Void = { [weak self] url, background in self?.openBookmark(url, background: background) }
         commandPalette.show(in: contentRoot, modes: [
-            CommandPaletteMode(sources: [bookmarks], placeholder: "Search bookmarks, or type > for commands",
-                               emptyText: "No bookmarks yet. Press ⌘B to bookmark the current page, or type > for commands."),
+            CommandPaletteMode(sources: [BookmarksPaletteSource(open: open)],
+                               placeholder: "Search bookmarks or enter an address (> for commands)",
+                               emptyText: "No bookmarks yet. Press ⌘B to bookmark the current page, or type > for commands.",
+                               queryItem: { BookmarksPaletteSource.queryItem($0, open: open) }),
             CommandPaletteMode(prefix: ">", sources: [MenuCommandsPaletteSource()], emptyText: "No commands", symbol: "command"),
         ])
     }

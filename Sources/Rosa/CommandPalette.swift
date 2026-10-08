@@ -35,6 +35,9 @@ struct CommandPaletteMode {
     var emptyText: String
     /// SF Symbol in front of the field.
     var symbol = "magnifyingglass"
+    /// An extra row made from the query itself (open it as an address, search for it): first
+    /// when `first`, else after the matches.
+    var queryItem: ((String) -> (item: CommandPaletteItem, first: Bool)?)?
 }
 
 // MARK: - Matching
@@ -330,6 +333,12 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
             query.removeFirst(min(prefix.count, query.count))
         }
         results = CommandPaletteMatcher.matches(query, in: candidates)
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty, let make = modes.indices.contains(modeIndex) ? modes[modeIndex].mode.queryItem : nil,
+           let (item, first) = make(trimmed) {
+            let match = CommandPaletteMatcher.Match(candidate: .init(item, order: -1), score: 0, highlights: [])
+            results.insert(match, at: first ? 0 : results.count)
+        }
         table.reloadData()
         let hasList = !results.isEmpty
         scrollView.isHidden = !hasList
@@ -439,6 +448,10 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
     var debugQuery: String { field.stringValue }
     var debugResults: [String] { results.map(\.candidate.item.title) }
     var debugShortcuts: [String] { results.map(\.candidate.item.shortcut) }
+    func debugSetQuery(_ query: String) {
+        field.currentEditor()?.string = query
+        filter()
+    }
     var debugSelectedTitle: String? {
         results.indices.contains(table.selectedRow) ? results[table.selectedRow].candidate.item.title : nil
     }
@@ -570,6 +583,29 @@ struct BookmarksPaletteSource: CommandPaletteSource {
         }
         collect(Bookmarks.items, folders: [])
         return items
+    }
+
+    /// Typed text as a row: "Open example.com" first when it's an address, else "Search Google
+    /// for …" after the bookmarks. Loads like the address bar does.
+    static func queryItem(_ text: String, open: @escaping (URL, Bool) -> Void) -> (item: CommandPaletteItem, first: Bool)? {
+        if let url = Settings.addressURL(fromUserInput: text) {
+            var item = CommandPaletteItem(
+                title: "Open \(text)", subtitle: url.absoluteString,
+                icon: FaviconStore.shared.cachedIcon(forHost: url.host()),
+                perform: { background in open(url, background) }
+            )
+            if url.host() != nil {
+                item.loadIcon = { await FaviconStore.shared.icon(forSite: url) }
+            }
+            return (item, true)
+        }
+        guard let url = Settings.url(fromUserInput: text) else { return nil }
+        let item = CommandPaletteItem(
+            title: "Search \(Settings.searchEngine.name) for “\(text)”",
+            icon: NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil),
+            perform: { background in open(url, background) }
+        )
+        return (item, false)
     }
 
     /// `https://www.example.com/path/` → `example.com/path`.

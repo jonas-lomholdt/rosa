@@ -128,8 +128,14 @@ final class BrowserContentView: NSView {
                 window?.standardWindowButton(kind)?.isHidden = isZenMode
             }
             if isZenMode { hideWorkItem?.cancel(); isSidebarRevealed = false }
+            showsZenAddressBar = false
             needsLayout = true
         }
+    }
+
+    /// Zen mode only: the shared address bar across the top while an address is being typed.
+    var showsZenAddressBar = false {
+        didSet { if showsZenAddressBar != oldValue { needsLayout = true } }
     }
 
     /// Auto-hide mode only: whether the sidebar is expanded over the page (otherwise it's a favicon rail).
@@ -221,9 +227,19 @@ final class BrowserContentView: NSView {
         if isZenMode {
             // The panes keep their margin, so the page sits just inside the window's edge.
             chrome.forEach { $0.isHidden = true }
-            tabContent?.frame = bounds
+            var top: CGFloat = 0
+            if showsZenAddressBar {
+                // The shared bar, whatever the address bar setting, where it usually sits.
+                header.isHidden = false
+                header.showsAddressField = true
+                header.leadingInset = 0
+                header.frame = NSRect(x: 0, y: 0, width: bounds.width, height: HeaderView.height)
+                top = HeaderView.height - PaneContainerView.margin
+            }
+            tabContent?.frame = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
             return
         }
+        header.showsAddressField = showsSharedAddressBar
         tabStrip.isHidden = false
         navigationButtons.isHidden = false
         bookmarksBar.isHidden = !showsBookmarksBar

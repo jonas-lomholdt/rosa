@@ -721,6 +721,17 @@ enum SelfTest {
         check("Select Tab 1 selects the first tab", controller.selectedTabIndex == 0)
 
         await open()
+        palette.debugSetQuery("example.com")
+        check("an address is the first row", palette.debugResults.first == "Open example.com")
+        palette.debugSetQuery("rosa browser")
+        check("other text: search row last", palette.debugResults.last?.hasPrefix("Search ") == true
+              && palette.debugResults.last?.hasSuffix("for “rosa browser”") == true)
+        palette.debugSetQuery("data:text/html,<title>Typed</title><h1>Typed</h1>")
+        await enter()
+        await pause(0.5)
+        check("↩ on it loads in the focused pane", !palette.isShown && controller.focusedPane?.displayTitle == "Typed")
+
+        await open()
         await type(">\u{7f}")
         check("deleting '>' goes back to bookmarks", palette.isShown && !palette.debugResults.contains("Zen Mode"))
         post("\u{1b}", keyCode: 53, modifiers: [], window: window)
@@ -771,12 +782,17 @@ enum SelfTest {
         check("page fills the window", fillsWindow())
         snapshot(controller, to: outputDir.appendingPathComponent("zen-single.png"))
 
+        let field = root.header.addressField
+        func zenBarShown() -> Bool { !root.header.isHidden && !field.isHiddenOrHasHiddenAncestor }
         await key("d", 2, [.command])
-        check("⌘D leaves zen to type the address", !controller.isZenMode && controller.focusedPane?.addressField.currentEditor() != nil)
-        controller.focusedPane?.load("data:text/html,<title>Two</title><body style='background:%23def'><h1>Two</h1>")
-        await pause(0.8)
-        controller.focusedPane?.focusWebView()
-        await toggle()
+        check("⌘D in zen: shared bar to type the address", controller.isZenMode && zenBarShown()
+              && field.currentEditor() != nil && controller.debugPanes.count == 2)
+        snapshot(controller, to: outputDir.appendingPathComponent("zen-address.png"))
+        field.currentEditor()?.string = "data:text/html,<title>Two</title><h1>Two</h1>"
+        await key("\r", 36, [])
+        await pause(0.5)
+        check("↩ loads it, bar gone, still zen", controller.isZenMode && !zenBarShown()
+              && controller.focusedPane?.displayTitle == "Two" && window?.firstResponder === controller.focusedPane?.webView)
         check("split in zen: no pane chrome", controller.isZenMode && chromeHidden() && controller.debugPanes.count == 2)
         check("split fills the window", fillsWindow())
         check("panes not dimmed", controller.debugPanes.allSatisfy { $0.alphaValue == 1 })
@@ -809,9 +825,18 @@ enum SelfTest {
 
         await toggle()
         await key("l", 37, [.command])
-        let editing = controller.focusedPane?.addressField.currentEditor() != nil
-        check("⌘L leaves zen and edits the address", !controller.isZenMode && editing)
+        check("⌘L in zen: shared bar, editing", controller.isZenMode && zenBarShown() && field.currentEditor() != nil
+              && controller.debugPanes.allSatisfy { $0.addressBarView.isHiddenOrHasHiddenAncestor })
+        check("panes move down under the bar", (root.tabContent?.frame.minY ?? 0) > 0)
+        await key("\u{1b}", 53, [])
+        check("Esc hides it, still zen", controller.isZenMode && !zenBarShown() && fillsWindow()
+              && window?.firstResponder === controller.focusedPane?.webView)
+        await key("l", 37, [.command])
+        await toggle()
+        check("⌃⌘Z while typing: zen off, per-pane bars", !controller.isZenMode && !root.tabStrip.isHidden
+              && controller.debugPanes.allSatisfy { !$0.addressBarView.isHidden })
 
+        controller.focusedPane?.focusAddressField()
         await toggle()
         check("entering zen leaves the address field", controller.isZenMode && controller.focusedPane?.addressField.currentEditor() == nil)
         await toggle()

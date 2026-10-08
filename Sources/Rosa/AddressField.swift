@@ -8,6 +8,8 @@ final class AddressField: NSTextField, NSTextFieldDelegate {
     var onSubmit: ((String) -> Void)?
     /// Called on Escape when no suggestions are open.
     var onCancel: (() -> Void)?
+    /// Called when the field stops being edited (after submit or cancel, or a click elsewhere).
+    var onEndEditing: (() -> Void)?
 
     private let suggestions = SuggestionsWindow()
     private var entries: [HistoryEntry] = []
@@ -54,6 +56,7 @@ final class AddressField: NSTextField, NSTextFieldDelegate {
 
     func controlTextDidEndEditing(_ notification: Notification) {
         hideSuggestions()
+        onEndEditing?()
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {

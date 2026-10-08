@@ -276,6 +276,17 @@ enum Settings {
     /// Turns address bar input into a URL: full URLs pass through, things that look
     /// like hosts get a scheme, and everything else becomes a search.
     static func url(fromUserInput input: String) -> URL? {
+        if let url = addressURL(fromUserInput: input) { return url }
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        var components = URLComponents(string: searchEngine.searchURL)
+        components?.queryItems = [URLQueryItem(name: "q", value: text)]
+        return components?.url
+    }
+
+    /// The address that input names (a URL, or something that looks like a host), or nil when
+    /// it would be searched for instead.
+    static func addressURL(fromUserInput input: String) -> URL? {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
 
@@ -290,9 +301,6 @@ enum Settings {
             if isLocal, let url = URL(string: "http://" + text) { return url }
             if host.contains("."), let url = URL(string: "https://" + text) { return url }
         }
-
-        var components = URLComponents(string: searchEngine.searchURL)
-        components?.queryItems = [URLQueryItem(name: "q", value: text)]
-        return components?.url
+        return nil
     }
 }
