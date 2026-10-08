@@ -151,6 +151,7 @@ enum Settings {
             "checkForUpdatesOnLaunch": checkForUpdatesOnLaunch,
             "updateChannel": updateChannel.rawValue,
             "searchEngine": searchEngine.rawValue,
+            "hiddenToolbarExtensions": hiddenToolbarExtensions,
         ]
     }
 
@@ -294,6 +295,13 @@ enum Settings {
     static var searchEngine: SearchEngine {
         get { value("searchEngine").flatMap(SearchEngine.init) ?? .google }
         set { set(newValue.rawValue, "searchEngine") }
+    }
+
+    /// Installed extensions (by folder name in `extensions/`) without a toolbar button. They still
+    /// run, and open from Rosa → Extensions or their shortcut.
+    static var hiddenToolbarExtensions: [String] {
+        get { value("hiddenToolbarExtensions") ?? [] }
+        set { set(newValue, "hiddenToolbarExtensions") }
     }
 
     private static func notify() {

@@ -7,7 +7,7 @@ release notes (`scripts/release-notes.sh`).
 ## Unreleased
 
 ### 🧩 Extensions
-- **Browser extensions (preview)**: Rosa can run Chrome-style extensions, 1Password included. Rosa → Extensions → Import from Another Browser installs one you already have in Chrome, Edge, Brave, Arc or Vivaldi; Install Extension… takes a folder, .crx or .zip. Extension buttons sit at the end of the address bar, right-click one for its settings or to remove it, and their shortcuts work (⌘⇧X opens 1Password). Extensions sign in on their own; connecting to desktop apps (like 1Password's Touch ID unlock) isn't supported yet.
+- **Browser extensions (preview)**: Rosa can run Chrome-style extensions, 1Password included. Rosa → Extensions → Import from Another Browser installs one you already have in Chrome, Edge, Brave, Arc or Vivaldi; Install Extension… takes a folder, .crx or .zip. Extension buttons sit at the end of the address bar; right-click one for its settings, to hide it from the toolbar or to remove it (Rosa → Extensions → its name → Show in Toolbar brings it back, Open opens it without a button), and their shortcuts work (⌘⇧X opens 1Password). Extensions sign in on their own; connecting to desktop apps (like 1Password's Touch ID unlock) isn't supported yet.
 
 ## v0.9.0
 
