@@ -1,4 +1,5 @@
 import AppKit
+import WebKit
 
 /// Scripted smoke test, enabled with `BROWSER_SELFTEST=<output dir>`. Posts real key events
 /// through the app's event queue (so menu shortcuts and the priority key monitor are exercised),
@@ -853,6 +854,14 @@ enum SelfTest {
     /// Loads the extensions installed beside the settings file, opens a page and each
     /// extension's popup, and reports what they show. `BROWSER_SELFTEST_URL` picks the page.
     private static func runExtensions(_ controller: BrowserWindowController, outputDir: URL) async {
+        // Sign a site out (cookies, storage) before testing an extension's sign-in against it.
+        if let site = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_CLEAR_SITE"] {
+            let store = WKWebsiteDataStore.default()
+            let types = WKWebsiteDataStore.allWebsiteDataTypes()
+            let records = await store.dataRecords(ofTypes: types).filter { $0.displayName == site || $0.displayName.hasSuffix(".\(site)") }
+            await store.removeData(ofTypes: types, for: records)
+            print("cleared website data: \(records.map(\.displayName))")
+        }
         let extensions = Extensions.shared
         for _ in 0..<40 where extensions.contexts.isEmpty { await pause(0.25) }
         print("extensions: \(extensions.contexts.map { Extensions.name(of: $0) })")
@@ -906,6 +915,12 @@ enum SelfTest {
             "[...document.querySelectorAll('*')].map(e => e.tagName).filter(t => t.startsWith('COM-1PASSWORD')).join(',') || 'none'"
         )
         print("1Password elements in page: \(injected ?? "?")")
+        // A script to run in the page after it loads, e.g. to fake an event an extension listens for.
+        if let script = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_PAGE_JS"] {
+            let result = try? await pane.webView.callAsyncJavaScript(script, arguments: [:], in: nil, contentWorld: .page)
+            print("page script: \(result.map { String(describing: $0) } ?? "nil")")
+            await pause(3)
+        }
         snapshot(controller, to: outputDir.appendingPathComponent("ext-1-page.png"))
         for context in extensions.contexts {
             context.performAction(for: pane)
@@ -917,11 +932,12 @@ enum SelfTest {
             if let opened = controller.allPanes.last, opened !== pane {
                 await pause(3)
                 let text = try? await opened.webView.evaluateJavaScript("document.body ? document.body.innerText.slice(0, 600) : '(no body)'")
-                print("opened tab text: \(String(describing: text ?? "?").replacingOccurrences(of: "\n", with: " | "))")
+                print("opened tab text: \((text as? String)?.count ?? -1) characters")
             }
             if let popup {
                 let text = try? await popup.evaluateJavaScript("document.body ? document.body.innerText.slice(0, 600) : '(no body)'")
-                print("popup text: \(String(describing: text ?? "?").replacingOccurrences(of: "\n", with: " | "))")
+                // Only its size: a signed-in password manager's popup lists your items.
+                print("popup text: \((text as? String)?.count ?? -1) characters")
             }
             action?.closePopup()
         }

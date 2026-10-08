@@ -34,6 +34,8 @@ final class Extensions: NSObject, WKWebExtensionControllerDelegate {
         controller = WKWebExtensionController(configuration: configuration)
         super.init()
         controller.delegate = self
+        // Console forwarding is for watching live: a file on stdout would otherwise get it only at exit.
+        if ProcessInfo.processInfo.environment["BROWSER_EXTENSION_CONSOLE"] == "1" { setvbuf(stdout, nil, _IOLBF, 0) }
     }
 
     // MARK: - Loading
@@ -449,10 +451,17 @@ final class Extensions: NSObject, WKWebExtensionControllerDelegate {
 
     // MARK: - Native messaging (not supported)
 
+    /// Where `BROWSER_EXTENSION_CONSOLE=1` forwards extension console output (`ExtensionCompatibility`).
+    static let consoleApplicationID = "rosa.console"
+
     func webExtensionController(
         _ controller: WKWebExtensionController, sendMessage message: Any, toApplicationWithIdentifier applicationIdentifier: String?,
         for extensionContext: WKWebExtensionContext
     ) async throws -> Any? {
+        if applicationIdentifier == Self.consoleApplicationID, let entry = message as? [String: Any] {
+            print("[\(extensionContext.uniqueIdentifier) \(entry["where"] ?? "?")] \(entry["level"] ?? "log"): \(entry["text"] ?? "")")
+            return nil
+        }
         throw InstallError(errorDescription: "Native messaging isn't supported.")
     }
 
