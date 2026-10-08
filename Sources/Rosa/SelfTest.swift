@@ -532,6 +532,20 @@ enum SelfTest {
         await step("⌘W in tab 1", [("w", 13, [.command])])
     }
 
+    /// A real left click (down + up) at `point` in window coordinates, through `NSWindow.sendEvent`.
+    private static func click(at point: NSPoint, in window: NSWindow?) async {
+        guard let window else { return }
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            guard let event = NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                pressure: type == .leftMouseUp ? 0 : 1
+            ) else { continue }
+            window.sendEvent(event)
+            await pause(0.05)
+        }
+    }
+
     /// ⌘-shortcuts only reach the app while it is active; the user may switch apps mid-run.
     private static func ensureActive(_ window: NSWindow?) async {
         guard !NSApp.isActive || NSApp.keyWindow == nil else { return }
@@ -628,9 +642,9 @@ enum SelfTest {
         check("launch pane shows welcome", shown() == "W")
         await requestScreenCapture("welcome-launch", of: controller, in: outputDir)
 
-        panes().first?.welcome?.debugPerform("Split Right")
+        if let point = panes().first?.welcome?.debugTitlePoint("Split Right") { await click(at: point, in: controller.window) }
         await pause(0.5)
-        check("row splits, new pane has none", shown() == "W-")
+        check("clicking a row's title splits", shown() == "W-")
 
         controller.newTab(nil)
         await pause(0.5)

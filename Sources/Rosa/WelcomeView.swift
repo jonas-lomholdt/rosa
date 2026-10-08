@@ -85,8 +85,10 @@ final class WelcomeView: NSView {
 
     /// Only the rows take clicks; elsewhere the click reaches the (blank) web view and focuses the pane.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        let hit = super.hitTest(point)
-        return hit is WelcomeRow ? hit : nil
+        // The row itself, also when the point is on its icon or title.
+        var view = super.hitTest(point)
+        while let current = view, !(current is WelcomeRow) { view = current === self ? nil : current.superview }
+        return view
     }
 
     override func viewWillDraw() {
@@ -124,6 +126,12 @@ final class WelcomeView: NSView {
         }
     }
 
+    /// Self-test: a point (window coordinates) on the title of the row titled `title`.
+    func debugTitlePoint(_ title: String) -> NSPoint? {
+        guard let row = rows.joined().first(where: { $0.accessibilityLabel() == title }) else { return nil }
+        return row.convert(NSPoint(x: 60, y: row.bounds.midY), to: nil)
+    }
+
     /// Self-test: clicks the row titled `title`.
     func debugPerform(_ title: String) {
         guard let command = Self.sections.flatMap(\.commands).first(where: { $0.title == title }) else { return }
@@ -155,9 +163,14 @@ final class WelcomeView: NSView {
 }
 
 /// "GET STARTED ———" small caps title with a hairline running to the right edge.
-private final class WelcomeSectionHeader: NSView {
+final class WelcomeSectionHeader: NSView {
     private let label: NSTextField
     private let line = NSBox()
+
+    var title: String {
+        get { label.stringValue }
+        set { label.stringValue = newValue.uppercased(); needsLayout = true }
+    }
 
     init(title: String) {
         label = NSTextField(labelWithString: title.uppercased())
