@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Installs the latest Rosa release.
+# Installs the latest Rosa release, or with --canary the latest canary build.
 #   curl -fsSL https://raw.githubusercontent.com/jonas-lomholdt/rosa/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/jonas-lomholdt/rosa/main/scripts/install.sh | bash -s -- --canary
 set -euo pipefail
 
 REPO="jonas-lomholdt/rosa"
@@ -13,8 +14,12 @@ fail() { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 MAJOR="$(sw_vers -productVersion | cut -d. -f1)"
 (( MAJOR >= 26 )) || fail "Rosa needs macOS 26 or later (you have $(sw_vers -productVersion))."
 
+# /releases/latest skips prereleases (canaries); /releases lists everything, newest first.
+FEED="releases/latest"
+[[ "${1:-}" == "--canary" ]] && FEED="releases?per_page=1"
+
 say "Finding the latest release…"
-URL="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+URL="$(curl -fsSL "https://api.github.com/repos/$REPO/$FEED" \
     | grep -o '"browser_download_url": *"[^"]*\.zip"' | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')"
 [[ -n "$URL" ]] || fail "No release found at https://github.com/$REPO/releases"
 

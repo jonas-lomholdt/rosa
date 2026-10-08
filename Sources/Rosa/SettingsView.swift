@@ -64,6 +64,13 @@ final class SettingsModel: ObservableObject {
     @Published var checkForUpdatesOnLaunch: Bool {
         didSet { if Settings.checkForUpdatesOnLaunch != checkForUpdatesOnLaunch { Settings.checkForUpdatesOnLaunch = checkForUpdatesOnLaunch } }
     }
+    @Published var updateChannel: UpdateChannel {
+        didSet {
+            guard Settings.updateChannel != updateChannel else { return }
+            Settings.updateChannel = updateChannel
+            Updater.shared.channelDidChange()
+        }
+    }
     @Published private(set) var updateStatus = ""
     @Published private(set) var updaterBusy = false
     @Published private(set) var availableUpdate: Updater.Release?
@@ -95,6 +102,7 @@ final class SettingsModel: ObservableObject {
         enabledFilterLists = Settings.enabledFilterLists
         allowlist = Settings.adBlockAllowlist
         checkForUpdatesOnLaunch = Settings.checkForUpdatesOnLaunch
+        updateChannel = Settings.updateChannel
         refreshBlockerStatus()
         refreshUpdateStatus()
         updaterObserver = NotificationCenter.default.addObserver(
@@ -140,6 +148,7 @@ final class SettingsModel: ObservableObject {
         enabledFilterLists = Settings.enabledFilterLists
         allowlist = Settings.adBlockAllowlist
         checkForUpdatesOnLaunch = Settings.checkForUpdatesOnLaunch
+        updateChannel = Settings.updateChannel
     }
 
     private func refreshUpdateStatus() {
@@ -353,6 +362,11 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Check for updates on launch", isOn: $model.checkForUpdatesOnLaunch)
+                Picker("Channel", selection: $model.updateChannel) {
+                    ForEach(UpdateChannel.allCases, id: \.self) { channel in
+                        Text(channel.name).tag(channel)
+                    }
+                }
                 LabeledContent(model.updateStatus) {
                     if let release = model.availableUpdate {
                         Button("Install \(release.version)") { model.installUpdate() }
@@ -364,7 +378,7 @@ struct SettingsView: View {
             } header: {
                 Text("Updates")
             } footer: {
-                Text("Updates come from GitHub releases. Installing quits Rosa, replaces it and reopens it.")
+                Text("Updates come from GitHub releases. Canary gets a build of every change as soon as it lands, before it's in a stable release. Installing quits Rosa, replaces it and reopens it.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

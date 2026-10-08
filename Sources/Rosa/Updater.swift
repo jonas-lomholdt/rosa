@@ -2,7 +2,8 @@ import AppKit
 
 /// Checks GitHub Releases for a newer Rosa and installs it in place: the release zip is
 /// downloaded and unpacked next to the running app, then a small helper script swaps the
-/// bundles once Rosa has quit and relaunches it.
+/// bundles once Rosa has quit and relaunches it. The Canary channel (`Settings.updateChannel`)
+/// also considers the prereleases canary.yml publishes for every push to main.
 @MainActor
 final class Updater {
     static let shared = Updater()
@@ -12,6 +13,8 @@ final class Updater {
         let version: String
         let downloadURL: URL
         let notesURL: URL?
+
+        var isCanary: Bool { version.contains("-canary") }
     }
 
     enum Status {
@@ -34,10 +37,16 @@ final class Updater {
         }
     }
 
-    /// `BROWSER_UPDATE_URL` points the check at another releases feed (for testing).
+    /// `BROWSER_UPDATE_URL` points the check at another releases feed (for testing): a single
+    /// release object, or a list of them like GitHub's /releases.
     private let feedOverride = ProcessInfo.processInfo.environment["BROWSER_UPDATE_URL"].flatMap(URL.init(string:))
     private var feedURL: URL {
-        feedOverride ?? URL(string: "https://api.github.com/repos/jonas-lomholdt/rosa/releases/latest")!
+        if let feedOverride { return feedOverride }
+        // /releases/latest skips prereleases; /releases lists everything, newest first.
+        return switch Settings.updateChannel {
+        case .stable: URL(string: "https://api.github.com/repos/jonas-lomholdt/rosa/releases/latest")!
+        case .canary: URL(string: "https://api.github.com/repos/jonas-lomholdt/rosa/releases?per_page=20")!
+        }
     }
     private let session = URLSession(configuration: .ephemeral)
 
@@ -70,6 +79,13 @@ final class Updater {
     /// From the menu or Settings: always reports the outcome.
     func checkNow() {
         Task { await check(interactive: true) }
+    }
+
+    /// After switching channels: forget an update offered by the other channel and look again.
+    func channelDidChange() {
+        guard !isBusy else { return }
+        status = .idle
+        Task { await check(interactive: false) }
     }
 
     private func check(interactive: Bool) async {
@@ -110,17 +126,31 @@ final class Updater {
             }
             let tag_name: String
             let html_url: URL?
+            let draft: Bool?
             let assets: [Asset]
+
+            var release: Release? {
+                guard draft != true, let zip = assets.first(where: { $0.name.hasSuffix(".zip") }) else { return nil }
+                let version = tag_name.hasPrefix("v") ? String(tag_name.dropFirst()) : tag_name
+                return Release(version: version, downloadURL: zip.browser_download_url, notesURL: html_url)
+            }
         }
-        let payload = try JSONDecoder().decode(Payload.self, from: data)
-        guard let zip = payload.assets.first(where: { $0.name.hasSuffix(".zip") }) else {
-            throw UpdateError("The latest release has no download.")
+        let decoder = JSONDecoder()
+        let releases = if let list = try? decoder.decode([Payload].self, from: data) {
+            list.compactMap(\.release)
+        } else {
+            [try decoder.decode(Payload.self, from: data)].compactMap(\.release)
         }
-        let version = payload.tag_name.hasPrefix("v") ? String(payload.tag_name.dropFirst()) : payload.tag_name
-        return Release(version: version, downloadURL: zip.browser_download_url, notesURL: payload.html_url)
+        guard var newest = releases.first else { throw UpdateError("The latest release has no download.") }
+        for release in releases.dropFirst() where Self.isVersion(release.version, newerThan: newest.version) {
+            newest = release
+        }
+        return newest
     }
 
     /// Compares dotted numeric versions ("0.10.0" > "0.9.2"); missing parts count as 0.
+    /// Canaries compare as a fourth part: "0.8.1-canary.3" is 0.8.1.3, after 0.8.1 and
+    /// before 0.8.2.
     static func isVersion(_ candidate: String, newerThan current: String) -> Bool {
         func parts(_ version: String) -> [Int] {
             version.split(separator: ".").map { Int($0.prefix { $0.isNumber }) ?? 0 }
@@ -237,6 +267,7 @@ final class Updater {
         let alert = NSAlert()
         alert.messageText = "Rosa \(release.version) is available"
         alert.informativeText = "You have \(currentVersion). Rosa will quit, update and reopen."
+            + (release.isCanary ? "\n\nCanary builds have the newest features before they're released, and may have rough edges." : "")
         alert.addButton(withTitle: "Install and Relaunch")
         alert.addButton(withTitle: "Later")
         if release.notesURL != nil { alert.addButton(withTitle: "Release Notes") }

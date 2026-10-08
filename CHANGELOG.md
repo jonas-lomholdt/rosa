@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🔄 Updates
+- **Canary builds**: pick Settings → Updates → Channel → Canary to get every new feature as soon as it lands, before it's in a stable release. Switch back to Stable any time; you'll move over with the next stable release.
+
 ## v0.8.1
 
 🩹 Zen mode is on the welcome page.

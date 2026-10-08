@@ -1,9 +1,10 @@
 name: Release
 
 # Push a tag like v0.2.0 to build Rosa.app and attach it to a GitHub release.
+# Canary tags (v0.2.0-canary.3) are published by canary.yml.
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*", "!v*-*"]
 
 permissions:
   contents: write
@@ -34,5 +35,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           scripts/release-notes.sh "$GITHUB_REF_NAME" > build/notes.md
+          # "Full Changelog" from the previous stable release, not the last canary.
+          PREVIOUS=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
           gh release create "$GITHUB_REF_NAME" "build/Rosa-${GITHUB_REF_NAME}.zip" \
-            --notes-file build/notes.md --generate-notes --title "Rosa $GITHUB_REF_NAME"
+            --notes-file build/notes.md --generate-notes ${PREVIOUS:+--notes-start-tag "$PREVIOUS"} \
+            --title "Rosa $GITHUB_REF_NAME"

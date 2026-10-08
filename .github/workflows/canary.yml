@@ -1,0 +1,72 @@
+name: Canary
+
+# Every push to main publishes a prerelease vX.Y.Z-canary.N (N commits after the last stable
+# tag) for the Canary update channel. Stable releases stay on tags (release.yml).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One at a time, so versions are published in order; a newer push replaces a queued one.
+concurrency:
+  group: canary
+  cancel-in-progress: false
+
+env:
+  KEEP: 10  # canary releases to keep; older ones and their tags are deleted
+
+jobs:
+  canary:
+    name: Build and publish
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # tags, to count commits since the last stable release
+
+      - name: Version
+        id: version
+        run: |
+          BASE=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')
+          COMMITS=$(git rev-list --count "$BASE..HEAD")
+          # A push that is itself a stable release is published by release.yml.
+          if [ "$COMMITS" = 0 ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          TAG="$BASE-canary.$COMMITS"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${TAG#v}" Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GITHUB_RUN_NUMBER" Resources/Info.plist
+
+      - name: Build
+        if: steps.version.outputs.skip != 'true'
+        run: scripts/build.sh release
+
+      - name: Package
+        if: steps.version.outputs.skip != 'true'
+        run: ditto -c -k --keepParent build/Rosa.app "build/Rosa-${{ steps.version.outputs.tag }}.zip"
+
+      - name: Publish prerelease
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git tag "$TAG"  # local only, so release-notes.sh can resolve it
+          {
+            echo "Canary build of $(git rev-parse --short HEAD), not yet in a stable release. Turn on Settings → Updates → Channel → Canary to get these automatically."
+            echo
+            scripts/release-notes.sh "$TAG"
+          } > build/notes.md
+          gh release create "$TAG" "build/Rosa-$TAG.zip" --prerelease --target "$GITHUB_SHA" \
+            --notes-file build/notes.md --title "Rosa $TAG"
+
+      - name: Prune old canaries
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --limit 200 --json tagName,isPrerelease,createdAt \
+            --jq "[.[] | select(.isPrerelease and (.tagName | contains(\"-canary.\")))] | sort_by(.createdAt) | reverse | .[$KEEP:] | .[].tagName" \
+            | while read -r tag; do gh release delete "$tag" --yes --cleanup-tag; done

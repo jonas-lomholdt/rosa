@@ -1,8 +1,7 @@
 name: CI
 
+# Pushes to main are built (and published) by canary.yml.
 on:
-  push:
-    branches: [main]
   pull_request:
 
 jobs:

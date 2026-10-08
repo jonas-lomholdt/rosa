@@ -78,6 +78,7 @@ On by default (Settings → Content Blocking). EasyList + EasyPrivacy (and optio
 
 - `.github/workflows/ci.yml` builds `Rosa.app` on every push/PR (macOS 26 runner) and uploads it as an artifact.
 - `.github/workflows/release.yml`: push a tag `vX.Y.Z` to build, stamp the version into `Info.plist`, and publish a GitHub release with `Rosa-vX.Y.Z.zip`.
+- `.github/workflows/canary.yml`: every push to `main` builds and publishes a prerelease `vX.Y.Z-canary.N`, N being the commits since the last stable tag `vX.Y.Z` (skipped when it is 0: the push is a release). Its notes are the Unreleased section (else the commits since that tag). Only the newest 10 canaries are kept; older releases and tags are deleted. `ci.yml` only builds pull requests.
 
 Release notes come from `CHANGELOG.md`: add user-facing changes under **Unreleased** as they land, then rename that heading to the version and commit before tagging. `scripts/release-notes.sh vX.Y.Z` prints what will be published (its section, else Unreleased, else commit subjects since the previous tag); GitHub's generated "Full Changelog" link is appended.
 
@@ -87,10 +88,11 @@ git tag v0.1.0 && git push origin v0.1.0
 
 ## Updates
 
-`Updater.swift` checks `api.github.com/repos/jonas-lomholdt/rosa/releases/latest` a few seconds after launch (Settings → Updates, or Rosa → Check for Updates…). Installing downloads the release zip into a staging folder on the app's volume, verifies the bundle id and signature, then a helper script waits for Rosa to quit, swaps the bundles and relaunches.
+`Updater.swift` checks `api.github.com/repos/jonas-lomholdt/rosa/releases/latest` (Stable channel) or `/releases` (Canary: the newest of all releases, prereleases included) a few seconds after launch (Settings → Updates, or Rosa → Check for Updates…). Installing downloads the release zip into a staging folder on the app's volume, verifies the bundle id and signature, then a helper script waits for Rosa to quit, swaps the bundles and relaunches.
 
 - Local builds keep `CFBundleVersion` 0 from `Resources/Info.plist` ("dev" in About) and skip the launch check; release builds get the run number.
-- Test against a local feed: `BROWSER_UPDATE_URL=http://127.0.0.1:8765/latest.json` (a GitHub release JSON with `tag_name` and a `.zip` asset), plus `BROWSER_UPDATE_AUTOINSTALL=1` to install without the prompt.
+- `Settings.updateChannel` (`stable` / `canary`) defaults to the channel the running build came from. `Updater.isVersion` orders `0.8.1-canary.3` as 0.8.1.3: after 0.8.1, before 0.8.2, so switching back to Stable waits for the next stable release rather than downgrading.
+- Test against a local feed: `BROWSER_UPDATE_URL=http://127.0.0.1:8765/latest.json` (a GitHub release JSON with `tag_name` and a `.zip` asset, or a list of them), plus `BROWSER_UPDATE_AUTOINSTALL=1` to install without the prompt.
 
 ## App icon
 

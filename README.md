@@ -27,7 +27,7 @@
 - ⬇️ **Downloads** — progress, cancel, show in Finder, right from the tab bar
 - 🎨 **Liquid Glass** look, light / dark / system theme
 - 🐞 **Web Inspector** — the same dev tools as Safari
-- 🔄 **Auto-updates** — checks GitHub on launch, installs and relaunches in one click
+- 🔄 **Auto-updates** — checks GitHub on launch, installs and relaunches in one click; opt into canary builds for the newest features
 
 ## ⌨️ Shortcuts
 
@@ -64,6 +64,8 @@ curl -fsSL https://raw.githubusercontent.com/jonas-lomholdt/rosa/main/scripts/in
 ```
 
 Downloads the latest release into `/Applications` and opens it. Needs **macOS 26**.
+
+Want every change as soon as it lands on `main`? Pick **Settings → Updates → Channel → Canary**, or install a canary build straight away with `… | bash -s -- --canary`.
 
 ## 🚀 Build it yourself
 

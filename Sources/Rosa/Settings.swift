@@ -56,6 +56,21 @@ enum SearchEngine: String, CaseIterable {
     }
 }
 
+/// Which releases the updater follows.
+enum UpdateChannel: String, CaseIterable {
+    /// Tagged releases (`vX.Y.Z`).
+    case stable
+    /// A build of every push to main (`vX.Y.Z-canary.N`), newest stable release included.
+    case canary
+
+    var name: String {
+        switch self {
+        case .stable: "Stable"
+        case .canary: "Canary"
+        }
+    }
+}
+
 enum AppInfo {
     static let repositoryURL = URL(string: "https://github.com/jonas-lomholdt/rosa")!
 
@@ -67,9 +82,14 @@ enum AppInfo {
         return "\(short) (\(isDevelopmentBuild ? "dev" : build))"
     }
 
-    /// Local builds keep build number 0 from Resources/Info.plist; release.yml stamps the run number.
+    /// Local builds keep build number 0 from Resources/Info.plist; release.yml and canary.yml stamp the run number.
     static var isDevelopmentBuild: Bool {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String == "0"
+    }
+
+    /// Built by canary.yml: "0.8.1-canary.3" is the third commit after v0.8.1.
+    static var isCanaryBuild: Bool {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)?.contains("-canary") == true
     }
 }
 
@@ -129,6 +149,7 @@ enum Settings {
             "showQuickLinks": showQuickLinks,
             "askWhereToSaveDownloads": askWhereToSaveDownloads,
             "checkForUpdatesOnLaunch": checkForUpdatesOnLaunch,
+            "updateChannel": updateChannel.rawValue,
             "searchEngine": searchEngine.rawValue,
         ]
     }
@@ -262,6 +283,12 @@ enum Settings {
     static var checkForUpdatesOnLaunch: Bool {
         get { value("checkForUpdatesOnLaunch") ?? true }
         set { set(newValue, "checkForUpdatesOnLaunch") }
+    }
+
+    /// Defaults to the channel the running build came from.
+    static var updateChannel: UpdateChannel {
+        get { value("updateChannel").flatMap(UpdateChannel.init) ?? (AppInfo.isCanaryBuild ? .canary : .stable) }
+        set { set(newValue.rawValue, "updateChannel") }
     }
 
     static var searchEngine: SearchEngine {
