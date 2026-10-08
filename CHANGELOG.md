@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.10.1
+
+✨ Press ↩ and the address bar opens the page you meant, and the auto-hiding sidebar resizes again.
+
 ### 🧠 Address bar
 - **↩ opens the page you mean**: the top suggestion is selected as you type when it's a page you opened for that input before, or when what you typed starts its address or title (`gma` → Gmail). Press ↑ to search for what you typed instead.
 - **Completes addresses that redirect**: type `gmail.com` once and next time `gm` fills in the rest, even though Gmail lives at mail.google.com.
