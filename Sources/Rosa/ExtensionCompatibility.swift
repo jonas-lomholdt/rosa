@@ -92,9 +92,26 @@ enum ExtensionCompatibility {
       const send = (level, values) => {
         try { api.runtime.sendNativeMessage("rosa.console", { level, where, text: values.map(text).join(" ") }).catch(() => {}); } catch {}
       };
-      for (const level of ["error", "warn"]) {
+      for (const level of ["error", "warn", "info", "log"]) {
         const original = console[level];
         console[level] = (...values) => { send(level, values); original.apply(console, values); };
+      }
+      // Requests by method, host and path (no query, headers or bodies), with status or failure.
+      const originalFetch = globalThis.fetch;
+      if (originalFetch) {
+        globalThis.fetch = async (input, init) => {
+          const url = new URL(typeof input === "string" ? input : input.url ?? String(input), globalThis.location?.href);
+          const label = `fetch ${(init && init.method) || (input && input.method) || "GET"} ${url.host}${url.pathname}`;
+          const started = Date.now();
+          try {
+            const response = await originalFetch(input, init);
+            if (url.protocol.startsWith("http")) send("net", [`${label} -> ${response.status} (${Date.now() - started}ms)`]);
+            return response;
+          } catch (error) {
+            send("net", [`${label} failed after ${Date.now() - started}ms: ${error}`]);
+            throw error;
+          }
+        };
       }
       globalThis.addEventListener?.("error", (event) => send("uncaught", [event.message, `${event.filename}:${event.lineno}`, event.error]));
       globalThis.addEventListener?.("unhandledrejection", (event) => send("rejection", [event.reason]));
