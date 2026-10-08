@@ -14,7 +14,7 @@ import Foundation
 enum ExtensionCompatibility {
     static let folder = "rosa-compat"
     private static let shimsFile: String = {
-        let hash = SHA256.hash(data: Data(shims.utf8)).prefix(6).map { String(format: "%02x", $0) }.joined()
+        let hash = SHA256.hash(data: Data(script.utf8)).prefix(6).map { String(format: "%02x", $0) }.joined()
         return "shims-\(hash).js"
     }()
     private static let scriptTag = "<script src=\"/\(folder)/\(shimsFile)\"></script>"
@@ -27,7 +27,7 @@ enum ExtensionCompatibility {
         for old in try fileManager.contentsOfDirectory(atPath: compat.path) where old.hasPrefix("shims") && old != shimsFile {
             try? fileManager.removeItem(at: compat.appendingPathComponent(old))
         }
-        try shims.write(to: compat.appendingPathComponent(shimsFile), atomically: true, encoding: .utf8)
+        try script.write(to: compat.appendingPathComponent(shimsFile), atomically: true, encoding: .utf8)
 
         let manifestURL = root.appendingPathComponent("manifest.json")
         let originalURL = compat.appendingPathComponent("manifest.original.json")
@@ -72,6 +72,35 @@ enum ExtensionCompatibility {
 
     /// Stand-ins for missing namespaces. Methods take a callback or return a promise, like
     /// Chrome's; events accept listeners and never fire.
+    /// The shims, plus console forwarding with `BROWSER_EXTENSION_CONSOLE=1`.
+    private static let script = ProcessInfo.processInfo.environment["BROWSER_EXTENSION_CONSOLE"] == "1"
+        ? shims + consoleForwarding : shims
+
+    /// Debugging: errors and warnings from the extension's worker and pages reach Rosa's stdout
+    /// through native messaging (`Extensions.consoleApplicationID`). Needs `nativeMessaging`.
+    private static let consoleForwarding = #"""
+    (() => {
+      const api = globalThis.chrome || globalThis.browser;
+      if (!api || !api.runtime || !api.runtime.sendNativeMessage) return;
+      const where = globalThis.location ? location.pathname : "?";
+      const text = (value) => {
+        if (value instanceof Error && !value.stack) return `${value.name}: ${value.message}`;
+        if (value && value.stack) return `${value}\n${value.stack.split("\n").slice(0, 4).join("\n")}`;
+        if (typeof value === "object") { try { return JSON.stringify(value).slice(0, 300); } catch { return String(value); } }
+        return String(value);
+      };
+      const send = (level, values) => {
+        try { api.runtime.sendNativeMessage("rosa.console", { level, where, text: values.map(text).join(" ") }).catch(() => {}); } catch {}
+      };
+      for (const level of ["error", "warn"]) {
+        const original = console[level];
+        console[level] = (...values) => { send(level, values); original.apply(console, values); };
+      }
+      globalThis.addEventListener?.("error", (event) => send("uncaught", [event.message, `${event.filename}:${event.lineno}`, event.error]));
+      globalThis.addEventListener?.("unhandledrejection", (event) => send("rejection", [event.reason]));
+    })();
+    """#
+
     static let shims = #"""
     // Added by Rosa: Chrome extension APIs WebKit doesn't provide.
     (() => {
