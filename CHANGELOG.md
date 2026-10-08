@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🐛 Fixes
+- **Back, forward and reload now react to the mouse**: a rounded highlight on hover, a stronger one while pressed, so they no longer look dead.
+
 ## v0.7.0
 
 ✨ A friendly start: a welcome page on launch, and your pinned or recent sites on every blank pane.

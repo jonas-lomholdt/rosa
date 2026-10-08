@@ -367,6 +367,59 @@ private final class HoverZoneView: NSView {
     override func mouseExited(with event: NSEvent) { onExit?() }
 }
 
+/// Borderless toolbar button with feedback: the icon brightens and a rounded background appears on
+/// hover, darker while pressed. (`showsBorderOnlyWhileMouseInside` does nothing without a border.)
+final class NavigationButton: NSButton {
+    private var isHovered = false { didSet { if isHovered != oldValue { updateAppearance() } } }
+
+    var debugHovered: Bool {
+        get { isHovered }
+        set { isHovered = newValue }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        isBordered = false
+        imagePosition = .imageOnly
+        updateAppearance()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override var isEnabled: Bool { didSet { updateAppearance() } }
+    override var isHighlighted: Bool { didSet { needsDisplay = true } }
+
+    private func updateAppearance() {
+        contentTintColor = !isEnabled ? .tertiaryLabelColor : (isHovered ? .labelColor : .secondaryLabelColor)
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if isEnabled, isHovered || isHighlighted {
+            NSColor.labelColor.withAlphaComponent(isHighlighted ? 0.16 : 0.08).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
+        }
+        super.draw(dirtyRect)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+        // Buttons shift when forward appears or hides, so entered/exited can be missed.
+        if let window {
+            isHovered = !isHidden && bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil))
+        }
+    }
+
+    override func mouseEntered(with event: NSEvent) { isHovered = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false }
+    override func viewDidHide() {
+        super.viewDidHide()
+        isHovered = false
+    }
+}
+
 /// Back, forward (only when there's somewhere to go) and reload/stop, beside the traffic lights.
 final class NavigationButtonsView: NSView {
     var onBack: (() -> Void)?
@@ -425,14 +478,16 @@ final class NavigationButtonsView: NSView {
     @objc private func forwardClicked() { onForward?() }
     @objc private func reloadClicked() { isLoading ? onStop?() : onReload?() }
 
-    private static func button(_ symbol: String, _ tip: String) -> NSButton {
-        let button = NSButton(image: Self.symbol(symbol), target: nil, action: nil)
-        button.isBordered = false
-        button.bezelStyle = .accessoryBarAction
-        button.showsBorderOnlyWhileMouseInside = true
-        button.contentTintColor = .secondaryLabelColor
+    private static func button(_ symbol: String, _ tip: String) -> NavigationButton {
+        let button = NavigationButton(image: Self.symbol(symbol), target: nil, action: nil)
         button.toolTip = tip
         return button
+    }
+
+    /// Self-test: hover / press states for a snapshot.
+    func debugSetStates(hoverBack: Bool, pressReload: Bool) {
+        back.debugHovered = hoverBack
+        reload.isHighlighted = pressReload
     }
 
     private static func symbol(_ name: String) -> NSImage {
