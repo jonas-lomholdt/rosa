@@ -588,6 +588,14 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
             NSWorkspace.shared.open(url)
             return .cancel
         }
+        // An extension's own page (its setup, settings) runs in the extension's web view
+        // configuration, which can't load websites: WebKit drops the navigation. Open it in a tab.
+        if navigationAction.targetFrame?.isMainFrame == true,
+           webView.url?.scheme == "webkit-extension",
+           let scheme = navigationAction.request.url?.scheme?.lowercased(), ["http", "https"].contains(scheme) {
+            browserWindow?.addTab(request: navigationAction.request, nextToCurrent: true)
+            return .cancel
+        }
         if navigationAction.shouldPerformDownload {
             return .download
         }

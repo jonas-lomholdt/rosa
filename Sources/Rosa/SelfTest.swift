@@ -858,13 +858,42 @@ enum SelfTest {
         print("extensions: \(extensions.contexts.map { Extensions.name(of: $0) })")
         for context in extensions.contexts {
             print("  \(Extensions.name(of: context)) loaded=\(context.isLoaded) base=\(context.baseURL)")
+            for site in ["https://github.com/login", "https://my.1password.com/signin"] {
+                let url = URL(string: site)!
+                print("  \(site): access=\(context.hasAccess(to: url)) injects=\(context.hasInjectedContent(for: url))")
+            }
             for error in context.webExtension.errors + context.errors { print("  error: \(error as NSError) \((error as NSError).userInfo)") }
         }
         if let page = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_EXT_PAGE"], let context = extensions.contexts.first {
-            let debugPane = controller.addTab(for: context.baseURL.appendingPathComponent(page), extensionContext: context, select: true)
+            let url = URL(string: page, relativeTo: context.baseURL)!.absoluteURL
+            let debugPane = controller.addTab(for: url, extensionContext: context, select: true)
             await pause(6)
-            let text = try? await debugPane.webView.evaluateJavaScript("(window.__log || []).join('\\n') + '\\n---\\n' + document.documentElement.innerText.slice(0, 1500)")
+            let dump = "(window.__log || []).splice(0).join('\\n') + '\\n---\\n' + document.documentElement.innerText.slice(0, 1500)"
+            let text = try? await debugPane.webView.evaluateJavaScript(dump)
             print("extension page \(debugPane.webView.url?.absoluteString ?? "-"):\n\(text ?? "?")")
+            // Clicks buttons or links by their text, in order (`Continue|Sign in`), reporting after each.
+            let clicks = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_EXT_CLICKS"]?.split(separator: "|").map(String.init) ?? []
+            for label in clicks {
+                let clicked = try? await debugPane.webView.callAsyncJavaScript(
+                    """
+                    const want = label.toLowerCase();
+                    const all = [...document.querySelectorAll('button, a, [role=button], input[type=submit]')];
+                    const target = all.find(e => (e.innerText || e.value || '').trim().toLowerCase() === want)
+                        || all.find(e => (e.innerText || e.value || '').trim().toLowerCase().includes(want));
+                    if (!target) return 'not found among: ' + all.map(e => (e.innerText || e.value || '').trim()).filter(Boolean).join(' / ');
+                    target.click();
+                    return 'clicked <' + target.tagName + '> ' + (target.href || '');
+                    """, arguments: ["label": label], in: nil, contentWorld: .page)
+                print("click \"\(label)\": \(clicked.map { String(describing: $0) } ?? "?")")
+                await pause(5)
+                let after = try? await debugPane.webView.evaluateJavaScript(dump)
+                print("after: \(debugPane.webView.url?.absoluteString ?? "-") panes=\(controller.allPanes.map { $0.webView.url?.absoluteString ?? "-" })\n\(after ?? "?")")
+                // The worker's console, when the extension under test records it (debugging builds of it).
+                let workerLog = try? await debugPane.webView.callAsyncJavaScript(
+                    "const r = await chrome.storage.local.get('__rosaLog'); return (r.__rosaLog || []).slice(-25).join('\\n')",
+                    arguments: [:], in: nil, contentWorld: .page)
+                if let workerLog = workerLog as? String, !workerLog.isEmpty { print("worker log:\n\(workerLog)") }
+            }
             return
         }
         guard let pane = controller.focusedPane else { return print("FAIL: no pane") }
