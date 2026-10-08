@@ -643,8 +643,9 @@ final class ExtensionsMenuDelegate: NSObject, NSMenuDelegate {
     }
 
     @objc private func revealFolder(_ sender: Any?) {
-        try? FileManager.default.createDirectory(at: Extensions.directory, withIntermediateDirectories: true)
-        NSWorkspace.shared.open(Extensions.directory)
+        let directory = MainActor.assumeIsolated { Extensions.directory }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(directory)
     }
 
     @objc private func openOptions(_ sender: NSMenuItem) {
