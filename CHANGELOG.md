@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.9.0
+
+✨ Canary builds: opt in to get every new feature as soon as it lands.
+
 ### 🔄 Updates
 - **Canary builds**: pick Settings → Updates → Channel → Canary to get every new feature as soon as it lands, before it's in a stable release. Switch back to Stable any time; you'll move over with the next stable release.
 
