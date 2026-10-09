@@ -6,6 +6,11 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+✨ ⌘P searches bookmarks and ⌘⇧P opens straight into commands, like VS Code.
+
+### ✨ Features
+- ⌘P opens the palette on your bookmarks (or an address or search); ⌘⇧P opens it on menu commands, with the `>` already typed. Each shortcut closes the palette again, or switches it over when the other half is showing.
+
 ## v0.10.4
 
 ✨ Zen mode shows which pane is focused again.

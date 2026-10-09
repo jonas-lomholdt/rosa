@@ -618,8 +618,8 @@ enum SelfTest {
         print(failures == 0 ? "layout: all ok" : "layout: \(failures) FAILED")
     }
 
-    /// ⌘⇧P then `>`: menu commands with shortcuts and checkmarks, run on the focused pane;
-    /// deleting the `>` goes back to bookmarks.
+    /// ⌘⇧P: menu commands with shortcuts and checkmarks, run on the focused pane; ⌘P and
+    /// deleting the `>` go back to bookmarks.
     private static func runPaletteCommands(_ controller: BrowserWindowController, outputDir: URL) async {
         let palette = controller.debugCommandPalette
         let window = controller.window
@@ -644,6 +644,11 @@ enum SelfTest {
             post("P", keyCode: 35, modifiers: [.command, .shift], window: window)
             await pause(0.5)
         }
+        func openBookmarks() async {
+            await ensureActive(window)
+            post("p", keyCode: 35, modifiers: [.command], window: window)
+            await pause(0.5)
+        }
         func enter() async {
             post("\r", keyCode: 36, modifiers: [], window: window)
             await pause(0.6)
@@ -652,13 +657,19 @@ enum SelfTest {
         controller.focusedPane?.load("data:text/html,<title>One</title><h1>One</h1>")
         await pause(1)
         controller.focusedPane?.focusWebView()
+        await openBookmarks()
+        check("⌘P: bookmarks mode", palette.isShown && !palette.debugResults.contains("Zen Mode"))
         await open()
-        check("⌘⇧P: bookmarks mode", palette.isShown && !palette.debugResults.contains("Zen Mode"))
-        await type(">")
+        check("⌘⇧P switches to commands", palette.isShown && palette.debugQuery == ">")
+        await openBookmarks()
+        check("⌘P switches back", palette.isShown && palette.debugQuery.isEmpty && !palette.debugResults.contains("Zen Mode"))
+        await openBookmarks()
+        check("⌘P again closes", !palette.isShown)
+        await open()
         let all = palette.debugResults
         print("commands: \(zip(all, palette.debugShortcuts).map { $0.1.isEmpty ? $0.0 : "\($0.0) \($0.1)" })")
         check("'>' lists menu commands", all.contains("Zen Mode") && all.contains("Split Right") && all.contains("Find…"))
-        check("no text editing or palette itself", !all.contains { ["Copy", "Paste", "Undo", "Select All", "Command Palette…"].contains($0) })
+        check("no text editing or palette itself", !all.contains { ["Copy", "Paste", "Undo", "Select All", "Command Palette…", "Search Bookmarks…"].contains($0) })
         check("app menu last", all.last == "Quit Rosa")
         let zenShortcut = zip(all, palette.debugShortcuts).first { $0.0 == "Zen Mode" }?.1
         let leftShortcut = zip(all, palette.debugShortcuts).first { $0.0 == "Focus Pane Left" }?.1
@@ -672,12 +683,12 @@ enum SelfTest {
         check("↩ runs it, focus back on the page", !palette.isShown && controller.isZenMode
               && window?.firstResponder === controller.focusedPane?.webView)
         await open()
-        await type("> zen")
+        await type(" zen")
         await enter()
         check("'> zen' (space) runs it again", !controller.isZenMode)
 
         await open()
-        await type(">split r")
+        await type("split r")
         check("'>split r' finds Split Right", palette.debugSelectedTitle == "Split Right")
         await enter()
         check("Split Right splits", controller.debugPanes.count == 2 && controller.debugDescriptionOfState.contains("H0.50"))
@@ -690,12 +701,12 @@ enum SelfTest {
         await pause(0.8)
         controller.focusedPane?.focusWebView()
         await open()
-        await type(">tab")
+        await type("tab")
         check("no Select Tab rows", !palette.debugResults.contains { $0.hasPrefix("Select") } && palette.debugResults.contains("Show Next Tab"))
         post("\u{1b}", keyCode: 53, modifiers: [], window: window)
         await pause(0.3)
 
-        await open()
+        await openBookmarks()
         palette.debugSetQuery("example.com")
         check("an address is the first row", palette.debugResults.first == "Open example.com")
         palette.debugSetQuery("rosa browser")
@@ -707,7 +718,7 @@ enum SelfTest {
         check("↩ on it loads in the focused pane", !palette.isShown && controller.focusedPane?.displayTitle == "Typed")
 
         await open()
-        await type(">\u{7f}")
+        await type("\u{7f}")
         check("deleting '>' goes back to bookmarks", palette.isShown && !palette.debugResults.contains("Zen Mode"))
         post("\u{1b}", keyCode: 53, modifiers: [], window: window)
         await pause(0.3)
@@ -1499,14 +1510,14 @@ enum SelfTest {
         }
         func open() async {
             await ensureActive(window)
-            post("P", keyCode: 35, modifiers: [.command, .shift], window: window)
+            post("p", keyCode: 35, modifiers: [.command], window: window)
             await pause(0.5)
         }
         let down = arrow(NSDownArrowFunctionKey), arrowFlags: NSEvent.ModifierFlags = [.function, .numericPad]
 
         controller.focusedPane?.focusWebView()
         await open()
-        report("palette: ⌘⇧P")
+        report("palette: ⌘P")
         await requestScreenCapture("command-palette", of: controller, in: outputDir)
         await type("hn")
         report("palette: 'hn'")
@@ -1535,7 +1546,7 @@ enum SelfTest {
 
         await open()
         await open()
-        print("palette: ⌘⇧P twice                  shown=\(palette.isShown)")
+        print("palette: ⌘P twice                   shown=\(palette.isShown)")
 
         // Matching speed over a large collection (it runs on every keystroke).
         let many = (0..<5000).map { index in
