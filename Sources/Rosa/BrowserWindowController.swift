@@ -175,7 +175,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     private func reloadTabStrip() {
         let items = tabs.map { TabItem(title: $0.title, paneCount: $0.panes.count, favicon: $0.favicon) }
         contentRoot.tabStrip.update(items: items, selectedIndex: selectedIndex)
-        if tabOverview.isShown { tabOverview.update(tabs: tabs, live: selectedTab) }
+        if tabOverview.isShown { tabOverview.update(tabs: tabs) }
     }
 
     private func tab(containing pane: PaneView) -> Tab? {
@@ -586,7 +586,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     private func reopenTabFromOverview() {
         guard Self.canReopenClosedTab else { return NSSound.beep() }
         restoreClosedTab()
-        tabOverview.update(tabs: tabs, live: selectedTab, highlight: selectedIndex)
+        tabOverview.update(tabs: tabs, highlight: selectedIndex)
         tabOverview.takeFocus()
         if let tab = selectedTab {
             Task { [weak self] in

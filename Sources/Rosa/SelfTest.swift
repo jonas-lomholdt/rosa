@@ -755,6 +755,10 @@ enum SelfTest {
             let rep = NSBitmapImageRep(cgImage: cg)
             return rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh * 3 / 4)?.usingColorSpace(.sRGB)
         }
+        func isYellow(_ color: NSColor?) -> Bool {
+            guard let color else { return false }
+            return color.redComponent > 0.8 && color.greenComponent > 0.8 && color.blueComponent < 0.3
+        }
         func isRed(_ color: NSColor?) -> Bool {
             guard let color else { return false }
             return color.redComponent > 0.8 && color.greenComponent < 0.3 && color.blueComponent < 0.3
@@ -802,6 +806,20 @@ enum SelfTest {
         await pause(0.5)
         await screenCapture(window, name: "overview-live-2", outputDir: outputDir)
 
+        // The live card follows the highlight; the tab left behind keeps a fresh snapshot.
+        let tabD = controller.allPanes[4].webView
+        await key("l", 37)
+        await pause(0.5)
+        check("moving makes the highlighted tab live", overview.debugLiveCard?.index == 3 && tabD.window === window
+              && liveWebView?.window == nil)
+        check("the tab left behind got a fresh snapshot", isYellow(previewColor(controller.debugTabPreviews[2])))
+        _ = try? await tabD.evaluateJavaScript("document.body.style.background = 'pink'; document.querySelector('h1').textContent = 'Live D!'")
+        await pause(0.5)
+        await screenCapture(window, name: "overview-live-3", outputDir: outputDir)
+        await key("h", 4)
+        await pause(0.5)
+        check("and back", overview.debugLiveCard?.index == 2 && liveWebView?.window === window && tabD.window == nil)
+
         await key("l", 37)
         check("L moves right", overview.highlightedIndex == 3)
         await key("h", 4)
@@ -836,6 +854,7 @@ enum SelfTest {
         let hints = overview.debugHints
         check("F labels the cards", hints.allSatisfy { $0 != nil } && Set(hints.compactMap { $0 }).count == hints.count)
         snapshot(controller, to: outputDir.appendingPathComponent("overview-2-hints.png"))
+        await screenCapture(window, name: "overview-hints", outputDir: outputDir)
         if hints.count > 3, let label = hints[3] {
             for character in label { await key(String(character), keyCodeForHint(character)) }
         }

@@ -3,8 +3,9 @@ import AppKit
 /// ⌘§: the window's tabs as a grid of previews over the whole window. H/J/K/L or the arrows move,
 /// ↩ (or a click) switches to the highlighted tab, Esc goes back. X closes the highlighted tab,
 /// U reopens the last closed one, F labels the cards to pick one by typing, 1–9 pick directly,
-/// / searches titles and addresses (the field shows only then). Previews are snapshots (`Tab.preview`) the controller
-/// refreshes on opening, except the current tab's: its real pages sit in its card, scaled down.
+/// / searches titles and addresses (the field shows only then). The highlighted tab is live: its
+/// real pages sit in its card, scaled down. The others are snapshots (`Tab.preview`), refreshed
+/// when the overview opens and when the highlight leaves a tab.
 final class TabOverviewView: NSView, NSTextFieldDelegate {
     var onSelect: ((Int) -> Void)?
     var onCancel: (() -> Void)?
@@ -40,9 +41,13 @@ final class TabOverviewView: NSView, NSTextFieldDelegate {
     /// F: labels on the visible cards; what's been typed so far, nil when not picking.
     private var hintTyped: String?
     private var hintLabels: [String] = []
-    /// The tab shown live rather than as a snapshot, and its real size.
-    private weak var liveTab: Tab?
+    /// The tab shown live rather than as a snapshot (the highlighted one), and its real size.
+    private var liveTab: Tab?
     private var liveSize: NSSize = .zero
+    /// Tabs the highlight just left: still live until their fresh snapshot is in, so their card
+    /// never flashes back to an older one.
+    private var retiringTabs: [Tab] = []
+    private var liveSwitch: DispatchWorkItem?
 
     var isShown: Bool { superview != nil }
     var isSearching: Bool { searchField.currentEditor() != nil }
@@ -108,7 +113,8 @@ final class TabOverviewView: NSView, NSTextFieldDelegate {
         autoresizingMask = [.width, .height]
         container.addSubview(self)
         highlightedIndex = selected
-        update(tabs: tabs, live: tabs.indices.contains(selected) ? tabs[selected] : nil)
+        update(tabs: tabs)
+        updateLive(immediately: true)
         window?.makeFirstResponder(self)
         scrollToHighlighted()
     }
@@ -116,7 +122,9 @@ final class TabOverviewView: NSView, NSTextFieldDelegate {
     /// Hands the live tab's view back (the caller puts it where it belongs) and goes.
     func close() {
         hintTyped = nil
+        liveSwitch?.cancel()
         liveTab = nil
+        retiringTabs = []
         cards.forEach { $0.liveView = nil }
         if isSearching { window?.makeFirstResponder(nil) }
         removeFromSuperview()
@@ -142,10 +150,8 @@ final class TabOverviewView: NSView, NSTextFieldDelegate {
     }
 
     /// The tabs changed (one closed or reopened, a title or icon came in). The highlight stays on
-    /// its tab; if that tab is gone, on the one now in its place. `live` (the selected tab) shows
-    /// its real pages: its container moves into the card, scaled down so the page doesn't reflow.
-    func update(tabs newTabs: [Tab], live: Tab?, highlight: Int? = nil) {
-        liveTab = live
+    /// its tab; if that tab is gone, on the one now in its place.
+    func update(tabs newTabs: [Tab], highlight: Int? = nil) {
         let highlightedTab = tabs.indices.contains(highlightedIndex) ? tabs[highlightedIndex] : nil
         tabs = newTabs
         if let highlight {
@@ -173,6 +179,7 @@ final class TabOverviewView: NSView, NSTextFieldDelegate {
             card.removeFromSuperview()
         }
         applyFilter(highlightBest: false)
+        updateLive(immediately: highlight != nil)
     }
 
     /// New snapshots came in.
@@ -180,12 +187,14 @@ final class TabOverviewView: NSView, NSTextFieldDelegate {
         for (card, tab) in zip(cards, tabs) { card.preview = tab.preview }
     }
 
+    private func isLive(_ tab: Tab) -> Bool { tab === liveTab || retiringTabs.contains { $0 === tab } }
+
     private func refreshCards() {
-        // Detach first, so the live view never gets pulled out of the card it just moved to.
-        for (card, tab) in zip(cards, tabs) where tab !== liveTab { card.liveView = nil }
+        // Detach first, so a live view never gets pulled out of the card it just moved to.
+        for (card, tab) in zip(cards, tabs) where !isLive(tab) { card.liveView = nil }
         for (index, (card, tab)) in zip(cards, tabs).enumerated() {
             card.configure(title: tab.title, favicon: tab.favicon, preview: tab.preview)
-            if tab === liveTab {
+            if isLive(tab) {
                 card.liveSize = liveSize
                 card.liveView = tab.container
             }
@@ -231,6 +240,7 @@ final class TabOverviewView: NSView, NSTextFieldDelegate {
         if hintTyped != nil { hintLabels = LinkHints.labels(count: visible.count) }
         refreshCards()
         needsLayout = true
+        updateLive(immediately: highlightBest)
     }
 
     private func startSearch() {
@@ -406,6 +416,38 @@ final class TabOverviewView: NSView, NSTextFieldDelegate {
         highlightedIndex = index
         for (i, card) in cards.enumerated() { card.isHighlighted = i == index }
         scrollToHighlighted()
+        updateLive()
+    }
+
+    // MARK: Live tab
+
+    /// Makes the highlighted tab the live one: its container moves into its card, at its real size
+    /// and scaled down, so the page doesn't reflow and keeps playing. Holding a movement key only
+    /// goes live where it stops. The tab left behind is snapshotted while it's still on screen.
+    private func updateLive(immediately: Bool = false) {
+        liveSwitch?.cancel()
+        let target = visible.contains(highlightedIndex) ? tabs[highlightedIndex] : nil
+        guard target !== liveTab else { return }
+        guard !immediately else { return switchLive(to: target) }
+        let work = DispatchWorkItem { [weak self] in self?.switchLive(to: target) }
+        liveSwitch = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+    }
+
+    private func switchLive(to target: Tab?) {
+        guard isShown, target !== liveTab else { return }
+        if let previous = liveTab, tabs.contains(where: { $0 === previous }) {
+            retiringTabs.append(previous)
+            Task { [weak self] in
+                await previous.capturePreview()
+                guard let self else { return }
+                retiringTabs.removeAll { $0 === previous }
+                refreshPreviews()
+                refreshCards()
+            }
+        }
+        liveTab = target
+        refreshCards()
     }
 
     /// Movement goes through the cards on screen, in their order.
@@ -515,7 +557,7 @@ private final class TabOverviewCard: NSView {
     private let ring = NSView()
     private let iconView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
-    private let hintLabel = NSTextField(labelWithString: "")
+    private let hintBadge = HintBadgeView()
     private let closeButton = NSButton()
     private var trackingArea: NSTrackingArea?
     private var isHovered = false { didSet { closeButton.isHidden = !isHovered } }
@@ -557,8 +599,8 @@ private final class TabOverviewCard: NSView {
 
     var hint: String? {
         didSet {
-            hintLabel.stringValue = hint?.uppercased() ?? ""
-            hintLabel.isHidden = hint == nil
+            hintBadge.text = hint?.uppercased() ?? ""
+            hintBadge.isHidden = hint == nil
             needsLayout = true
         }
     }
@@ -593,15 +635,7 @@ private final class TabOverviewCard: NSView {
         titleLabel.maximumNumberOfLines = 1
         titleLabel.cell?.usesSingleLineMode = true
 
-        hintLabel.font = .monospacedSystemFont(ofSize: 20, weight: .bold)
-        hintLabel.alignment = .center
-        hintLabel.textColor = .black
-        hintLabel.drawsBackground = true
-        hintLabel.backgroundColor = NSColor(hex: Settings.linkHintColor) ?? .systemYellow
-        hintLabel.wantsLayer = true
-        hintLabel.layer?.cornerRadius = 6
-        hintLabel.layer?.masksToBounds = true
-        hintLabel.isHidden = true
+        hintBadge.isHidden = true
 
         let symbol = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Close Tab")
         closeButton.image = symbol?.withSymbolConfiguration(.init(pointSize: 20, weight: .regular))
@@ -615,7 +649,7 @@ private final class TabOverviewCard: NSView {
 
         liveHost.isHidden = true
         previewBox.addSubview(liveHost)
-        for view in [ring, previewBox, placeholder, iconView, titleLabel, hintLabel, closeButton] { addSubview(view) }
+        for view in [ring, previewBox, placeholder, iconView, titleLabel, hintBadge, closeButton] { addSubview(view) }
         applyColors()
     }
 
@@ -660,10 +694,9 @@ private final class TabOverviewCard: NSView {
         iconView.frame = NSRect(x: rowX, y: previewHeight + ((30 - 16) / 2).rounded() + 2, width: 16, height: 16)
         titleLabel.frame = NSRect(x: rowX + 22, y: titleY, width: max(0, textWidth), height: titleHeight)
 
-        let hintSize = hintLabel.intrinsicContentSize
-        let hintWidth = hintSize.width + 16, hintHeight = hintSize.height + 6
-        hintLabel.frame = NSRect(x: (previewFrame.midX - hintWidth / 2).rounded(), y: (previewFrame.midY - hintHeight / 2).rounded(),
-                                 width: hintWidth, height: hintHeight)
+        let hintSize = hintBadge.fittingSize
+        hintBadge.frame = NSRect(x: (previewFrame.midX - hintSize.width / 2).rounded(), y: (previewFrame.midY - hintSize.height / 2).rounded(),
+                                 width: hintSize.width, height: hintSize.height)
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -709,6 +742,33 @@ private final class TabOverviewCard: NSView {
     @objc private func closeClicked() { onClose?() }
 
     var debugPreviewFrameInWindow: NSRect { previewBox.convert(previewBox.bounds, to: nil) }
+}
+
+/// A link-hint style label: the letters centred on their capital height (a text field centres the
+/// whole line, descender included, so capitals sit high).
+private final class HintBadgeView: NSView {
+    private static let font = NSFont.monospacedSystemFont(ofSize: 20, weight: .bold)
+    private static let padding = NSSize(width: 9, height: 7)
+
+    var text = "" { didSet { needsDisplay = true } }
+
+    override var isFlipped: Bool { true }
+
+    override var fittingSize: NSSize {
+        let width = (text as NSString).size(withAttributes: [.font: Self.font]).width
+        return NSSize(width: (width + Self.padding.width * 2).rounded(.up),
+                      height: (Self.font.capHeight + Self.padding.height * 2).rounded(.up))
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        (NSColor(hex: Settings.linkHintColor) ?? .systemYellow).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
+        let attributes: [NSAttributedString.Key: Any] = [.font: Self.font, .foregroundColor: NSColor.black]
+        let width = (text as NSString).size(withAttributes: attributes).width
+        // Drawing at a point puts the line's top there; the baseline is `ascender` below it.
+        let baseline = bounds.midY + Self.font.capHeight / 2
+        (text as NSString).draw(at: NSPoint(x: bounds.midX - width / 2, y: baseline - Self.font.ascender), withAttributes: attributes)
+    }
 }
 
 /// Flipped, like the tab's usual parent, and transparent to clicks.
