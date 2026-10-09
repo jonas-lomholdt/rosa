@@ -324,6 +324,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         window.addItem(item("Show Next Tab", #selector(BrowserWindowController.showNextTab(_:)), "\t", [.control]))
         window.addItem(item("Show Previous Tab", #selector(BrowserWindowController.showPreviousTab(_:)),
                             functionKey(NSBackTabCharacter), [.control, .shift]))
+        window.addItem(item("Tab Overview", #selector(BrowserWindowController.toggleTabOverview(_:)), "§"))
         for number in 1...9 {
             let tabItem = item(number == 9 ? "Select Last Tab" : "Select Tab \(number)",
                                #selector(BrowserWindowController.selectTabByNumber(_:)), "\(number)")

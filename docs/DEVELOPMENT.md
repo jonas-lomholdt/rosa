@@ -18,6 +18,7 @@ scripts/build.sh release --run   # builds build/Rosa.app and opens it
 | ⌘⌃= | Equalize pane sizes (double-click a gap resets that split) |
 | ⌘T / ⌘⇧W | New tab / close tab |
 | ⌃⇥ / ⌃⇧⇥, ⌘1–9 | Switch tabs |
+| ⌘§ | Tab overview, see below |
 | ⌘L, ⌘R, ⌘[ / ⌘] | Address bar, reload, back / forward |
 | ⌘+ (or ⌘=) / ⌘- / ⌘0 | Zoom the focused pane in / out / reset (`WKWebView.pageZoom`, Chrome's steps in `PageZoom`; ⌘0 also undoes pinch magnification) |
 | ⌘, | Settings (tab layout, address bar, search engine) |
@@ -52,6 +53,12 @@ Settings (⌘,) and the View menu toggle **Vertical Tabs** and **Shared Address 
 ## Zen mode
 
 ⌃⌘Z (View → Zen Mode) toggles `BrowserWindowController.isZenMode` for that window (not saved). `BrowserContentView` then hides the tab strip / sidebar, header, bookmarks bar, navigation buttons and traffic lights and gives the tab's `PaneContainerView` the whole window (it keeps its margin, so the page sits just inside the edge); panes drop their address bars and focus dimming, and split gaps stay. Focusing the address bar (⌘L, and ⌘T / ⌘D, which open blank panes) shows the header's shared address bar at the top (`showsZenAddressBar`, whatever the address bar setting) until the field ends editing (`AddressField.onEndEditing`: ↩, Esc, or a click into the page). ⌘B's editor and ⌥⌘L's downloads popover leave zen mode; downloads that start in zen mode don't pop it open. Entering zen mode while typing an address moves focus to the page. `BROWSER_SELFTEST_ONLY=zen` covers it (posts key events; use a scratch `BROWSER_SETTINGS_FILE`, it changes layouts).
+
+## Tab overview
+
+⌘§ (Window → Tab Overview) covers the window with a `TabOverviewView`: a grid of the window's tabs, sized so they all fit (down to a minimum card width, then it scrolls), in tab order with the current tab highlighted. H/J/K/L, the arrows, ⌃H/J/K/L (through `handleVimPaneNavigation`) and ⇥ move; g / ⇧G jump to the first / last; ↩ or a click switches; 1–9 switch like ⌘1–9; Esc or ⌘§ goes back to the tab you were on. X, D, ⌫, ⌘W, ⌘⇧W and a middle-click or the hover × close the highlighted tab without leaving; U or ⌘⇧T reopens one. F labels the cards with link-hint letters; typing a label switches to that tab. While it's open every other menu command is disabled (`validateMenuItem`), so nothing acts on the page underneath. The overlay is the first responder; closing the selected tab from it gives focus back to it.
+
+Previews are snapshots, not live pages: `Tab.capturePreview` asks each non-blank pane's web view for a `takeSnapshot` (about 480pt across the tab, in pixels at the screen's scale, since WebKit returns 1x images) and draws them where the panes sit in the split, without address bars, into one bitmap (~2 MB a tab). WebKit paints snapshots in the page's process, so this works for detached tabs too (with `afterScreenUpdates` off, or it never returns). A tab is captured when it's left (`selectTab`) and every tab again when the overview opens; tabs opened in the background have never been laid out, so they are first sized like the current tab. A page that finishes loading while the overview is open is captured again. A tab with no preview yet shows its favicon. `BROWSER_SELFTEST_ONLY=overview` covers it (posts key events; use a scratch `BROWSER_SETTINGS_FILE`).
 
 ## Welcome page
 

@@ -18,6 +18,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     private var bookmarksObserver: NSObjectProtocol?
     private let bookmarkEditor = BookmarkEditor()
     private let commandPalette = CommandPaletteView()
+    private let tabOverview = TabOverviewView()
     private lazy var downloadsPopover: NSPopover = {
         let popover = NSPopover()
         popover.behavior = .transient
@@ -137,8 +138,12 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     func selectTab(at index: Int, editAddress: Bool = false) {
         guard tabs.indices.contains(index) else { return }
         if hintSession != nil { enqueueHintOperation { [weak self] in await self?.endHintSession() } }
-        selectedIndex = index
         let tab = tabs[index]
+        // Last look at the tab being left, for the tab overview.
+        if let previous = selectedTab, previous !== tab {
+            Task { await previous.capturePreview() }
+        }
+        selectedIndex = index
         contentRoot.tabContent = tab.container
         contentRoot.layoutSubtreeIfNeeded()
         reloadTabStrip()
@@ -170,6 +175,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     private func reloadTabStrip() {
         let items = tabs.map { TabItem(title: $0.title, paneCount: $0.panes.count, favicon: $0.favicon) }
         contentRoot.tabStrip.update(items: items, selectedIndex: selectedIndex)
+        if tabOverview.isShown { tabOverview.update(tabs: tabs) }
     }
 
     private func tab(containing pane: PaneView) -> Tab? {
@@ -249,6 +255,11 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     static var canReopenClosedTab: Bool { !closedTabs.isEmpty }
 
     @objc func reopenClosedTab(_ sender: Any?) {
+        if tabOverview.isShown { return reopenTabFromOverview() }
+        restoreClosedTab()
+    }
+
+    private func restoreClosedTab() {
         guard let closed = Self.closedTabs.popLast() else { return NSSound.beep() }
         var focused: PaneView?
         func restore(_ layout: ClosedLayout) -> NSView {
@@ -337,6 +348,10 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     /// Handles ⌃H/J/K/L pane navigation. Returns false when the tab has a single pane,
     /// so the keys keep their text-editing meaning (⌃K kills a line, ⌃H deletes back).
     func handleVimPaneNavigation(_ direction: Direction) -> Bool {
+        if tabOverview.isShown {
+            tabOverview.handleVimKey(direction)
+            return true
+        }
         // In the command palette, ⌃J / ⌃K move the selection instead.
         if commandPalette.isShown {
             guard direction == .up || direction == .down else { return false }
@@ -468,9 +483,22 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
 
     // MARK: - Menu actions
 
-    @objc func newTab(_ sender: Any?) { addTab() }
-    @objc func closeCurrentTab(_ sender: Any?) { closeTab(at: selectedIndex) }
-    @objc func closePane(_ sender: Any?) { focusedPane.map(close) }
+    @objc func newTab(_ sender: Any?) {
+        if tabOverview.isShown { closeTabOverview(selecting: nil) }
+        addTab()
+    }
+
+    /// In the tab overview, ⌘W and ⌘⇧W close the highlighted tab.
+    @objc func closeCurrentTab(_ sender: Any?) {
+        if tabOverview.isShown { return closeTabFromOverview(at: tabOverview.highlightedIndex) }
+        closeTab(at: selectedIndex)
+    }
+
+    @objc func closePane(_ sender: Any?) {
+        if tabOverview.isShown { return closeTabFromOverview(at: tabOverview.highlightedIndex) }
+        focusedPane.map(close)
+    }
+
     @objc func splitRight(_ sender: Any?) { split(.horizontal) }
     @objc func splitDown(_ sender: Any?) { split(.vertical) }
     @objc func focusPaneLeft(_ sender: Any?) { focusNeighbor(.left) }
@@ -490,8 +518,85 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(toggleZenMode(_:)) { menuItem.state = isZenMode ? .on : .off }
+        // The overview covers the tab: commands that act on the page wait until it's closed.
+        // (A disabled item still swallows its shortcut, so nothing reaches the page either.)
+        if tabOverview.isShown, let action = menuItem.action, !Self.tabOverviewActions.contains(action) {
+            return false
+        }
         return true
     }
+
+    // MARK: - Tab overview (⌘§)
+
+    private static let tabOverviewActions: Set<Selector> = [
+        #selector(toggleTabOverview(_:)), #selector(newTab(_:)), #selector(closePane(_:)),
+        #selector(closeCurrentTab(_:)), #selector(reopenClosedTab(_:)),
+    ]
+
+    /// ⌘§: every tab in this window as a grid of previews; pressing it again goes back.
+    @objc func toggleTabOverview(_ sender: Any?) {
+        if tabOverview.isShown { return closeTabOverview(selecting: nil) }
+        guard !tabs.isEmpty else { return }
+        commandPalette.close(restoringFocus: false)
+        bookmarkEditor.close()
+        if downloadsPopover.isShown { downloadsPopover.performClose(nil) }
+        if hintSession != nil { enqueueHintOperation { [weak self] in await self?.endHintSession() } }
+
+        tabOverview.onSelect = { [weak self] index in self?.closeTabOverview(selecting: index) }
+        tabOverview.onCancel = { [weak self] in self?.closeTabOverview(selecting: nil) }
+        tabOverview.onCloseTab = { [weak self] index in self?.closeTabFromOverview(at: index) }
+        tabOverview.onReopenTab = { [weak self] in self?.reopenTabFromOverview() }
+        let content = contentRoot.tabContent?.frame ?? contentRoot.bounds
+        tabOverview.show(in: contentRoot, tabs: tabs, selected: selectedIndex,
+                         aspect: content.width > 0 ? content.height / content.width : 0.62)
+        // Tabs opened in the background have never been laid out, and others may have been left
+        // at an older window size: size them like the current one so they can be captured.
+        for tab in tabs where tab.container.frame.size != content.size {
+            tab.container.frame = content
+            tab.container.layoutSubtreeIfNeeded()
+        }
+        // Cached previews show right away; fresh ones replace them as they come in.
+        for tab in tabs {
+            Task { [weak self] in
+                await tab.capturePreview()
+                self?.tabOverview.refreshPreviews()
+            }
+        }
+    }
+
+    private func closeTabOverview(selecting index: Int?) {
+        guard tabOverview.isShown else { return }
+        tabOverview.close()
+        if let index, index != selectedIndex {
+            selectTab(at: index)
+        } else if let pane = focusedPane {
+            focus(pane)
+        }
+    }
+
+    private func closeTabFromOverview(at index: Int) {
+        guard tabs.indices.contains(index) else { return }
+        closeTab(at: index)  // closing the last tab closes the window
+        guard tabOverview.isShown else { return }
+        // Closing the selected tab selects (and focuses) another; the overview keeps the keys.
+        window?.makeFirstResponder(tabOverview)
+    }
+
+    private func reopenTabFromOverview() {
+        guard Self.canReopenClosedTab else { return NSSound.beep() }
+        restoreClosedTab()
+        tabOverview.update(tabs: tabs, highlight: selectedIndex)
+        window?.makeFirstResponder(tabOverview)
+        if let tab = selectedTab {
+            Task { [weak self] in
+                await tab.capturePreview()
+                self?.tabOverview.refreshPreviews()
+            }
+        }
+    }
+
+    /// For the self-test.
+    var debugTabOverview: TabOverviewView { tabOverview }
 
     @objc func toggleDownloads(_ sender: Any?) {
         if downloadsPopover.isShown {
@@ -621,6 +726,13 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
 
     func paneDidChangeState(_ pane: PaneView) {
         reloadTabStrip()
+        // A page that finished loading behind the overview (a reopened tab) gets a fresh preview.
+        if tabOverview.isShown, !pane.webView.isLoading, let tab = tab(containing: pane) {
+            Task { [weak self] in
+                await tab.capturePreview()
+                self?.tabOverview.refreshPreviews()
+            }
+        }
         if pane === focusedPane {
             updateTitle()
             syncSharedAddressField()
@@ -770,6 +882,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
 
     /// For the self-test.
     var debugTabTitles: [String] { tabs.map(\.title) }
+    var debugTabPreviews: [NSImage?] { tabs.map(\.preview) }
     var debugPanes: [PaneView] { selectedTab?.panes ?? [] }
     var debugTabCenters: [NSPoint] { contentRoot.tabStrip.debugTabCenters }
 

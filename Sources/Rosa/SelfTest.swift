@@ -63,6 +63,10 @@ enum SelfTest {
             await runAddressClick(controller)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "overview" {
+            await runTabOverview(controller, outputDir: outputDir)
+            return
+        }
         if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "history" {
             runHistorySearch()
             return
@@ -713,6 +717,132 @@ enum SelfTest {
 
     /// Zen mode (⌃⌘Z): no chrome in any layout, panes fill the window, the same key brings it all
     /// back, and ⌘L leaves it with the address bar focused.
+    /// ⌘§ tab overview: previews of tabs that aren't on screen, moving, closing, reopening, picking.
+    private static func runTabOverview(_ controller: BrowserWindowController, outputDir: URL) async {
+        let overview = controller.debugTabOverview
+        let window = controller.window
+        var failures = 0
+        func check(_ label: String, _ ok: Bool) {
+            if !ok { failures += 1 }
+            print("\(ok ? "ok  " : "FAIL") \(label.padding(toLength: 44, withPad: " ", startingAt: 0)) \(controller.debugDescriptionOfState) hl=\(overview.highlightedIndex)")
+        }
+        func key(_ characters: String, _ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags = []) async {
+            await ensureActive(window)
+            post(characters, keyCode: keyCode, modifiers: modifiers, window: window)
+            await pause(0.4)
+        }
+        func toggle() async { await key("§", 10, [.command]) }
+        func page(_ name: String, _ color: String) -> String {
+            "data:text/html,<title>\(name)</title><body style='background:\(color)'><h1>\(name)</h1>"
+        }
+        /// The preview's colour in the middle of its lower half, where the page background shows.
+        func previewColor(_ image: NSImage?) -> NSColor? {
+            guard let image, let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+            let rep = NSBitmapImageRep(cgImage: cg)
+            return rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh * 3 / 4)?.usingColorSpace(.sRGB)
+        }
+        func isRed(_ color: NSColor?) -> Bool {
+            guard let color else { return false }
+            return color.redComponent > 0.8 && color.greenComponent < 0.3 && color.blueComponent < 0.3
+        }
+
+        Settings.tabLayout = .horizontal
+        controller.focusedPane?.load(page("A", "red"))
+        for (name, color) in [("B", "green"), ("C", "blue"), ("D", "orange"), ("E", "purple")] {
+            controller.addTab(request: URLRequest(url: URL(string: page(name, color))!), select: false)
+        }
+        await pause(1.5)
+        controller.selectTab(at: 1)
+        controller.splitRight(nil)
+        controller.focusedPane?.load(page("B2", "cyan"))
+        await pause(1)
+        controller.selectTab(at: 2)
+        await pause(0.5)
+
+        await toggle()
+        await pause(1.5)
+        check("⌘§ opens it, highlighting the current tab", overview.isShown && overview.highlightedIndex == 2
+              && window?.firstResponder === overview)
+        check("one card per tab", overview.debugTitles == ["A", "B2", "C", "D", "E"])
+        let previews = controller.debugTabPreviews
+        check("every tab has a preview", previews.allSatisfy { $0 != nil })
+        print("     preview sizes: \(previews.map { $0.map { "\(Int($0.size.width))x\(Int($0.size.height))" } ?? "-" })")
+        for (index, preview) in previews.enumerated() {
+            guard let cg = preview?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { continue }
+            let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:])
+            try? png?.write(to: outputDir.appendingPathComponent("overview-preview-\(index).png"))
+        }
+        print("     tab A centre colour: \(previewColor(previews[0]).map { "\($0)" } ?? "-")")
+        check("off-screen tab A's preview shows its page", isRed(previewColor(previews[0])))
+        snapshot(controller, to: outputDir.appendingPathComponent("overview-1-open.png"))
+
+        await key("l", 37)
+        check("L moves right", overview.highlightedIndex == 3)
+        await key("h", 4)
+        await key("h", 4)
+        check("H moves left", overview.highlightedIndex == 1)
+        let columns = overview.debugColumns
+        await key("j", 38)
+        check("J moves down a row (\(columns) columns)", overview.highlightedIndex == min(1 + columns, 4) || columns >= 5)
+        await key("k", 40)
+        check("K moves back up", overview.highlightedIndex == 1)
+        await key("k", 40, [.control])
+        await key("l", 37, [.control])
+        check("⌃L moves too", overview.highlightedIndex == 2)
+        await key("G", 5, [.shift])
+        check("⇧G goes to the last", overview.highlightedIndex == 4)
+
+        await key("x", 7)
+        check("X closes the highlighted tab, stays open", overview.isShown && controller.debugTabTitles == ["A", "B2", "C", "D"]
+              && overview.highlightedIndex == 3 && window?.firstResponder === overview)
+        await key("g", 5)
+        await key("w", 13, [.command])
+        check("⌘W closes the highlighted tab", controller.debugTabTitles == ["B2", "C", "D"] && overview.isShown)
+        await key("u", 32)
+        await pause(0.5)
+        check("U reopens it and highlights it", controller.debugTabTitles.first == "A" && overview.highlightedIndex == 0
+              && window?.firstResponder === overview)
+
+        await key("r", 15, [.command])
+        check("page commands are off while open", overview.isShown)
+
+        await key("f", 3)
+        let hints = overview.debugHints
+        check("F labels the cards", hints.allSatisfy { $0 != nil } && Set(hints.compactMap { $0 }).count == hints.count)
+        snapshot(controller, to: outputDir.appendingPathComponent("overview-2-hints.png"))
+        if hints.count > 3, let label = hints[3] {
+            for character in label { await key(String(character), keyCodeForHint(character)) }
+        }
+        check("typing a label switches to that tab", !overview.isShown && controller.selectedTabIndex == 3)
+
+        await toggle()
+        await key("2", 19)
+        check("2 picks the second tab", !overview.isShown && controller.selectedTabIndex == 1)
+
+        await toggle()
+        await key("l", 37)
+        await key("\u{1b}", 53)
+        check("Esc goes back to the same tab", !overview.isShown && controller.selectedTabIndex == 1
+              && window?.firstResponder === controller.focusedPane?.webView)
+
+        await toggle()
+        await key("l", 37)
+        await key("\r", 36)
+        check("↩ switches to the highlighted tab", !overview.isShown && controller.selectedTabIndex == 2)
+
+        await toggle()
+        await toggle()
+        check("⌘§ again closes it", !overview.isShown && controller.selectedTabIndex == 2)
+        print(failures == 0 ? "overview: all passed" : "overview: \(failures) FAILED")
+    }
+
+    private static func keyCodeForHint(_ character: Character) -> UInt16 {
+        let codes: [Character: UInt16] = [
+            "s": 1, "a": 0, "d": 2, "f": 3, "j": 38, "k": 40, "l": 37, "e": 14, "w": 13, "c": 8, "m": 46, "p": 35, "g": 5, "h": 4,
+        ]
+        return codes[character] ?? 0
+    }
+
     private static func runZen(_ controller: BrowserWindowController, outputDir: URL) async {
         let root = controller.debugContentRoot
         let window = controller.window
