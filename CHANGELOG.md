@@ -8,6 +8,8 @@ release notes (`scripts/release-notes.sh`).
 
 ### 🗂️ Tabs
 - **Tab overview (⌘§)**: see every tab in the window as a preview, split panes and all. Move with `h` `j` `k` `l` or the arrows and press ↩ to switch, Esc to go back. `x` closes the highlighted tab, `u` brings it back, and `f` labels the tabs so you can jump to one by typing its letter.
+- The current tab plays live in the overview, videos and all.
+- Press `/` in the overview to search your tabs by title or address; ↩ opens the best match.
 
 ## v0.10.2
 

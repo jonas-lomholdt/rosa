@@ -237,7 +237,7 @@ final class BrowserContentView: NSView {
                 header.frame = NSRect(x: 0, y: 0, width: bounds.width, height: HeaderView.height)
                 top = HeaderView.height - PaneContainerView.margin
             }
-            tabContent?.frame = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
+            placeTabContent(NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top)))
             return
         }
         header.showsAddressField = showsSharedAddressBar
@@ -306,8 +306,23 @@ final class BrowserContentView: NSView {
             contentRect = NSRect(x: contentX, y: top, width: bounds.width - contentX, height: max(0, bounds.height - top))
         }
 
-        tabContent?.frame = contentRect
+        placeTabContent(contentRect)
         layoutNavigationButtons()
+    }
+
+    /// The tab overview borrows the selected tab's container for its live card; it keeps its size there.
+    private func placeTabContent(_ frame: NSRect) {
+        guard let tabContent, tabContent.superview === self else { return }
+        tabContent.frame = frame
+    }
+
+    /// Puts the selected tab's container back after the tab overview borrowed it.
+    func reattachTabContent() {
+        guard let tabContent, tabContent.superview !== self else { return }
+        tabContent.removeFromSuperview()
+        addSubview(tabContent, positioned: .above, relativeTo: background)
+        needsLayout = true
+        layoutSubtreeIfNeeded()
     }
 
     /// Back / forward / reload right after the traffic lights, in the top row of every layout:

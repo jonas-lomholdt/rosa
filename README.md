@@ -40,7 +40,7 @@
 | `⌘W` | Close pane |
 | `⌘T` | New tab |
 | `⌘⇧T` | Reopen closed tab (with its panes and history) |
-| `⌘§` | Tab overview: previews of every tab; `h` `j` `k` `l` to move, `↩` to switch, `x` to close, `f` to pick by letter |
+| `⌘§` | Tab overview: previews of every tab (the current one live); `h` `j` `k` `l` to move, `↩` to switch, `x` to close, `f` to pick by letter, `/` to search |
 | `⌘L` | Address bar |
 | `f` / `⇧F` | Link hints / open link in background |
 | `j` / `k`, `h` / `l` | Scroll down / up, left / right |

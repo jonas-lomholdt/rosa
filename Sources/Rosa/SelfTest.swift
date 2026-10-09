@@ -758,6 +758,10 @@ enum SelfTest {
         await pause(1)
         controller.selectTab(at: 2)
         await pause(0.5)
+        let root = controller.debugContentRoot
+        let liveWebView = controller.focusedPane?.webView
+        let liveSize = liveWebView?.bounds.size
+        let contentFrame = root.tabContent?.frame
 
         await toggle()
         await pause(1.5)
@@ -775,6 +779,14 @@ enum SelfTest {
         print("     tab A centre colour: \(previewColor(previews[0]).map { "\($0)" } ?? "-")")
         check("off-screen tab A's preview shows its page", isRed(previewColor(previews[0])))
         snapshot(controller, to: outputDir.appendingPathComponent("overview-1-open.png"))
+        check("the current tab is live in its card", overview.debugLiveCard?.index == 2 && liveWebView?.window === window
+              && root.tabContent?.superview !== root)
+        check("its page keeps its size (no reflow)", liveWebView?.bounds.size == liveSize)
+        print("     live card frame: \(overview.debugLiveCard.map { "\($0.frame)" } ?? "-")")
+        await screenCapture(window, name: "overview-live-1", outputDir: outputDir)
+        _ = try? await liveWebView?.evaluateJavaScript("document.body.style.background = 'yellow'; document.querySelector('h1').textContent = 'Live!'")
+        await pause(0.5)
+        await screenCapture(window, name: "overview-live-2", outputDir: outputDir)
 
         await key("l", 37)
         check("L moves right", overview.highlightedIndex == 3)
@@ -824,6 +836,7 @@ enum SelfTest {
         await key("\u{1b}", 53)
         check("Esc goes back to the same tab", !overview.isShown && controller.selectedTabIndex == 1
               && window?.firstResponder === controller.focusedPane?.webView)
+        check("its pages are back in place", root.tabContent?.superview === root && root.tabContent?.frame == contentFrame)
 
         await toggle()
         await key("l", 37)
@@ -833,7 +846,41 @@ enum SelfTest {
         await toggle()
         await toggle()
         check("⌘§ again closes it", !overview.isShown && controller.selectedTabIndex == 2)
+
+        await toggle()
+        check("no search field until /", overview.debugSearchField.isHiddenOrHasHiddenAncestor)
+        await key("/", 44)
+        check("/ starts a search, field showing", overview.isSearching && !overview.debugSearchField.isHiddenOrHasHiddenAncestor)
+        await key("b", 11)
+        await key("2", 19)
+        check("typing keeps the matching tabs", overview.debugVisibleTitles == ["B2"] && overview.highlightedIndex == 1)
+        await screenCapture(window, name: "overview-search", outputDir: outputDir)
+        await key("\r", 36)
+        check("↩ switches to the match", !overview.isShown && controller.selectedTabIndex == 1)
+        await toggle()
+        await key("/", 44)
+        await key("b", 11)
+        await key("2", 19)
+        await key("w", 13, [.command])
+        check("⌘W in a search closes the match, keeps typing", controller.debugTabTitles == ["A", "C", "D"]
+              && overview.isSearching && overview.debugVisibleTitles.isEmpty)
+        await key("\u{1b}", 53)
+        check("Esc drops the search and the field", overview.isShown && !overview.isSearching && overview.debugVisibleTitles.count == 3
+              && overview.debugSearchField.stringValue.isEmpty && overview.debugSearchField.isHiddenOrHasHiddenAncestor)
+        await key("\u{1b}", 53)
+        check("Esc again closes it", !overview.isShown && root.tabContent?.superview === root)
         print(failures == 0 ? "overview: all passed" : "overview: \(failures) FAILED")
+    }
+
+    /// A real capture of the window, taken by the test driver (`screencapture -l`, which needs the
+    /// screen recording permission the app doesn't have): with `BROWSER_SELFTEST_SCREENCAPTURE` set,
+    /// writes `<name>.request` holding the window number and waits for the driver to write `<name>.png`.
+    private static func screenCapture(_ window: NSWindow?, name: String, outputDir: URL) async {
+        guard ProcessInfo.processInfo.environment["BROWSER_SELFTEST_SCREENCAPTURE"] != nil, let window else { return }
+        let image = outputDir.appendingPathComponent("\(name).png")
+        try? "\(window.windowNumber)".write(to: outputDir.appendingPathComponent("\(name).request"), atomically: true, encoding: .utf8)
+        for _ in 0..<40 where !FileManager.default.fileExists(atPath: image.path) { await pause(0.25) }
+        await pause(0.3)  // let the driver finish writing it
     }
 
     private static func keyCodeForHint(_ character: Character) -> UInt16 {

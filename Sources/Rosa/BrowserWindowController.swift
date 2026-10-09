@@ -175,7 +175,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     private func reloadTabStrip() {
         let items = tabs.map { TabItem(title: $0.title, paneCount: $0.panes.count, favicon: $0.favicon) }
         contentRoot.tabStrip.update(items: items, selectedIndex: selectedIndex)
-        if tabOverview.isShown { tabOverview.update(tabs: tabs) }
+        if tabOverview.isShown { tabOverview.update(tabs: tabs, live: selectedTab) }
     }
 
     private func tab(containing pane: PaneView) -> Tab? {
@@ -546,15 +546,15 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         tabOverview.onCancel = { [weak self] in self?.closeTabOverview(selecting: nil) }
         tabOverview.onCloseTab = { [weak self] index in self?.closeTabFromOverview(at: index) }
         tabOverview.onReopenTab = { [weak self] in self?.reopenTabFromOverview() }
+        contentRoot.layoutSubtreeIfNeeded()
         let content = contentRoot.tabContent?.frame ?? contentRoot.bounds
-        tabOverview.show(in: contentRoot, tabs: tabs, selected: selectedIndex,
-                         aspect: content.width > 0 ? content.height / content.width : 0.62)
         // Tabs opened in the background have never been laid out, and others may have been left
         // at an older window size: size them like the current one so they can be captured.
         for tab in tabs where tab.container.frame.size != content.size {
             tab.container.frame = content
             tab.container.layoutSubtreeIfNeeded()
         }
+        tabOverview.show(in: contentRoot, tabs: tabs, selected: selectedIndex, liveSize: content.size)
         // Cached previews show right away; fresh ones replace them as they come in.
         for tab in tabs {
             Task { [weak self] in
@@ -567,6 +567,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     private func closeTabOverview(selecting index: Int?) {
         guard tabOverview.isShown else { return }
         tabOverview.close()
+        contentRoot.reattachTabContent()
         if let index, index != selectedIndex {
             selectTab(at: index)
         } else if let pane = focusedPane {
@@ -579,14 +580,14 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         closeTab(at: index)  // closing the last tab closes the window
         guard tabOverview.isShown else { return }
         // Closing the selected tab selects (and focuses) another; the overview keeps the keys.
-        window?.makeFirstResponder(tabOverview)
+        tabOverview.takeFocus()
     }
 
     private func reopenTabFromOverview() {
         guard Self.canReopenClosedTab else { return NSSound.beep() }
         restoreClosedTab()
-        tabOverview.update(tabs: tabs, highlight: selectedIndex)
-        window?.makeFirstResponder(tabOverview)
+        tabOverview.update(tabs: tabs, live: selectedTab, highlight: selectedIndex)
+        tabOverview.takeFocus()
         if let tab = selectedTab {
             Task { [weak self] in
                 await tab.capturePreview()

@@ -2,35 +2,50 @@ import AppKit
 
 /// ⌘§: the window's tabs as a grid of previews over the whole window. H/J/K/L or the arrows move,
 /// ↩ (or a click) switches to the highlighted tab, Esc goes back. X closes the highlighted tab,
-/// U reopens the last closed one, F labels the cards to pick one by typing, 1–9 pick directly.
-/// Previews are snapshots (`Tab.preview`), not live pages: the controller refreshes them on opening.
-final class TabOverviewView: NSView {
+/// U reopens the last closed one, F labels the cards to pick one by typing, 1–9 pick directly,
+/// / searches titles and addresses (the field shows only then). Previews are snapshots (`Tab.preview`) the controller
+/// refreshes on opening, except the current tab's: its real pages sit in its card, scaled down.
+final class TabOverviewView: NSView, NSTextFieldDelegate {
     var onSelect: ((Int) -> Void)?
     var onCancel: (() -> Void)?
     var onCloseTab: ((Int) -> Void)?
     var onReopenTab: (() -> Void)?
 
     private static let topInset: CGFloat = 52
+    /// With the search field showing.
+    private static let searchTopInset: CGFloat = 60
     private static let sideInset: CGFloat = 40
     private static let gap: CGFloat = 28
     private static let titleHeight: CGFloat = 30
     private static let minCardWidth: CGFloat = 200
     private static let maxCardWidth: CGFloat = 420
+    private static let searchWidth: CGFloat = 420
+    private static let searchHeight: CGFloat = 34
 
     private let background = NSVisualEffectView()
     private let scrollView = NSScrollView()
     private let grid = FlippedView()
+    private let searchGlass = NSGlassEffectView()
+    private let searchIcon = NSImageView()
+    private let searchField = NSTextField()
+    private let emptyLabel = NSTextField(labelWithString: "No tabs match")
     private var cards: [TabOverviewCard] = []
     private var tabs: [Tab] = []
     private(set) var highlightedIndex = 0
+    /// Indices of the tabs the search leaves, in tab order (all of them without a search).
+    private var visible: [Int] = []
     private var columns = 1
     /// Height / width of the page area, so cards have the shape of the tabs.
     private var aspect: CGFloat = 0.62
-    /// F: labels on the cards; what's been typed so far, nil when not picking.
+    /// F: labels on the visible cards; what's been typed so far, nil when not picking.
     private var hintTyped: String?
     private var hintLabels: [String] = []
+    /// The tab shown live rather than as a snapshot, and its real size.
+    private weak var liveTab: Tab?
+    private var liveSize: NSSize = .zero
 
     var isShown: Bool { superview != nil }
+    var isSearching: Bool { searchField.currentEditor() != nil }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -45,6 +60,31 @@ final class TabOverviewView: NSView {
         scrollView.autohidesScrollers = true
         scrollView.automaticallyAdjustsContentInsets = false
         addSubview(scrollView)
+
+        searchGlass.cornerRadius = Self.searchHeight / 2
+        let searchContent = FlippedView()
+        searchGlass.contentView = searchContent
+        let symbol = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
+        searchIcon.image = symbol?.withSymbolConfiguration(.init(pointSize: 13, weight: .regular))
+        searchIcon.contentTintColor = .secondaryLabelColor
+        searchField.isBordered = false
+        searchField.drawsBackground = false
+        searchField.focusRingType = .none
+        searchField.font = .systemFont(ofSize: 14)
+        searchField.placeholderString = "Search tabs"
+        searchField.cell?.usesSingleLineMode = true
+        searchField.cell?.isScrollable = true
+        searchField.delegate = self
+        searchContent.addSubview(searchIcon)
+        searchContent.addSubview(searchField)
+        searchGlass.isHidden = true
+        addSubview(searchGlass)
+
+        emptyLabel.font = .systemFont(ofSize: 15)
+        emptyLabel.textColor = .secondaryLabelColor
+        emptyLabel.alignment = .center
+        emptyLabel.isHidden = true
+        addSubview(emptyLabel)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -56,29 +96,56 @@ final class TabOverviewView: NSView {
     override func mouseDown(with event: NSEvent) {}
 
     /// Covers `container` (the window's content view) with `tabs`, highlighting `selected`.
-    func show(in container: NSView, tabs: [Tab], selected: Int, aspect: CGFloat) {
+    /// `liveSize` is the size of the page area, which the live tab keeps inside its card.
+    func show(in container: NSView, tabs: [Tab], selected: Int, liveSize: NSSize) {
+        self.liveSize = liveSize
+        let aspect = liveSize.width > 0 ? liveSize.height / liveSize.width : 0.62
         self.aspect = min(max(aspect, 0.35), 1.2)
         hintTyped = nil
+        searchField.stringValue = ""
+        searchGlass.isHidden = true
         frame = container.bounds
         autoresizingMask = [.width, .height]
         container.addSubview(self)
         highlightedIndex = selected
-        update(tabs: tabs)
+        update(tabs: tabs, live: tabs.indices.contains(selected) ? tabs[selected] : nil)
         window?.makeFirstResponder(self)
         scrollToHighlighted()
     }
 
+    /// Hands the live tab's view back (the caller puts it where it belongs) and goes.
     func close() {
         hintTyped = nil
+        liveTab = nil
+        cards.forEach { $0.liveView = nil }
+        if isSearching { window?.makeFirstResponder(nil) }
         removeFromSuperview()
         tabs = []
+        visible = []
         cards.forEach { $0.removeFromSuperview() }
         cards = []
     }
 
+    /// Keyboard focus back after something else took it: the search field while searching.
+    func takeFocus(searching: Bool? = nil) {
+        if searching ?? !searchField.stringValue.isEmpty {
+            if searchGlass.isHidden {
+                searchGlass.isHidden = false
+                needsLayout = true
+                layoutSubtreeIfNeeded()
+            }
+            window?.makeFirstResponder(searchField)
+            searchField.currentEditor()?.selectedRange = NSRange(location: searchField.stringValue.utf16.count, length: 0)
+        } else {
+            window?.makeFirstResponder(self)
+        }
+    }
+
     /// The tabs changed (one closed or reopened, a title or icon came in). The highlight stays on
-    /// its tab; if that tab is gone, on the one now in its place.
-    func update(tabs newTabs: [Tab], highlight: Int? = nil) {
+    /// its tab; if that tab is gone, on the one now in its place. `live` (the selected tab) shows
+    /// its real pages: its container moves into the card, scaled down so the page doesn't reflow.
+    func update(tabs newTabs: [Tab], live: Tab?, highlight: Int? = nil) {
+        liveTab = live
         let highlightedTab = tabs.indices.contains(highlightedIndex) ? tabs[highlightedIndex] : nil
         tabs = newTabs
         if let highlight {
@@ -86,7 +153,6 @@ final class TabOverviewView: NSView {
         } else if let highlightedTab, let index = newTabs.firstIndex(where: { $0 === highlightedTab }) {
             highlightedIndex = index
         }
-        highlightedIndex = min(max(highlightedIndex, 0), max(newTabs.count - 1, 0))
 
         while cards.count < newTabs.count {
             let card = TabOverviewCard()
@@ -101,10 +167,12 @@ final class TabOverviewView: NSView {
             grid.addSubview(card)
             cards.append(card)
         }
-        while cards.count > newTabs.count { cards.removeLast().removeFromSuperview() }
-        if hintTyped != nil { hintLabels = LinkHints.labels(count: newTabs.count) }
-        refreshCards()
-        needsLayout = true
+        while cards.count > newTabs.count {
+            let card = cards.removeLast()
+            card.liveView = nil
+            card.removeFromSuperview()
+        }
+        applyFilter(highlightBest: false)
     }
 
     /// New snapshots came in.
@@ -113,11 +181,19 @@ final class TabOverviewView: NSView {
     }
 
     private func refreshCards() {
+        // Detach first, so the live view never gets pulled out of the card it just moved to.
+        for (card, tab) in zip(cards, tabs) where tab !== liveTab { card.liveView = nil }
         for (index, (card, tab)) in zip(cards, tabs).enumerated() {
             card.configure(title: tab.title, favicon: tab.favicon, preview: tab.preview)
+            if tab === liveTab {
+                card.liveSize = liveSize
+                card.liveView = tab.container
+            }
             card.isHighlighted = index == highlightedIndex
-            if let typed = hintTyped, hintLabels.indices.contains(index) {
-                let label = hintLabels[index]
+            let position = visible.firstIndex(of: index)
+            card.isHidden = position == nil
+            if let typed = hintTyped, let position, hintLabels.indices.contains(position) {
+                let label = hintLabels[position]
                 let matches = label.hasPrefix(typed)
                 card.hint = matches ? label : nil
                 card.alphaValue = matches ? 1 : 0.35
@@ -126,6 +202,76 @@ final class TabOverviewView: NSView {
                 card.alphaValue = 1
             }
         }
+        emptyLabel.isHidden = !visible.isEmpty || tabs.isEmpty
+    }
+
+    // MARK: Search
+
+    /// Keeps the tabs whose title or address matches every word of the search. Typing moves the
+    /// highlight to the best match; otherwise it stays on its tab while that's still shown.
+    private func applyFilter(highlightBest: Bool) {
+        let query = searchField.stringValue.trimmingCharacters(in: .whitespaces)
+        var best: Int?
+        if query.isEmpty {
+            visible = Array(tabs.indices)
+        } else {
+            let candidates = tabs.enumerated().map { index, tab in
+                CommandPaletteMatcher.Candidate(CommandPaletteItem(title: tab.title, keywords: tab.displayURL, perform: { _ in }), order: index)
+            }
+            let matches = CommandPaletteMatcher.matches(query, in: candidates)
+            best = matches.first?.candidate.order
+            visible = matches.map(\.candidate.order).sorted()
+        }
+        if highlightBest, let best {
+            highlightedIndex = best
+        } else if !visible.contains(highlightedIndex) {
+            // The next shown tab after it, else the last one.
+            highlightedIndex = visible.first { $0 > highlightedIndex } ?? visible.last ?? min(highlightedIndex, max(tabs.count - 1, 0))
+        }
+        if hintTyped != nil { hintLabels = LinkHints.labels(count: visible.count) }
+        refreshCards()
+        needsLayout = true
+    }
+
+    private func startSearch() {
+        endHints()
+        takeFocus(searching: true)
+    }
+
+    /// Esc in the search: drops it and goes back to moving around all the tabs.
+    private func endSearch() {
+        searchField.stringValue = ""
+        searchGlass.isHidden = true
+        applyFilter(highlightBest: false)
+        window?.makeFirstResponder(self)
+        scrollToHighlighted()
+    }
+
+    /// Clicking away from an empty search puts the field away.
+    func controlTextDidEndEditing(_ notification: Notification) {
+        if searchField.stringValue.isEmpty, !searchGlass.isHidden {
+            searchGlass.isHidden = true
+            needsLayout = true
+        }
+    }
+
+    func controlTextDidChange(_ notification: Notification) {
+        applyFilter(highlightBest: true)
+        scrollToHighlighted()
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        switch selector {
+        case #selector(NSResponder.moveDown(_:)): moveVertically(down: true)
+        case #selector(NSResponder.moveUp(_:)): moveVertically(down: false)
+        case #selector(NSResponder.insertTab(_:)): moveWrapping(by: 1)
+        case #selector(NSResponder.insertBacktab(_:)): moveWrapping(by: -1)
+        case #selector(NSResponder.insertNewline(_:)):
+            if visible.contains(highlightedIndex) { onSelect?(highlightedIndex) } else { NSSound.beep() }
+        case #selector(NSResponder.cancelOperation(_:)): endSearch()
+        default: return false
+        }
+        return true
     }
 
     // MARK: Layout
@@ -133,11 +279,20 @@ final class TabOverviewView: NSView {
     override func layout() {
         super.layout()
         background.frame = bounds
-        let area = NSRect(x: 0, y: Self.topInset, width: bounds.width, height: max(0, bounds.height - Self.topInset))
+        let searchWidth = min(Self.searchWidth, bounds.width - Self.sideInset * 2)
+        searchGlass.frame = NSRect(x: ((bounds.width - searchWidth) / 2).rounded(), y: 14, width: searchWidth, height: Self.searchHeight)
+        searchIcon.frame = NSRect(x: 12, y: (Self.searchHeight - 16) / 2, width: 16, height: 16)
+        let fieldHeight = searchField.intrinsicContentSize.height
+        searchField.frame = NSRect(x: 34, y: ((Self.searchHeight - fieldHeight) / 2).rounded(), width: searchWidth - 34 - 14, height: fieldHeight)
+
+        let top = searchGlass.isHidden ? Self.topInset : Self.searchTopInset
+        let area = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top))
         scrollView.frame = area
+        let labelHeight = emptyLabel.intrinsicContentSize.height
+        emptyLabel.frame = NSRect(x: 0, y: (area.minY + area.height * 0.4).rounded(), width: bounds.width, height: labelHeight)
         let width = max(0, area.width - Self.sideInset * 2)
         let height = max(0, area.height - Self.sideInset)
-        let count = max(tabs.count, 1)
+        let count = max(visible.count, 1)
 
         // The biggest cards that fit them all; past the minimum size, scroll instead.
         var choice: (columns: Int, cardWidth: CGFloat)?
@@ -161,14 +316,17 @@ final class TabOverviewView: NSView {
         let contentWidth = CGFloat(usedColumns) * cardWidth + CGFloat(usedColumns - 1) * Self.gap
         let contentHeight = gridHeight(rows: rows, cardWidth: cardWidth)
         let originX = ((area.width - contentWidth) / 2).rounded()
-        // Centred while it fits, a little above the middle like a dialog.
-        let originY = max(0, ((height - contentHeight) * 0.45).rounded())
+        // Centred while it fits, a little above the middle like a dialog. A search keeps the
+        // cards at the top, under the field.
+        // Room above the top row for the highlight ring.
+        let centred = searchField.stringValue.isEmpty ? ((height - contentHeight) * 0.45).rounded() : 0
+        let originY = max(12, centred)
         grid.frame = NSRect(x: 0, y: 0, width: area.width, height: max(area.height, originY + contentHeight + Self.sideInset))
         let cardHeight = (cardWidth * aspect).rounded() + Self.titleHeight
-        for (index, card) in cards.enumerated() {
-            let row = index / columns, column = index % columns
-            card.frame = NSRect(
-                x: originX + CGFloat(column) * (cardWidth + Self.gap),
+        for (position, index) in visible.enumerated() where cards.indices.contains(index) {
+            let row = position / columns, column = position % columns
+            cards[index].frame = NSRect(
+                x: (originX + CGFloat(column) * (cardWidth + Self.gap)).rounded(),
                 y: originY + CGFloat(row) * (cardHeight + Self.gap),
                 width: cardWidth.rounded(), height: cardHeight
             )
@@ -181,7 +339,7 @@ final class TabOverviewView: NSView {
 
     private func scrollToHighlighted() {
         layoutSubtreeIfNeeded()
-        guard cards.indices.contains(highlightedIndex) else { return }
+        guard cards.indices.contains(highlightedIndex), visible.contains(highlightedIndex) else { return }
         grid.scrollToVisible(cards[highlightedIndex].frame.insetBy(dx: 0, dy: -Self.gap))
     }
 
@@ -195,14 +353,18 @@ final class TabOverviewView: NSView {
         guard modifiers.isSubset(of: [.shift]) else { return super.keyDown(with: event) }
 
         switch event.keyCode {
-        case 53: onCancel?(); return  // Esc
-        case 36, 76: onSelect?(highlightedIndex); return  // ↩, enter
+        case 53:  // Esc: drops a search first
+            if searchField.stringValue.isEmpty { onCancel?() } else { endSearch() }
+            return
+        case 36, 76:  // ↩, enter
+            if visible.contains(highlightedIndex) { onSelect?(highlightedIndex) } else { NSSound.beep() }
+            return
         case 123: move(by: -1); return
         case 124: move(by: 1); return
         case 125: moveVertically(down: true); return
         case 126: moveVertically(down: false); return
         case 48: moveWrapping(by: modifiers.contains(.shift) ? -1 : 1); return  // ⇥
-        case 51, 117: onCloseTab?(highlightedIndex); return  // ⌫, ⌦
+        case 51, 117: closeHighlighted(); return  // ⌫, ⌦
         default: break
         }
         switch characters {
@@ -210,11 +372,12 @@ final class TabOverviewView: NSView {
         case "l": move(by: 1)
         case "j": moveVertically(down: true)
         case "k": moveVertically(down: false)
-        case "g": setHighlight(0)
-        case "G": setHighlight(tabs.count - 1)
-        case "x", "d": onCloseTab?(highlightedIndex)
+        case "g": visible.first.map(setHighlight)
+        case "G": visible.last.map(setHighlight)
+        case "x", "d": closeHighlighted()
         case "u": onReopenTab?()
         case "f": startHints()
+        case "/": startSearch()
         case "1", "2", "3", "4", "5", "6", "7", "8", "9":
             // Like ⌘1–9: 9 is the last tab.
             let number = Int(characters)!
@@ -234,6 +397,10 @@ final class TabOverviewView: NSView {
         }
     }
 
+    private func closeHighlighted() {
+        if visible.contains(highlightedIndex) { onCloseTab?(highlightedIndex) } else { NSSound.beep() }
+    }
+
     private func setHighlight(_ index: Int) {
         guard tabs.indices.contains(index) else { return }
         highlightedIndex = index
@@ -241,33 +408,46 @@ final class TabOverviewView: NSView {
         scrollToHighlighted()
     }
 
-    private func move(by delta: Int) { setHighlight(min(max(highlightedIndex + delta, 0), tabs.count - 1)) }
+    /// Movement goes through the cards on screen, in their order.
+    private var position: Int? { visible.firstIndex(of: highlightedIndex) }
+
+    private func move(by delta: Int) {
+        guard !visible.isEmpty else { return }
+        let target = (position ?? 0) + delta
+        setHighlight(visible[min(max(target, 0), visible.count - 1)])
+    }
 
     private func moveWrapping(by delta: Int) {
-        guard !tabs.isEmpty else { return }
-        setHighlight((highlightedIndex + delta + tabs.count) % tabs.count)
+        guard !visible.isEmpty else { return }
+        setHighlight(visible[((position ?? 0) + delta + visible.count) % visible.count])
     }
 
     /// Down from a row above a short last row lands on the last card.
     private func moveVertically(down: Bool) {
-        let target = highlightedIndex + (down ? columns : -columns)
-        if tabs.indices.contains(target) {
-            setHighlight(target)
-        } else if down, highlightedIndex / columns < (tabs.count - 1) / columns {
-            setHighlight(tabs.count - 1)
+        guard !visible.isEmpty else { return }
+        let current = position ?? 0
+        let target = current + (down ? columns : -columns)
+        if visible.indices.contains(target) {
+            setHighlight(visible[target])
+        } else if down, current / columns < (visible.count - 1) / columns {
+            setHighlight(visible[visible.count - 1])
         }
     }
 
     // MARK: Hints
 
     private func startHints() {
-        guard tabs.count > 1 else { onSelect?(highlightedIndex); return }
+        guard visible.count > 1 else {
+            if let only = visible.first { onSelect?(only) }
+            return
+        }
         hintTyped = ""
-        hintLabels = LinkHints.labels(count: tabs.count)
+        hintLabels = LinkHints.labels(count: visible.count)
         refreshCards()
     }
 
     private func endHints() {
+        guard hintTyped != nil else { return }
         hintTyped = nil
         refreshCards()
     }
@@ -293,9 +473,9 @@ final class TabOverviewView: NSView {
             NSSound.beep()
             return true
         }
-        if let index = hintLabels.firstIndex(of: typed) {
+        if let position = hintLabels.firstIndex(of: typed), visible.indices.contains(position) {
             hintTyped = nil
-            onSelect?(index)
+            onSelect?(visible[position])
             return true
         }
         hintTyped = typed
@@ -306,10 +486,17 @@ final class TabOverviewView: NSView {
     // MARK: Testing
 
     var debugTitles: [String] { tabs.map(\.title) }
+    var debugVisibleTitles: [String] { visible.map { tabs[$0].title } }
     var debugColumns: Int { columns }
-    var debugHints: [String?] { cards.map(\.hint) }
+    var debugHints: [String?] { cards.filter { !$0.isHidden }.map(\.hint) }
     var debugPreviewSizes: [NSSize?] { cards.map { $0.preview?.size } }
     var debugCardFrames: [NSRect] { cards.map { $0.convert($0.bounds, to: self) } }
+    var debugSearchField: NSTextField { searchField }
+    /// Index of the card hosting the live tab, and that card's preview area in window coordinates.
+    var debugLiveCard: (index: Int, frame: NSRect)? {
+        guard let index = cards.firstIndex(where: { $0.liveView != nil }) else { return nil }
+        return (index, cards[index].debugPreviewFrameInWindow)
+    }
 }
 
 /// One tab in the overview: its preview (or favicon, before there is one) with the favicon and
@@ -321,6 +508,9 @@ private final class TabOverviewCard: NSView {
     private static let radius: CGFloat = 12
 
     private let previewBox = NSView()
+    /// Holds the live tab's container at its real size, drawn scaled to the card (bounds scaling,
+    /// so the page keeps its layout). Clicks go to the card, not the page.
+    private let liveHost = LiveHostView()
     private let placeholder = NSImageView()
     private let ring = NSView()
     private let iconView = NSImageView()
@@ -333,9 +523,29 @@ private final class TabOverviewCard: NSView {
     var preview: NSImage? {
         didSet {
             guard preview !== oldValue else { return }
-            previewBox.layer?.contents = preview
-            placeholder.isHidden = preview != nil
+            updatePreviewContents()
         }
+    }
+
+    /// The live tab's container, or nil to show the snapshot.
+    var liveView: NSView? {
+        didSet {
+            guard liveView !== oldValue else { return }
+            if let oldValue, oldValue.superview === liveHost { oldValue.removeFromSuperview() }
+            if let liveView { liveHost.addSubview(liveView) }
+            liveHost.isHidden = liveView == nil
+            updatePreviewContents()
+            needsLayout = true
+        }
+    }
+
+    var liveSize: NSSize = .zero { didSet { if liveSize != oldValue { needsLayout = true } } }
+
+    private func updatePreviewContents() {
+        // Behind live pages the window shows through the panes' margins: no stale snapshot there.
+        previewBox.layer?.contents = liveView == nil ? preview : nil
+        placeholder.isHidden = preview != nil || liveView != nil
+        applyColors()
     }
 
     var isHighlighted = false {
@@ -380,7 +590,8 @@ private final class TabOverviewCard: NSView {
         titleLabel.font = .systemFont(ofSize: 12, weight: .medium)
         titleLabel.textColor = .secondaryLabelColor
         titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.cell?.truncatesLastVisibleLine = true
+        titleLabel.maximumNumberOfLines = 1
+        titleLabel.cell?.usesSingleLineMode = true
 
         hintLabel.font = .monospacedSystemFont(ofSize: 20, weight: .bold)
         hintLabel.alignment = .center
@@ -402,6 +613,8 @@ private final class TabOverviewCard: NSView {
         closeButton.toolTip = "Close Tab"
         closeButton.isHidden = true
 
+        liveHost.isHidden = true
+        previewBox.addSubview(liveHost)
         for view in [ring, previewBox, placeholder, iconView, titleLabel, hintLabel, closeButton] { addSubview(view) }
         applyColors()
     }
@@ -425,15 +638,23 @@ private final class TabOverviewCard: NSView {
         let previewHeight = bounds.height - 30
         let previewFrame = NSRect(x: 0, y: 0, width: bounds.width, height: previewHeight)
         previewBox.frame = previewFrame
+        if let liveView, liveSize.width > 0, liveSize.height > 0 {
+            liveHost.frame = previewBox.bounds
+            liveHost.bounds = NSRect(origin: .zero, size: liveSize)
+            liveView.frame = NSRect(origin: .zero, size: liveSize)
+        }
         ring.frame = previewFrame.insetBy(dx: -5, dy: -5)
         let placeholderSize = min(48, previewHeight / 3)
         placeholder.frame = NSRect(x: (previewFrame.midX - placeholderSize / 2).rounded(), y: (previewFrame.midY - placeholderSize / 2).rounded(),
                                    width: placeholderSize, height: placeholderSize)
         closeButton.frame = NSRect(x: 6, y: 6, width: 24, height: 24)
 
-        let titleHeight = titleLabel.intrinsicContentSize.height
+        // The cell's size, not the intrinsic one: that comes out a few points short, and the
+        // label then truncates even a short title to "…".
+        let titleSize = titleLabel.cell?.cellSize ?? titleLabel.intrinsicContentSize
+        let titleHeight = titleSize.height
         let titleY = previewHeight + ((30 - titleHeight) / 2).rounded() + 2
-        let textWidth = min(titleLabel.intrinsicContentSize.width, bounds.width - 22)
+        let textWidth = min(titleSize.width.rounded(.up), bounds.width - 22)
         let rowWidth = 16 + 6 + textWidth
         let rowX = ((bounds.width - rowWidth) / 2).rounded()
         iconView.frame = NSRect(x: rowX, y: previewHeight + ((30 - 16) / 2).rounded() + 2, width: 16, height: 16)
@@ -453,7 +674,8 @@ private final class TabOverviewCard: NSView {
     private func applyColors() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             ring.layer?.borderColor = NSColor.controlAccentColor.cgColor
-            previewBox.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+            let color: NSColor = liveView == nil ? .textBackgroundColor : .windowBackgroundColor
+            previewBox.layer?.backgroundColor = color.cgColor
         }
     }
 
@@ -485,4 +707,12 @@ private final class TabOverviewCard: NSView {
     }
 
     @objc private func closeClicked() { onClose?() }
+
+    var debugPreviewFrameInWindow: NSRect { previewBox.convert(previewBox.bounds, to: nil) }
+}
+
+/// Flipped, like the tab's usual parent, and transparent to clicks.
+private final class LiveHostView: NSView {
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
