@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.10.3
+
+✨ Tab close buttons light up when you hover them.
+
 ### 🩹 Fixes
 - A tab's close button lights up when you hover it, like back, forward and reload.
 
