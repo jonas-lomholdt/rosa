@@ -11,6 +11,9 @@ release notes (`scripts/release-notes.sh`).
 ### ✨ Features
 - ⌘P opens the palette on your bookmarks (or an address or search); ⌘⇧P opens it on menu commands, with the `>` already typed. Each shortcut closes the palette again, or switches it over when the other half is showing.
 
+### 🩹 Fixes
+- The command palette's "No bookmarks yet" hint shows in full instead of being cut in half under the search field.
+
 ## v0.10.4
 
 ✨ Zen mode shows which pane is focused again.

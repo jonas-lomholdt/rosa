@@ -302,10 +302,9 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
     private func updateFrame() {
         guard let container = superview else { return }
         let rows = min(results.count, Self.maxVisibleRows)
-        let listHeight = results.isEmpty
-            ? (candidates.isEmpty && field.stringValue.isEmpty ? 0 : Self.rowHeight)
-            : CGFloat(rows) * Self.rowHeight + Self.listPadding * 2
-        let height = Self.fieldHeight + (listHeight > 0 ? 1 + listHeight : 0)
+        // With no results, one row's room for the empty-state hint or "No matches".
+        let listHeight = results.isEmpty ? Self.rowHeight : CGFloat(rows) * Self.rowHeight + Self.listPadding * 2
+        let height = Self.fieldHeight + 1 + listHeight
         let width = min(Self.width, container.bounds.width - 32)
         let top = min(max(64, (container.bounds.height * 0.16).rounded()), max(16, container.bounds.height - height - 16))
         frame = NSRect(x: ((container.bounds.width - width) / 2).rounded(), y: top, width: width, height: height)
@@ -361,7 +360,6 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
         scrollView.isHidden = !hasList
         emptyLabel.isHidden = hasList
         emptyLabel.stringValue = candidates.isEmpty ? (modes.indices.contains(modeIndex) ? modes[modeIndex].mode.emptyText : "") : "No matches"
-        separator.isHidden = !hasList && candidates.isEmpty && field.stringValue.isEmpty
         if hasList { select(0) }
         updateFrame()
     }
