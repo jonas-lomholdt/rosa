@@ -337,7 +337,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         guard let tab = selectedTab else { return }
         let panes = tab.panes
         for pane in panes {
-            if panes.count < 2 || isZenMode {
+            if panes.count < 2 {
                 pane.highlight = .none
             } else {
                 pane.highlight = pane === tab.focusedPane ? .focused : .unfocused
@@ -641,11 +641,18 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     /// For the self-test.
     var debugBookmarkEditor: BookmarkEditor { bookmarkEditor }
 
-    /// ⌘⇧P: search bookmarks and open one in the focused pane, enter an address or search, or type
-    /// `>` to run a menu command.
-    /// Pressing it again closes the palette.
-    @objc func showCommandPalette(_ sender: Any?) {
-        if commandPalette.isShown { return commandPalette.close(restoringFocus: true) }
+    /// ⌘P: search bookmarks and open one in the focused pane, or enter an address or search.
+    /// Pressing it again closes the palette; with the commands showing, it switches to bookmarks.
+    @objc func searchBookmarks(_ sender: Any?) { togglePalette(prefix: "") }
+
+    /// ⌘⇧P: run any menu command, like VS Code's palette (it opens with `>`; deleting that goes to
+    /// bookmarks). Pressing it again closes the palette; with bookmarks showing, it switches to commands.
+    @objc func showCommandPalette(_ sender: Any?) { togglePalette(prefix: ">") }
+
+    private func togglePalette(prefix: String) {
+        if let current = commandPalette.modePrefix {
+            return current == prefix ? commandPalette.close(restoringFocus: true) : commandPalette.setQuery(prefix)
+        }
         bookmarkEditor.close()
         let open: (URL, Bool) -> Void = { [weak self] url, background in self?.openBookmark(url, background: background) }
         commandPalette.show(in: contentRoot, modes: [
@@ -654,7 +661,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
                                emptyText: "No bookmarks yet. Press ⌘B to bookmark the current page, or type > for commands.",
                                queryItem: { BookmarksPaletteSource.queryItem($0, open: open) }),
             CommandPaletteMode(prefix: ">", sources: [MenuCommandsPaletteSource()], emptyText: "No commands", symbol: "command"),
-        ])
+        ], query: prefix)
     }
 
     /// For the self-test.

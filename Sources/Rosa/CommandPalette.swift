@@ -240,8 +240,9 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
 
     // MARK: Showing
 
-    /// Opens over `container` (a flipped view) with the sources' current items, in the first mode.
-    func show(in container: NSView, modes: [CommandPaletteMode]) {
+    /// Opens over `container` (a flipped view) with the sources' current items. `query` starts the
+    /// field off, e.g. with a mode's prefix to open in that mode.
+    func show(in container: NSView, modes: [CommandPaletteMode], query: String = "") {
         if isShown { close(restoringFocus: false) }
         // Collected before the field takes focus, so menu commands validate against the page.
         self.modes = modes.map { mode in
@@ -251,7 +252,7 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
         modeIndex = 0
         setSymbol(modes.first?.symbol)
         field.placeholderString = modes.first?.placeholder
-        field.stringValue = ""
+        field.stringValue = query
 
         let window = container.window
         let responder = window?.firstResponder
@@ -262,6 +263,22 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
         container.addSubview(self)
         filter()
         window?.makeFirstResponder(field)
+        // Focusing selects the text; put the caret after it so typing adds to the prefix.
+        field.currentEditor()?.selectedRange = NSRange(location: (query as NSString).length, length: 0)
+    }
+
+    /// The prefix of the mode the palette is in (`""` for the first), or nil when it's closed.
+    var modePrefix: String? { modes.indices.contains(modeIndex) ? modes[modeIndex].mode.prefix : nil }
+
+    /// Replaces the query, switching mode if it starts with another mode's prefix.
+    func setQuery(_ query: String) {
+        if let editor = field.currentEditor() {
+            editor.string = query
+            editor.selectedRange = NSRange(location: (query as NSString).length, length: 0)
+        } else {
+            field.stringValue = query
+        }
+        filter()
     }
 
     func close(restoringFocus: Bool) {
@@ -285,10 +302,9 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
     private func updateFrame() {
         guard let container = superview else { return }
         let rows = min(results.count, Self.maxVisibleRows)
-        let listHeight = results.isEmpty
-            ? (candidates.isEmpty && field.stringValue.isEmpty ? 0 : Self.rowHeight)
-            : CGFloat(rows) * Self.rowHeight + Self.listPadding * 2
-        let height = Self.fieldHeight + (listHeight > 0 ? 1 + listHeight : 0)
+        // With no results, one row's room for the empty-state hint or "No matches".
+        let listHeight = results.isEmpty ? Self.rowHeight : CGFloat(rows) * Self.rowHeight + Self.listPadding * 2
+        let height = Self.fieldHeight + 1 + listHeight
         let width = min(Self.width, container.bounds.width - 32)
         let top = min(max(64, (container.bounds.height * 0.16).rounded()), max(16, container.bounds.height - height - 16))
         frame = NSRect(x: ((container.bounds.width - width) / 2).rounded(), y: top, width: width, height: height)
@@ -344,7 +360,6 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
         scrollView.isHidden = !hasList
         emptyLabel.isHidden = hasList
         emptyLabel.stringValue = candidates.isEmpty ? (modes.indices.contains(modeIndex) ? modes[modeIndex].mode.emptyText : "") : "No matches"
-        separator.isHidden = !hasList && candidates.isEmpty && field.stringValue.isEmpty
         if hasList { select(0) }
         updateFrame()
     }
@@ -448,10 +463,7 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
     var debugQuery: String { field.stringValue }
     var debugResults: [String] { results.map(\.candidate.item.title) }
     var debugShortcuts: [String] { results.map(\.candidate.item.shortcut) }
-    func debugSetQuery(_ query: String) {
-        field.currentEditor()?.string = query
-        filter()
-    }
+    func debugSetQuery(_ query: String) { setQuery(query) }
     var debugSelectedTitle: String? {
         results.indices.contains(table.selectedRow) ? results[table.selectedRow].candidate.item.title : nil
     }
@@ -627,6 +639,7 @@ struct MenuCommandsPaletteSource: CommandPaletteSource {
         Selector(("undo:")), Selector(("redo:")), #selector(NSText.cut(_:)), #selector(NSText.copy(_:)),
         #selector(NSText.paste(_:)), #selector(NSText.selectAll(_:)), Selector(("startDictation:")),
         #selector(NSApplication.orderFrontCharacterPalette(_:)), #selector(BrowserWindowController.showCommandPalette(_:)),
+        #selector(BrowserWindowController.searchBookmarks(_:)),
         #selector(BrowserWindowController.selectTabByNumber(_:)),
     ]
     private static let checkmark = NSImage(systemSymbolName: "checkmark", accessibilityDescription: "On")

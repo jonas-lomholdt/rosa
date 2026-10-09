@@ -6,10 +6,32 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+✨ Tab overview: press ⌘§ to see all your tabs and jump between them. Plus ⌘P searches bookmarks and ⌘⇧P opens straight into commands, like VS Code.
+
 ### 🗂️ Tabs
 - **Tab overview (⌘§)**: see every tab in the window as a preview, split panes and all. Move with `h` `j` `k` `l` or the arrows and press ↩ to switch, Esc to go back. `x` closes the highlighted tab, `u` brings it back, and `f` labels the tabs so you can jump to one by typing its letter.
 - The current tab plays live in the overview, videos and all.
 - Press `/` in the overview to search your tabs by title or address; ↩ opens the best match.
+
+### ✨ Features
+- ⌘P opens the palette on your bookmarks (or an address or search); ⌘⇧P opens it on menu commands, with the `>` already typed. Each shortcut closes the palette again, or switches it over when the other half is showing.
+
+### 🩹 Fixes
+- The command palette's "No bookmarks yet" hint shows in full instead of being cut in half under the search field.
+
+## v0.10.4
+
+✨ Zen mode shows which pane is focused again.
+
+### 🩹 Fixes
+- Zen mode (⌃⌘Z) shows which pane is focused again: it gets the accent outline and the others dim, as outside zen mode.
+
+## v0.10.3
+
+✨ Tab close buttons light up when you hover them.
+
+### 🩹 Fixes
+- A tab's close button lights up when you hover it, like back, forward and reload.
 
 ## v0.10.2
 
