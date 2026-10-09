@@ -6,6 +6,8 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.11.0
+
 ✨ Tab overview: press ⌘§ to see all your tabs and jump between them. Plus ⌘P searches bookmarks and ⌘⇧P opens straight into commands, like VS Code.
 
 ### 🗂️ Tabs
