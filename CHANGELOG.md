@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.11.1
+
+✨ The tab overview's live preview fades in smoothly.
+
 ### 🩹 Fixes
 - Tab overview: moving the highlight fades smoothly between a tab's preview and its live page, instead of the card jumping.
 
