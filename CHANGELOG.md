@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🩹 Fixes
+- Zen mode (⌃⌘Z) shows which pane is focused again: it gets the accent outline and the others dim, as outside zen mode.
+
 ## v0.10.3
 
 ✨ Tab close buttons light up when you hover them.

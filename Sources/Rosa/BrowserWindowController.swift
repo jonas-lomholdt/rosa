@@ -326,7 +326,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         guard let tab = selectedTab else { return }
         let panes = tab.panes
         for pane in panes {
-            if panes.count < 2 || isZenMode {
+            if panes.count < 2 {
                 pane.highlight = .none
             } else {
                 pane.highlight = pane === tab.focusedPane ? .focused : .unfocused

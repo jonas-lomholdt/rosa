@@ -770,7 +770,9 @@ enum SelfTest {
               && controller.focusedPane?.displayTitle == "Two" && window?.firstResponder === controller.focusedPane?.webView)
         check("split in zen: no pane chrome", controller.isZenMode && chromeHidden() && controller.debugPanes.count == 2)
         check("split fills the window", fillsWindow())
-        check("panes not dimmed", controller.debugPanes.allSatisfy { $0.alphaValue == 1 })
+        check("focused pane highlighted, other dimmed", controller.debugPanes.allSatisfy {
+            $0.highlight == ($0 === controller.focusedPane ? .focused : .unfocused)
+        })
         snapshot(controller, to: outputDir.appendingPathComponent("zen-split.png"))
 
         for (layout, mode) in [(TabLayout.vertical, AddressBarMode.perPane), (.vertical, .shared), (.horizontal, .shared)] {
