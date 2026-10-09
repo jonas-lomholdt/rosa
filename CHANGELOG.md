@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🩹 Fixes
+- A tab's close button lights up when you hover it, like back, forward and reload.
+
 ## v0.10.2
 
 ✨ Click the address bar and the whole address is selected, ready for a new one.

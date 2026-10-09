@@ -286,6 +286,11 @@ final class TabStripView: ChromeView {
         itemViews.map { $0.convert(NSPoint(x: $0.bounds.midX, y: $0.bounds.midY), to: nil) }
     }
 
+    /// Self-test: hover the selected tab's close button for a snapshot.
+    func debugSetCloseHovered(_ hovered: Bool) {
+        if itemViews.indices.contains(selectedIndex) { itemViews[selectedIndex].debugCloseHovered = hovered }
+    }
+
     @objc private func downloadsClicked(_ sender: Any?) {
         onDownloadsClick?()
     }
@@ -327,7 +332,7 @@ private final class TabItemView: NSView {
     private let iconView = FaviconView()
     private let titleLabel = NonDraggingLabel(labelWithString: "")
     private let paneBadge = NonDraggingLabel(labelWithString: "")
-    private let closeButton: NSButton
+    private let closeButton: NavigationButton
     private var isSelected = false
     private var paneCount = 1
     /// Favicon only, centred (collapsed sidebar rail).
@@ -338,7 +343,7 @@ private final class TabItemView: NSView {
     init() {
         let symbol = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close Tab")?
             .withSymbolConfiguration(.init(pointSize: 9, weight: .semibold)) ?? NSImage()
-        closeButton = NSButton(image: symbol, target: nil, action: nil)
+        closeButton = NavigationButton(image: symbol, target: nil, action: nil)
         super.init(frame: .zero)
 
         titleLabel.font = .systemFont(ofSize: 12)
@@ -349,8 +354,6 @@ private final class TabItemView: NSView {
         paneBadge.textColor = .secondaryLabelColor
         paneBadge.toolTip = "Panes in this tab"
 
-        closeButton.isBordered = false
-        closeButton.contentTintColor = .secondaryLabelColor
         closeButton.target = self
         closeButton.action = #selector(closeClicked(_:))
 
@@ -472,6 +475,11 @@ private final class TabItemView: NSView {
     }
 
     @objc private func closeClicked(_ sender: Any?) { onClose?() }
+
+    var debugCloseHovered: Bool {
+        get { closeButton.debugHovered }
+        set { closeButton.debugHovered = newValue }
+    }
 }
 
 /// "+ New Tab ⌘T" row at the end of the vertical tab list; only the + when compact (collapsed rail).

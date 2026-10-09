@@ -607,11 +607,14 @@ enum SelfTest {
         Settings.sidebarAutoHide = false
         Settings.tabLayout = .horizontal
         Settings.addressBarMode = .perPane
-        // Navigation button feedback: back hovered, reload pressed.
+        // Button feedback: back hovered, reload pressed, the selected tab's close button hovered.
         await pause(0.3)
         root.navigationButtons.debugSetStates(hoverBack: true, pressReload: true)
+        root.tabStrip.debugSetCloseHovered(true)
+        snapshot(controller, to: outputDir.appendingPathComponent("nav-feedback.png"))
         await requestScreenCapture("nav-feedback", of: controller, in: outputDir)
         root.navigationButtons.debugSetStates(hoverBack: false, pressReload: false)
+        root.tabStrip.debugSetCloseHovered(false)
         print(failures == 0 ? "layout: all ok" : "layout: \(failures) FAILED")
     }
 
