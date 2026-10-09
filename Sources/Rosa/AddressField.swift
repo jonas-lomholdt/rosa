@@ -50,6 +50,16 @@ final class AddressField: NSTextField, NSTextFieldDelegate {
         return accepted
     }
 
+    /// A click that focuses the field selects the whole address (like ⌘L), so typing replaces it;
+    /// a drag still selects what it covers. Once editing, the field editor covers the field and
+    /// takes the clicks, so this only sees the focusing one.
+    override func mouseDown(with event: NSEvent) {
+        super.mouseDown(with: event)
+        if let editor, editor.selectedRange.length == 0 {
+            editor.selectAll(nil)
+        }
+    }
+
     // MARK: - NSTextFieldDelegate
 
     func controlTextDidChange(_ notification: Notification) {

@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🩹 Fixes
+- Clicking the address bar selects the whole address, like ⌘L, so you can type a new one right away.
+
 ## v0.10.1
 
 ✨ Press ↩ and the address bar opens the page you meant, and the auto-hiding sidebar resizes again.

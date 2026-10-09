@@ -59,6 +59,10 @@ enum SelfTest {
             await runSidebar(controller)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "addressclick" {
+            await runAddressClick(controller)
+            return
+        }
         if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "history" {
             runHistorySearch()
             return
@@ -1092,6 +1096,60 @@ enum SelfTest {
 
     /// Welcome commands: only on the pane Rosa opens at launch, a click acts on that pane, hidden
     /// while the pane is too small, gone once it loads a page. Posts no key events.
+    /// Clicking into the address bar selects the whole address; a drag selects part of it, and a
+    /// click while editing places the caret.
+    private static func runAddressClick(_ controller: BrowserWindowController) async {
+        var failures = 0
+        guard let pane = controller.focusedPane, let window = controller.window else { return print("FAIL: no pane") }
+        // A lone pane's address bar is in the header.
+        let field = [pane.addressField, controller.debugContentRoot.header.addressField].first { !$0.isHiddenOrHasHiddenAncestor }
+            ?? pane.addressField
+        func selection() -> String {
+            guard let editor = field.currentEditor() else { return "not editing" }
+            return (editor.string as NSString).substring(with: editor.selectedRange)
+        }
+        func check(_ label: String, _ expected: String) {
+            let actual = selection()
+            if actual != expected { failures += 1 }
+            print("\(actual == expected ? "ok  " : "FAIL") \(label.padding(toLength: 34, withPad: " ", startingAt: 0)) selected=\"\(actual)\"")
+        }
+        func point(atFraction x: CGFloat) -> NSPoint {
+            field.convert(NSPoint(x: field.bounds.width * x, y: field.bounds.midY), to: nil)
+        }
+        /// The field editor tracks the mouse in its own loop, so queue the drags and up before the down.
+        func press(from start: CGFloat, to end: CGFloat) async {
+            func mouse(_ type: NSEvent.EventType, _ x: CGFloat) -> NSEvent? {
+                NSEvent.mouseEvent(
+                    with: type, location: point(atFraction: x), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                    pressure: type == .leftMouseUp ? 0 : 1
+                )
+            }
+            if start != end, let drag = mouse(.leftMouseDragged, end) { NSApp.postEvent(drag, atStart: false) }
+            if let up = mouse(.leftMouseUp, end) { NSApp.postEvent(up, atStart: false) }
+            if let down = mouse(.leftMouseDown, start) { window.sendEvent(down) }
+            await pause(0.3)
+        }
+
+        pane.load("data:text/html,<title>Page</title><h1>Page</h1>")
+        await pause(1)
+        pane.focusWebView()
+        await pause(0.3)
+        let address = field.stringValue
+        await press(from: 0.1, to: 0.1)
+        check("click selects the whole address", address)
+        await press(from: 0.1, to: 0.1)
+        check("click while editing places caret", "")
+        pane.focusWebView()
+        await pause(0.3)
+        await press(from: 0.05, to: 0.2)
+        let dragged = selection()
+        let partial = !dragged.isEmpty && dragged != address && dragged != "not editing"
+        if !partial { failures += 1 }
+        print("\(partial ? "ok  " : "FAIL") \("drag selects part of it".padding(toLength: 34, withPad: " ", startingAt: 0)) selected=\"\(dragged)\"")
+        print(failures == 0 ? "addressclick: all ok" : "addressclick: \(failures) FAILED")
+    }
+
     private static func runWelcome(_ controller: BrowserWindowController, outputDir: URL) async {
         var failures = 0
         func panes() -> [PaneView] { controller.debugContentRoot.tabContent?.paneLeaves ?? [] }
