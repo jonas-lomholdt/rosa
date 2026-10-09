@@ -747,13 +747,16 @@ enum SelfTest {
         }
         func toggle() async { await key("§", 10, [.command]) }
         func page(_ name: String, _ color: String) -> String {
-            "data:text/html,<title>\(name)</title><body style='background:\(color)'><h1>\(name)</h1>"
+            // Busy pages (text and stripes over the colour) so repainting shows up in recordings.
+            let lines = (1...80).map { "<p style='margin:2px;font:14px Georgia;background:linear-gradient(90deg,white,transparent)'>\(name) line \($0): the quick brown fox jumps over the lazy dog, 0123456789</p>" }.joined()
+            let html = "<title>\(name)</title><body style='background:\(color)'><h1>\(name)</h1>\(lines)"
+            return "data:text/html;base64,\(Data(html.utf8).base64EncodedString())"
         }
-        /// The preview's colour in the middle of its lower half, where the page background shows.
+        /// The preview's colour near its right edge, past the text, where the page background shows.
         func previewColor(_ image: NSImage?) -> NSColor? {
             guard let image, let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
             let rep = NSBitmapImageRep(cgImage: cg)
-            return rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh * 3 / 4)?.usingColorSpace(.sRGB)
+            return rep.colorAt(x: rep.pixelsWide * 19 / 20, y: rep.pixelsHigh * 3 / 4)?.usingColorSpace(.sRGB)
         }
         func isYellow(_ color: NSColor?) -> Bool {
             guard let color else { return false }
@@ -765,6 +768,7 @@ enum SelfTest {
         }
 
         Settings.tabLayout = .horizontal
+        Settings.addressBarMode = ProcessInfo.processInfo.environment["BROWSER_SELFTEST_SHARED_BAR"] != nil ? .shared : .perPane
         controller.focusedPane?.load(page("A", "red"))
         for (name, color) in [("B", "green"), ("C", "blue"), ("D", "orange"), ("E", "purple")] {
             controller.addTab(request: URLRequest(url: URL(string: page(name, color))!), select: false)
@@ -808,8 +812,19 @@ enum SelfTest {
 
         // The live card follows the highlight; the tab left behind keeps a fresh snapshot.
         let tabD = controller.allPanes[4].webView
+        // With BROWSER_SELFTEST_SCREENCAPTURE, the driver records frames while burst.request exists.
+        let burst = outputDir.appendingPathComponent("burst.request")
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_SCREENCAPTURE"] != nil, let window {
+            // The window's rect in screen coordinates from the top left, for `screencapture -v -R`.
+            let screenHeight = NSScreen.screens.first?.frame.height ?? 0
+            let frame = window.frame
+            let rect = "\(Int(frame.minX)),\(Int(screenHeight - frame.maxY)),\(Int(frame.width)),\(Int(frame.height))"
+            try? rect.write(to: burst, atomically: true, encoding: .utf8)
+            await pause(1.5)  // recording takes a moment to start
+        }
         await key("l", 37)
         await pause(0.5)
+        try? "".write(to: outputDir.appendingPathComponent("burst.stop"), atomically: true, encoding: .utf8)
         check("moving makes the highlighted tab live", overview.debugLiveCard?.index == 3 && tabD.window === window
               && liveWebView?.window == nil)
         check("the tab left behind got a fresh snapshot", isYellow(previewColor(controller.debugTabPreviews[2])))

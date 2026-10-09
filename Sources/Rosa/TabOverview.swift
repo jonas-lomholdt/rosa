@@ -225,7 +225,9 @@ final class TabOverviewView: NSView, NSTextFieldDelegate {
             visible = Array(tabs.indices)
         } else {
             let candidates = tabs.enumerated().map { index, tab in
-                CommandPaletteMatcher.Candidate(CommandPaletteItem(title: tab.title, keywords: tab.displayURL, perform: { _ in }), order: index)
+                // A data: address is the page itself, encoded: it would match nearly anything.
+                let address = tab.displayURL.hasPrefix("data:") ? "" : tab.displayURL
+                return CommandPaletteMatcher.Candidate(CommandPaletteItem(title: tab.title, keywords: address, perform: { _ in }), order: index)
             }
             let matches = CommandPaletteMatcher.matches(query, in: candidates)
             best = matches.first?.candidate.order
@@ -553,6 +555,11 @@ private final class TabOverviewCard: NSView {
     /// Holds the live tab's container at its real size, drawn scaled to the card (bounds scaling,
     /// so the page keeps its layout). Clicks go to the card, not the page.
     private let liveHost = LiveHostView()
+    /// The snapshot over the live page while one turns into the other. The compositor scales the
+    /// live page differently from the resampled snapshot (text weight, fine lines), so swapping
+    /// them outright makes the card visibly jump; a short crossfade hides it.
+    private let cover = NSView()
+    private static let crossfade: TimeInterval = 0.2
     private let placeholder = NSImageView()
     private let ring = NSView()
     private let iconView = NSImageView()
@@ -569,25 +576,62 @@ private final class TabOverviewCard: NSView {
         }
     }
 
-    /// The live tab's container, or nil to show the snapshot.
+    /// The live tab's container, or nil to show the snapshot. Either way the change crossfades.
     var liveView: NSView? {
         didSet {
             guard liveView !== oldValue else { return }
-            if let oldValue, oldValue.superview === liveHost { oldValue.removeFromSuperview() }
-            if let liveView { liveHost.addSubview(liveView) }
-            liveHost.isHidden = liveView == nil
+            if let liveView {
+                if let oldValue, oldValue.superview === liveHost { oldValue.removeFromSuperview() }
+                // The snapshot stays on top until the page has drawn here, then fades away.
+                fadeCover(from: 1, to: 0, delay: 0.03)
+                liveHost.addSubview(liveView)
+                liveHost.isHidden = false
+            } else if let oldValue {
+                // The snapshot (fresh, taken from the live page) fades in over it, then the page goes.
+                fadeCover(from: 0, to: 1) { [weak self, weak oldValue] in
+                    guard let self, liveView == nil else { return }
+                    if let oldValue, oldValue.superview === liveHost { oldValue.removeFromSuperview() }
+                    liveHost.isHidden = true
+                    cover.alphaValue = 0
+                }
+            }
             updatePreviewContents()
             needsLayout = true
+        }
+    }
+
+    private var fadeGeneration = 0
+
+    private func fadeCover(from start: CGFloat, to end: CGFloat, delay: TimeInterval = 0, completion: (() -> Void)? = nil) {
+        fadeGeneration += 1
+        let generation = fadeGeneration
+        cover.layer?.contents = preview
+        cover.alphaValue = start
+        // Without a snapshot there's nothing to fade.
+        guard preview != nil else {
+            cover.alphaValue = 0
+            completion?()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, generation == fadeGeneration else { return }
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = Self.crossfade
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                self.cover.animator().alphaValue = end
+            }, completionHandler: { [weak self] in
+                guard let self, generation == fadeGeneration else { return }
+                completion?()
+            })
         }
     }
 
     var liveSize: NSSize = .zero { didSet { if liveSize != oldValue { needsLayout = true } } }
 
     private func updatePreviewContents() {
-        // Behind live pages the window shows through the panes' margins: no stale snapshot there.
-        previewBox.layer?.contents = liveView == nil ? preview : nil
+        // Also behind the live page: its margins are transparent, as they are in the snapshot.
+        previewBox.layer?.contents = preview
         placeholder.isHidden = preview != nil || liveView != nil
-        applyColors()
     }
 
     var isHighlighted = false {
@@ -649,6 +693,10 @@ private final class TabOverviewCard: NSView {
 
         liveHost.isHidden = true
         previewBox.addSubview(liveHost)
+        cover.wantsLayer = true
+        cover.layer?.contentsGravity = .resizeAspectFill
+        cover.alphaValue = 0
+        previewBox.addSubview(cover)
         for view in [ring, previewBox, placeholder, iconView, titleLabel, hintBadge, closeButton] { addSubview(view) }
         applyColors()
     }
@@ -672,6 +720,7 @@ private final class TabOverviewCard: NSView {
         let previewHeight = bounds.height - 30
         let previewFrame = NSRect(x: 0, y: 0, width: bounds.width, height: previewHeight)
         previewBox.frame = previewFrame
+        cover.frame = previewBox.bounds
         if let liveView, liveSize.width > 0, liveSize.height > 0 {
             liveHost.frame = previewBox.bounds
             liveHost.bounds = NSRect(origin: .zero, size: liveSize)
@@ -707,8 +756,8 @@ private final class TabOverviewCard: NSView {
     private func applyColors() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             ring.layer?.borderColor = NSColor.controlAccentColor.cgColor
-            let color: NSColor = liveView == nil ? .textBackgroundColor : .windowBackgroundColor
-            previewBox.layer?.backgroundColor = color.cgColor
+            // The same live or not, so the panes' margins don't change colour when it switches.
+            previewBox.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         }
     }
 

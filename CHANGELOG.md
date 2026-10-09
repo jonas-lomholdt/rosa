@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🩹 Fixes
+- Tab overview: moving the highlight fades smoothly between a tab's preview and its live page, instead of the card jumping.
+
 ## v0.11.0
 
 ✨ Tab overview: press ⌘§ to see all your tabs and jump between them. Plus ⌘P searches bookmarks and ⌘⇧P opens straight into commands, like VS Code.
