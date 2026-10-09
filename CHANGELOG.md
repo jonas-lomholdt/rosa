@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.10.2
+
+✨ Click the address bar and the whole address is selected, ready for a new one.
+
 ### 🩹 Fixes
 - Clicking the address bar selects the whole address, like ⌘L, so you can type a new one right away.
 
