@@ -37,6 +37,7 @@
 | `⌘D` | Split right |
 | `⌘⇧D` | Split down |
 | `⌘⌥ ← ↑ ↓ →` / `⌃H` `⌃J` `⌃K` `⌃L` | Jump to the pane in that direction |
+| `⌃⌘ ← ↑ ↓ →` / `⌃⌘H` `⌃⌘J` `⌃⌘K` `⌃⌘L` | Swap the pane with its neighbour in that direction |
 | `⌘W` | Close pane |
 | `⌘T` | New tab |
 | `⌘⇧T` | Reopen closed tab (with its panes and history) |

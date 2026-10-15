@@ -6,6 +6,11 @@ protocol TabStripDelegate: AnyObject {
     func tabStrip(_ strip: TabStripView, didCloseTabAt index: Int)
     func tabStripDidRequestNewTab(_ strip: TabStripView)
     func tabStrip(_ strip: TabStripView, didMoveTabFrom source: Int, to destination: Int)
+    /// A tab dragged out of the strip is over `windowPoint` (nil once it's back in the strip or the
+    /// drag ends). Returns whether it could be dropped there; the delegate shows where it would land.
+    func tabStrip(_ strip: TabStripView, draggedTabAt index: Int, to windowPoint: NSPoint?) -> Bool
+    /// The tab was dropped outside the strip, where `tabStrip(_:draggedTabAt:to:)` last said it could go.
+    func tabStrip(_ strip: TabStripView, droppedTabAt index: Int, at windowPoint: NSPoint)
 }
 
 struct TabItem {
@@ -224,6 +229,7 @@ final class TabStripView: ChromeView {
 
     /// Runs a mouse-tracking loop after a tab is pressed. Moving more than a few points
     /// starts a drag: the tab follows the mouse along the strip and the others make room.
+    /// Dragged out of the strip, it can be dropped onto a pane (the delegate decides where).
     private func trackDrag(of view: TabItemView, from mouseDown: NSEvent) {
         guard let window, let startIndex = itemViews.firstIndex(where: { $0 === view }),
               slots.indices.contains(startIndex) else { return }
@@ -232,18 +238,39 @@ final class TabStripView: ChromeView {
         let origin = slots[startIndex]
         var target = startIndex
         var dragging = false
+        var dropPoint: NSPoint?
 
         while let event = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]),
               event.type == .leftMouseDragged {
             let point = documentView.convert(event.locationInWindow, from: nil)
             let delta = horizontal ? point.x - start.x : point.y - start.y
             if !dragging {
-                guard abs(delta) > 4 else { continue }
+                guard hypot(point.x - start.x, point.y - start.y) > 4 else { continue }
                 dragging = true
                 draggedView = view
                 view.isDragging = true
                 documentView.addSubview(view, positioned: .above, relativeTo: nil)
             }
+
+            // Outside the strip: over a pane it would drop into, the tabs go back to where they were.
+            let inStrip = bounds.contains(convert(event.locationInWindow, from: nil))
+            let canDrop = !inStrip && delegate?.tabStrip(self, draggedTabAt: startIndex, to: event.locationInWindow) == true
+            if inStrip, dropPoint != nil { _ = delegate?.tabStrip(self, draggedTabAt: startIndex, to: nil) }
+            dropPoint = canDrop ? event.locationInWindow : nil
+            if canDrop {
+                if !view.isOverDropTarget {
+                    target = startIndex
+                    dragOrder = nil
+                    place(itemViews, animated: true)
+                    NSAnimationContext.runAnimationGroup { context in
+                        context.duration = 0.15
+                        view.animator().frame = origin
+                    }
+                }
+                view.isOverDropTarget = true
+                continue
+            }
+            view.isOverDropTarget = false
 
             var frame = origin
             if horizontal {
@@ -274,6 +301,12 @@ final class TabStripView: ChromeView {
         draggedView = nil
         dragOrder = nil
         view.isDragging = false
+        view.isOverDropTarget = false
+        if let dropPoint {
+            place(itemViews)
+            delegate?.tabStrip(self, droppedTabAt: startIndex, at: dropPoint)
+            return
+        }
         itemViews.insert(itemViews.remove(at: startIndex), at: target)
         place(itemViews, animated: true)
         if target != startIndex {
@@ -332,6 +365,11 @@ private final class TabItemView: NSView {
     var onClose: (() -> Void)?
     /// Mouse-down on the tab; the strip decides whether it becomes a click or a drag.
     var onPress: ((NSEvent) -> Void)?
+
+    /// Dragged out over a pane it would drop into: it waits in its slot, faded.
+    var isOverDropTarget = false {
+        didSet { if isOverDropTarget != oldValue { animator().alphaValue = isOverDropTarget ? 0.4 : (isDragging ? 0.85 : 1) } }
+    }
 
     var isDragging = false {
         didSet {

@@ -355,6 +355,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             pane.addItem(item(title, action, functionKey(key), [.command, .option]))
         }
         pane.addItem(.separator())
+        // Swaps the focused pane with its neighbour; ⌃⌘H/J/K/L too, like ⌃H/J/K/L for focus.
+        let moves: [(String, Selector, Int, String)] = [
+            ("Move Pane Left", #selector(BrowserWindowController.movePaneLeft(_:)), NSLeftArrowFunctionKey, "h"),
+            ("Move Pane Right", #selector(BrowserWindowController.movePaneRight(_:)), NSRightArrowFunctionKey, "l"),
+            ("Move Pane Up", #selector(BrowserWindowController.movePaneUp(_:)), NSUpArrowFunctionKey, "k"),
+            ("Move Pane Down", #selector(BrowserWindowController.movePaneDown(_:)), NSDownArrowFunctionKey, "j"),
+        ]
+        for (title, action, key, letter) in moves {
+            pane.addItem(item(title, action, functionKey(key), [.command, .control]))
+            pane.addItem(hidden(item(title, action, letter, [.command, .control])))
+        }
+        pane.addItem(.separator())
         pane.addItem(item("Equalize Pane Sizes", #selector(BrowserWindowController.equalizePanes(_:)), "=", [.command, .control]))
 
         let window = submenu("Window", in: main)

@@ -13,6 +13,7 @@ scripts/build.sh release --run   # builds build/Rosa.app and opens it
 | Keys | Action |
 |---|---|
 | ⌘D / ⌘⇧D | Split pane right / down |
+| ⌃⌘ ←↑↓→, ⌃⌘H/J/K/L | Move pane: swaps the focused pane with its neighbour (`moveFocusedPane`, same spatial pick as focus); the tree keeps its shape and sizes |
 | ⌘W | Close pane (last pane closes the tab) |
 | ⌘⌥ ←↑↓→, ⌃H/J/K/L | Focus neighbouring pane (⌃HJKL pass through to the page/text field when the tab has a single pane; handled in `AppDelegate.performVimPaneNavigation`) |
 | ⌘⌃= | Equalize pane sizes (double-click a gap resets that split) |
@@ -98,6 +99,7 @@ On by default (Settings → Content Blocking). EasyList + EasyPrivacy (and optio
 
 - `Tab` owns a split tree: `PaneContainerView` → nested `SplitView`s → `PaneView` leaves (one `WKWebView` each).
 - `BrowserWindowController` handles tabs, splitting/closing, and directional focus (spatial, ties go to the most recently focused pane).
+- Dragging a tab out of the strip onto a pane of the selected tab merges it (`TabStripView.trackDrag` asks the delegate at each point outside the strip; the tab waits faded in its slot meanwhile). `PaneDropEdge` picks the half nearest the pointer, a `PaneDropIndicator` in the tab's `PaneContainerView` shows it, and dropping wraps the pane in a `SplitView` with the dragged tab's whole tree, then removes that tab. The selected tab can't drop on itself; outside the strip and away from panes the drag still reorders. `BROWSER_SELFTEST_ONLY=panedrop` covers drops (horizontal and vertical strip) and pane moves (mouse events sent to the window, key events posted; use a scratch `BROWSER_SETTINGS_FILE`; with `BROWSER_SELFTEST_SCREENCAPTURE=1` it asks for real captures).
 - Pane/tab shortcuts are dispatched by a key monitor before the web page sees them (`AppDelegate.priorityMenus`).
 - Back / forward / reload (`NavigationButtonsView`) sit beside the traffic lights: in the tab strip (horizontal), the sidebar's top row (vertical), or the start of the header (auto-hide sidebar, so revealing it doesn't move the address bar). `BROWSER_SELFTEST_ONLY=layout` checks every tab layout × address bar mode, collapsed and revealed, for overlap.
 

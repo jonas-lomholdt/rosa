@@ -380,10 +380,37 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         return true
     }
 
-    /// Moves focus to the pane visually adjacent in `direction`. Among equally close
-    /// candidates, the most recently focused one wins (like tmux/iTerm).
+    /// Moves focus to the pane visually adjacent in `direction`.
     private func focusNeighbor(_ direction: Direction) {
-        guard let current = focusedPane, let tab = selectedTab else { return }
+        guard let current = focusedPane, let neighbor = neighbor(of: current, direction) else { return }
+        focus(neighbor)
+    }
+
+    /// ⌃⌘ arrows / ⌃⌘H/J/K/L: the focused pane trades places with its neighbour in `direction`.
+    /// The split tree keeps its shape and sizes; only the two pages swap, and focus follows the moved one.
+    private func moveFocusedPane(_ direction: Direction) {
+        guard let current = focusedPane, let neighbor = neighbor(of: current, direction),
+              let currentParent = current.superview as? PaneParent,
+              let neighborParent = neighbor.superview as? PaneParent else { return }
+        let currentFrame = current.frame
+        let neighborFrame = neighbor.frame
+        // A stand-in holds `current`'s place while `neighbor` moves into it (they may share a parent).
+        let placeholder = NSView()
+        currentParent.replaceChild(current, with: placeholder)
+        neighborParent.replaceChild(neighbor, with: current)
+        currentParent.replaceChild(placeholder, with: neighbor)
+        current.frame = neighborFrame
+        neighbor.frame = currentFrame
+        currentParent.layoutSubtreeIfNeeded()
+        neighborParent.layoutSubtreeIfNeeded()
+        focus(current)
+        reloadTabStrip()
+    }
+
+    /// The pane visually adjacent to `current` in `direction`. Among equally close candidates,
+    /// the most recently focused one wins (like tmux/iTerm).
+    private func neighbor(of current: PaneView, _ direction: Direction) -> PaneView? {
+        guard let tab = tab(containing: current) else { return nil }
         let tolerance: CGFloat = 2
         // Window coordinates: y grows upward.
         let origin = current.convert(current.bounds, to: nil)
@@ -409,7 +436,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
             if abs(a.gap - b.gap) > tolerance { return a.gap < b.gap }
             return a.pane.lastFocusSerial > b.pane.lastFocusSerial
         }
-        if let best { focus(best.pane) }
+        return best?.pane
     }
 
     private func equalize(_ view: NSView) {
@@ -522,6 +549,10 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     @objc func focusPaneRight(_ sender: Any?) { focusNeighbor(.right) }
     @objc func focusPaneUp(_ sender: Any?) { focusNeighbor(.up) }
     @objc func focusPaneDown(_ sender: Any?) { focusNeighbor(.down) }
+    @objc func movePaneLeft(_ sender: Any?) { moveFocusedPane(.left) }
+    @objc func movePaneRight(_ sender: Any?) { moveFocusedPane(.right) }
+    @objc func movePaneUp(_ sender: Any?) { moveFocusedPane(.up) }
+    @objc func movePaneDown(_ sender: Any?) { moveFocusedPane(.down) }
     @objc func equalizePanes(_ sender: Any?) { selectedTab.map { equalize($0.container.child) } }
     @objc func openLocation(_ sender: Any?) { focusAddressField() }
     @objc func reloadPage(_ sender: Any?) { focusedPane?.webView.reload() }
@@ -903,6 +934,62 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
             selectedIndex = index
         }
         reloadTabStrip()
+    }
+
+    /// Shows where a tab dragged out of the strip would land: half of the selected tab's pane
+    /// under the pointer. Any tab but the selected one can go there.
+    func tabStrip(_ strip: TabStripView, draggedTabAt index: Int, to windowPoint: NSPoint?) -> Bool {
+        guard let windowPoint, let drop = paneDrop(forTabAt: index, at: windowPoint) else {
+            paneDropIndicator?.hide()
+            paneDropIndicator = nil
+            return false
+        }
+        let container = drop.tab.container
+        let indicator = paneDropIndicator ?? PaneDropIndicator()
+        if indicator.superview !== container { container.addSubview(indicator) }
+        paneDropIndicator = indicator
+        let paneRect = drop.pane.convert(drop.pane.bounds, to: container)
+        indicator.show(drop.edge.rect(in: paneRect), title: tabs[index].title, favicon: tabs[index].favicon)
+        return true
+    }
+
+    /// The dragged tab's panes join the selected tab: the pane under the pointer splits and the
+    /// dropped tab's split tree takes the half it was dropped on. The dropped tab goes away.
+    func tabStrip(_ strip: TabStripView, droppedTabAt index: Int, at windowPoint: NSPoint) {
+        paneDropIndicator?.hide()
+        paneDropIndicator = nil
+        guard let drop = paneDrop(forTabAt: index, at: windowPoint),
+              let parent = drop.pane.superview as? PaneParent else { return }
+        let moved = tabs[index]
+        let root = moved.container.child
+        let movedFocus = moved.focusedPane ?? root.paneLeaves.first
+
+        tabs.remove(at: index)
+        if index < selectedIndex { selectedIndex -= 1 }
+        let frame = drop.pane.frame
+        // Creating the split reparents both trees; the parent then takes the split in the pane's place.
+        let split = drop.edge.isLeading
+            ? SplitView(axis: drop.edge.axis, first: root, second: drop.pane)
+            : SplitView(axis: drop.edge.axis, first: drop.pane, second: root)
+        split.frame = frame
+        parent.replaceChild(drop.pane, with: split)
+        split.layoutSubtreeIfNeeded()
+        drop.tab.restorePanes()
+        if let movedFocus { focus(movedFocus) }
+        reloadTabStrip()
+    }
+
+    private var paneDropIndicator: PaneDropIndicator?
+
+    /// Where tab `index` would land if dropped at `windowPoint`: a pane of the selected tab, and which half.
+    private func paneDrop(forTabAt index: Int, at windowPoint: NSPoint) -> (tab: Tab, pane: PaneView, edge: PaneDropEdge)? {
+        guard tabs.indices.contains(index), index != selectedIndex, let tab = selectedTab,
+              !tabOverview.isShown, !isZenMode else { return nil }
+        for pane in tab.panes {
+            let point = pane.convert(windowPoint, from: nil)
+            if pane.bounds.contains(point) { return (tab, pane, PaneDropEdge(point: point, in: pane.bounds)) }
+        }
+        return nil
     }
 
     /// For the self-test.

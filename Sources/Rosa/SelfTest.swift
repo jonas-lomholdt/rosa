@@ -71,6 +71,10 @@ enum SelfTest {
             await runSession(controller)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "panedrop" {
+            await runPaneDrop(controller, outputDir: outputDir)
+            return
+        }
         if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "history" {
             runHistorySearch()
             return
@@ -1345,6 +1349,92 @@ enum SelfTest {
         await runSidebarMenu(controller)
         Settings.sidebarAutoHide = false
         Settings.tabLayout = .horizontal
+    }
+
+    /// Drags background tabs out of the strip onto a pane of the selected tab (horizontal strip,
+    /// then vertical sidebar), then swaps panes with ⌃⌘ arrows and ⌃⌘H/J/K/L. Mouse events sent
+    /// to the window, key events posted.
+    private static func runPaneDrop(_ controller: BrowserWindowController, outputDir: URL) async {
+        guard let window = controller.window else { return }
+        Settings.tabLayout = .horizontal
+        func page(_ name: String, _ color: String) -> String {
+            "data:text/html,<title>\(name)</title><body style='background:\(color)'><h1>\(name)</h1>"
+        }
+        controller.focusedPane?.load(page("A", "pink"))
+        controller.addTab(select: false).load(page("B", "lightblue"))
+        controller.addTab(select: false).load(page("C", "palegreen"))
+        await pause(1.5)
+        func report(_ label: String, expect: String) {
+            let state = controller.debugDescriptionOfState
+            print("\(state.hasSuffix(expect) ? "ok  " : "FAIL") \(label.padding(toLength: 34, withPad: " ", startingAt: 0)) \(state)")
+        }
+        report("start", expect: "tabs=3 sel=0 | *A")
+
+        func mouse(_ type: NSEvent.EventType, _ point: NSPoint) -> NSEvent? {
+            NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                pressure: type == .leftMouseUp ? 0 : 1
+            )
+        }
+        /// Drags the tab titled `tab` to `fraction` of the pane titled `title` (0...1 across, top down).
+        func drop(tab: String, onto title: String, at fraction: NSPoint) async {
+            guard let pane = controller.debugPanes.first(where: { $0.displayTitle == title }),
+                  let index = controller.debugTabTitles.firstIndex(of: tab),
+                  controller.debugTabCenters.indices.contains(index) else { return print("drop: no pane \(title) or tab \(tab)") }
+            let start = controller.debugTabCenters[index]
+            let local = NSPoint(x: pane.bounds.width * fraction.x, y: pane.bounds.height * fraction.y)
+            let end = pane.convert(local, to: nil)
+            for step in 1...12 {
+                let t = CGFloat(step) / 12
+                let point = NSPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t)
+                if let event = mouse(.leftMouseDragged, point) { NSApp.postEvent(event, atStart: false) }
+            }
+            if let up = mouse(.leftMouseUp, end) { NSApp.postEvent(up, atStart: false) }
+            if let down = mouse(.leftMouseDown, start) { window.sendEvent(down) }
+            await pause(0.8)
+        }
+
+        // The indicator, shown the way a drag shows it, for a look.
+        if let pane = controller.debugPanes.first {
+            let point = pane.convert(NSPoint(x: pane.bounds.width * 0.8, y: pane.bounds.height / 2), to: nil)
+            let shown = controller.tabStrip(controller.debugContentRoot.tabStrip, draggedTabAt: 1, to: point)
+            await pause(0.4)
+            await screenCapture(window, name: "panedrop-indicator", outputDir: outputDir)
+            let own = controller.tabStrip(controller.debugContentRoot.tabStrip, draggedTabAt: 0, to: point)
+            print("\(shown && !own ? "ok  " : "FAIL") indicator for B / for the tab itself  \(shown) / \(own)")
+            _ = controller.tabStrip(controller.debugContentRoot.tabStrip, draggedTabAt: 1, to: nil)
+        }
+
+        // Its own tab has nowhere to go: it just follows the pointer along the strip, as before.
+        await drop(tab: "A", onto: "A", at: NSPoint(x: 0.8, y: 0.5))
+        report("own tab onto its pane: no drop", expect: "tabs=3 sel=2 | *A")
+        await drop(tab: "B", onto: "A", at: NSPoint(x: 0.8, y: 0.5))
+        report("horizontal: B onto A's right", expect: "tabs=2 sel=1 | H0.50(A, *B)")
+        await screenCapture(window, name: "panedrop-1", outputDir: outputDir)
+
+        Settings.tabLayout = .vertical
+        await pause(0.5)
+        await drop(tab: "C", onto: "B", at: NSPoint(x: 0.5, y: 0.85))
+        report("vertical: C onto B's bottom", expect: "tabs=1 sel=0 | H0.50(A, V0.50(B, *C))")
+        await screenCapture(window, name: "panedrop-2", outputDir: outputDir)
+        Settings.tabLayout = .horizontal
+        await pause(0.5)
+
+        let arrows: NSEvent.ModifierFlags = [.command, .control, .function, .numericPad]
+        func move(_ label: String, _ characters: String, _ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags, expect: String) async {
+            await ensureActive(window)
+            post(characters, keyCode: keyCode, modifiers: modifiers, window: window)
+            await pause(0.5)
+            report(label, expect: expect)
+        }
+        await move("⌃⌘← C swaps with A", arrow(NSLeftArrowFunctionKey), 123, arrows, expect: "H0.50(*C, V0.50(B, A))")
+        await move("⌃⌘L C swaps with B (recent)", "l", 37, [.command, .control], expect: "H0.50(B, V0.50(*C, A))")
+        await move("⌃⌘J C swaps with A", "j", 38, [.command, .control], expect: "H0.50(B, V0.50(A, *C))")
+        await move("⌃⌘↑ C swaps back", arrow(NSUpArrowFunctionKey), 126, arrows, expect: "H0.50(B, V0.50(*C, A))")
+        await move("⌃⌘K at the top: nothing", "k", 40, [.command, .control], expect: "H0.50(B, V0.50(*C, A))")
+        await move("⌃⌘H C swaps with B", "h", 4, [.command, .control], expect: "H0.50(*C, V0.50(B, A))")
+        await screenCapture(window, name: "panedrop-3", outputDir: outputDir)
     }
 
     /// Right-clicking the sidebar (empty space or a tab) offers Pin Sidebar, checked while
