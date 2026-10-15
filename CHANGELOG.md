@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.12.0
+
+✨ Your tabs survive restarts: Rosa reopens your windows, tabs and split panes after quitting or updating.
+
 ### 🗂️ Tabs
 - Rosa reopens your windows, tabs and split panes, each with its back/forward history, after quitting or installing an update. Tabs you haven't looked at yet wait to load until you switch to them. Turn it off in Settings → Tabs & Links.
 
