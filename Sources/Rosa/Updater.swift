@@ -149,11 +149,15 @@ final class Updater {
     }
 
     /// Compares dotted numeric versions ("0.10.0" > "0.9.2"); missing parts count as 0.
-    /// Canaries compare as a fourth part: "0.8.1-canary.3" is 0.8.1.3, after 0.8.1 and
-    /// before 0.8.2.
+    /// Canaries are builds towards the version they name: "0.13.0-canary.3" is after
+    /// 0.12.x and "0.13.0-canary.2", and before 0.13.0.
     static func isVersion(_ candidate: String, newerThan current: String) -> Bool {
         func parts(_ version: String) -> [Int] {
-            version.split(separator: ".").map { Int($0.prefix { $0.isNumber }) ?? 0 }
+            let halves = version.split(separator: "-canary.", maxSplits: 1)
+            let release = halves[0].split(separator: ".").map { Int($0.prefix { $0.isNumber }) ?? 0 }
+            let padded = release + Array(repeating: 0, count: max(0, 3 - release.count))
+            // A release outranks every canary towards it.
+            return padded + [halves.count > 1 ? Int(halves[1]) ?? 0 : Int.max]
         }
         let a = parts(candidate), b = parts(current)
         for index in 0..<max(a.count, b.count) {

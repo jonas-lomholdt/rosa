@@ -1,7 +1,8 @@
 name: Canary
 
-# Every push to main publishes a prerelease vX.Y.Z-canary.N (N commits after the last stable
-# tag) for the Canary update channel. Stable releases stay on tags (release.yml).
+# Every push to main publishes a prerelease of the next minor version for the Canary update
+# channel: after v0.12.x it is v0.13.0-canary.N, N being the commits since v0.12.0 (so a patch
+# release in between doesn't restart the count). Stable releases stay on tags (release.yml).
 on:
   push:
     branches: [main]
@@ -34,7 +35,10 @@ jobs:
           COMMITS=$(git rev-list --count "$BASE..HEAD")
           # A push that is itself a stable release is published by release.yml.
           if [ "$COMMITS" = 0 ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          TAG="$BASE-canary.$COMMITS"
+          IFS=. read -r MAJOR MINOR _ <<< "${BASE#v}"
+          LINE="v$MAJOR.$MINOR.0"
+          git rev-parse -q --verify "refs/tags/$LINE" > /dev/null || LINE=$BASE
+          TAG="v$MAJOR.$((MINOR + 1)).0-canary.$(git rev-list --count "$LINE..HEAD")"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${TAG#v}" Resources/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GITHUB_RUN_NUMBER" Resources/Info.plist

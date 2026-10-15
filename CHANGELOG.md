@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🔄 Updates
+- Canary builds are named after the release they lead up to (after 0.12, they're 0.13.0-canary.N), and Canary users are offered that release when it ships.
+
 ## v0.12.0
 
 ✨ Your tabs survive restarts: Rosa reopens your windows, tabs and split panes after quitting or updating.
