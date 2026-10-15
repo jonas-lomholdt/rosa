@@ -1341,7 +1341,76 @@ enum SelfTest {
         await pause(0.5)
         print("⌃⌘S hide                           sidebar width=\(Int(root.debugSidebarFrame.width)) revealed=\(root.isSidebarRevealed)")
         Settings.sidebarAutoHide = false
+        await pause(0.5)
+        await runSidebarMenu(controller)
+        Settings.sidebarAutoHide = false
         Settings.tabLayout = .horizontal
+    }
+
+    /// Right-clicking the sidebar (empty space or a tab) offers Pin Sidebar, checked while
+    /// auto-hide is off; choosing it flips the setting. Sends one real right-click to the window.
+    private static func runSidebarMenu(_ controller: BrowserWindowController) async {
+        guard let window = controller.window, let contentView = window.contentView else { return }
+        let root = controller.debugContentRoot
+        func rightClick(at point: NSPoint) -> NSEvent? {
+            NSEvent.mouseEvent(
+                with: .rightMouseDown, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1
+            )
+        }
+        /// The menu AppKit would show: the first one up the view hierarchy from the clicked view.
+        func menu(at point: NSPoint) -> NSMenu? {
+            guard let event = rightClick(at: point) else { return nil }
+            var view = contentView.hitTest(contentView.convert(point, from: nil))
+            while let current = view {
+                if let menu = current.menu(for: event) { return menu }
+                view = current.superview
+            }
+            return nil
+        }
+        func describe(_ menu: NSMenu?) -> String {
+            menu?.items.map { "\($0.state == .on ? "✓" : "")\($0.title)" }.joined(separator: ", ") ?? "none"
+        }
+        let side = root.debugSidebarFrame
+        let empty = root.convert(NSPoint(x: side.midX, y: side.maxY - 60), to: nil)
+        let tab = controller.debugContentRoot.tabStrip.debugTabCenters.first ?? empty
+
+        let emptyMenu = menu(at: empty), tabMenu = menu(at: tab)
+        let pinned = describe(emptyMenu) == "✓Pin Sidebar" && describe(tabMenu) == "✓Pin Sidebar"
+        print("\(pinned ? "ok  " : "FAIL") menu pinned                   empty=[\(describe(emptyMenu))] tab=[\(describe(tabMenu))]")
+
+        // A real right-click on empty sidebar space opens the menu; close it right away (timers
+        // and the main queue don't run while a context menu tracks, so it would wait for a click).
+        var shown = "none"
+        let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: nil) { note in
+            guard let menu = note.object as? NSMenu else { return }
+            MainActor.assumeIsolated {
+                shown = describe(menu)
+                menu.cancelTrackingWithoutAnimation()
+            }
+        }
+        if let event = rightClick(at: empty) { window.sendEvent(event) }
+        NotificationCenter.default.removeObserver(observer)
+        print("\(shown == "✓Pin Sidebar" ? "ok  " : "FAIL") right-click shows               [\(shown)]")
+
+        if let item = emptyMenu?.items.first { emptyMenu?.performActionForItem(at: emptyMenu!.index(of: item)) }
+        await pause(0.5)
+        // The sidebar is now the collapsed rail; it has the menu too.
+        let rail = root.convert(NSPoint(x: root.debugSidebarFrame.midX, y: root.debugSidebarFrame.maxY - 60), to: nil)
+        let railMenu = menu(at: rail)
+        let unpinned = Settings.sidebarAutoHide && describe(railMenu) == "Pin Sidebar" && !root.isSidebarRevealed
+        print("\(unpinned ? "ok  " : "FAIL") unpin → auto-hide on            autoHide=\(Settings.sidebarAutoHide) rail=[\(describe(railMenu))]")
+
+        railMenu?.performActionForItem(at: 0)
+        await pause(0.5)
+        let repinned = !Settings.sidebarAutoHide && describe(menu(at: empty)) == "✓Pin Sidebar"
+        print("\(repinned ? "ok  " : "FAIL") pin from rail → auto-hide off  autoHide=\(Settings.sidebarAutoHide)")
+
+        Settings.tabLayout = .horizontal
+        await pause(0.5)
+        let horizontal = describe(menu(at: controller.debugContentRoot.tabStrip.debugTabCenters.first ?? empty))
+        print("\(horizontal == "none" ? "ok  " : "FAIL") no menu on horizontal tabs      [\(horizontal)]")
+        Settings.tabLayout = .vertical
     }
 
     /// Address bar history matching and ranking: every word in any order, fuzzy matches, learned

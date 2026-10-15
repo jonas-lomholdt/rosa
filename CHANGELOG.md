@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🗂️ Tabs
+- Right-click the sidebar to pin or unpin it: Pin Sidebar is the same switch as Settings → Auto-hide sidebar, and has a checkmark while the sidebar stays open.
+
 ### 🔄 Updates
 - Canary builds are named after the release they lead up to (after 0.12, they're 0.13.0-canary.N), and Canary users are offered that release when it ships.
 

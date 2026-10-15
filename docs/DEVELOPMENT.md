@@ -36,7 +36,7 @@ scripts/build.sh release --run   # builds build/Rosa.app and opens it
 
 Settings (⌘,) and the View menu toggle **Vertical Tabs** and **Shared Address Bar** (default: slim bar per pane).
 
-`BROWSER_SELFTEST_ONLY=sidebar` drags the vertical sidebar's edge, pinned and expanded from auto-hide (mouse events sent to the window, no key events; use a scratch `BROWSER_SETTINGS_FILE`, it changes layouts).
+`BROWSER_SELFTEST_ONLY=sidebar` drags the vertical sidebar's edge, pinned and expanded from auto-hide, then checks the sidebar's Pin Sidebar context menu (`TabStripView.menu(for:)`, vertical layout only; it flips `Settings.sidebarAutoHide`, and tabs have no menu of their own, so right-clicking one shows it too) (mouse events sent to the window, no key events; use a scratch `BROWSER_SETTINGS_FILE`, it changes layouts).
 
 ## Settings file
 

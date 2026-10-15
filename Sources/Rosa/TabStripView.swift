@@ -291,6 +291,24 @@ final class TabStripView: ChromeView {
         if itemViews.indices.contains(selectedIndex) { itemViews[selectedIndex].debugCloseHovered = hovered }
     }
 
+    // MARK: - Context menu
+
+    /// Vertical only: right-clicking the sidebar (empty space or a tab, which have no menu of their own)
+    /// offers Pin Sidebar, the inverse of Settings → Auto-hide sidebar.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard tabLayout == .vertical else { return super.menu(for: event) }
+        let menu = NSMenu()
+        let pin = NSMenuItem(title: "Pin Sidebar", action: #selector(togglePinned(_:)), keyEquivalent: "")
+        pin.target = self
+        pin.state = Settings.sidebarAutoHide ? .off : .on
+        menu.addItem(pin)
+        return menu
+    }
+
+    @objc private func togglePinned(_ sender: Any?) {
+        Settings.sidebarAutoHide.toggle()
+    }
+
     @objc private func downloadsClicked(_ sender: Any?) {
         onDownloadsClick?()
     }
