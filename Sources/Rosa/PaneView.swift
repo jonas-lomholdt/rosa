@@ -261,13 +261,17 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     override var isFlipped: Bool { true }
 
     var displayURL: String {
-        guard let url = webView.url, url.absoluteString != "about:blank" else { return "" }
+        guard let url = pendingRestore?.url ?? webView.url, url.absoluteString != "about:blank" else { return "" }
         return url.absoluteString
     }
 
     var displayTitle: String {
-        if let title = webView.title, !title.isEmpty { return title }
-        if let host = webView.url?.host() { return host }
+        if let title = pendingRestore?.title ?? webView.title, !title.isEmpty { return title }
+        // A restored page keeps its saved title until it has loaded its own.
+        if let restoredTitle, webView.url == nil || webView.url == restoredTitle.url, !restoredTitle.title.isEmpty {
+            return restoredTitle.title
+        }
+        if let host = (pendingRestore?.url ?? webView.url)?.host() { return host }
         return "New Tab"
     }
 
@@ -298,7 +302,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
 
     /// Nothing loaded or loading yet.
     var isBlank: Bool {
-        guard !webView.isLoading else { return false }
+        guard pendingRestore == nil, !webView.isLoading else { return false }
         return webView.url == nil || webView.url?.absoluteString == "about:blank"
     }
 
@@ -396,6 +400,61 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         addressField.onFocus = nil
         addressField.onSubmit = nil
         addressField.onCancel = nil
+    }
+
+    // MARK: - Session
+
+    /// A page from the session file that loads once the pane is first shown (`restoreIfNeeded`),
+    /// so a restart doesn't load every tab at once. Until then the pane reports its address and title.
+    private(set) var pendingRestore: SessionPane?
+    private var restoredTitle: (url: URL?, title: String)?
+
+    /// What the session file keeps of this pane.
+    func sessionPane(focused: Bool) -> SessionPane {
+        if var pending = pendingRestore {
+            pending.focused = focused
+            return pending
+        }
+        let hasPage = webView.backForwardList.currentItem != nil
+        return SessionPane(
+            url: webView.url,
+            title: webView.title ?? "",
+            // Without a back/forward item yet (the first page is still loading) the state is
+            // empty, and the address is all there is to restore.
+            state: hasPage ? webView.interactionState as? Data : nil,
+            zoom: webView.pageZoom == 1 ? nil : Double(webView.pageZoom),
+            focused: focused
+        )
+    }
+
+    /// Restores `saved` later, when the pane is first shown.
+    func deferRestore(_ saved: SessionPane) {
+        if let zoom = saved.zoom { webView.pageZoom = zoom }
+        guard !saved.isBlank else { return }
+        pendingRestore = saved
+        addressField.stringValue = displayURL
+        if let url = saved.url {
+            favicon = FaviconStore.shared.cachedIcon(forHost: url.host())
+            Task { [weak self] in
+                let icon = await FaviconStore.shared.icon(forSite: url)
+                guard let self, pendingRestore != nil, let icon else { return }
+                favicon = icon
+            }
+        }
+        delegate?.paneDidChangeState(self)
+    }
+
+    /// Loads the page saved in the session file, if it hasn't been yet.
+    func restoreIfNeeded() {
+        guard let saved = pendingRestore else { return }
+        pendingRestore = nil
+        restoredTitle = (saved.url, saved.title)
+        if let state = saved.state {
+            webView.interactionState = state
+        } else if let url = saved.url {
+            webView.load(URLRequest(url: url))
+        }
+        pageStateChanged()
     }
 
     // MARK: - Web Inspector
@@ -562,6 +621,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
 
     private func pageStateChanged() {
+        if pendingRestore != nil, webView.url != nil { pendingRestore = nil }
         Extensions.shared.controller.didChangeTabProperties([.URL, .title], for: self)
         extensionToolbar.refresh()
         updateWelcome()
@@ -574,6 +634,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     }
 
     private func titleChanged() {
+        if webView.title?.isEmpty == false { restoredTitle = nil }
         if let url = webView.url, let title = webView.title, recordsHistory {
             HistoryStore.shared.updateTitle(url: url, title: title)
             if let redirectSource { HistoryStore.shared.updateTitle(url: redirectSource, title: title) }

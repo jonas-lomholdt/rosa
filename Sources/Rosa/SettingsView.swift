@@ -43,6 +43,9 @@ final class SettingsModel: ObservableObject {
     @Published var sidebarAutoHide: Bool {
         didSet { if Settings.sidebarAutoHide != sidebarAutoHide { Settings.sidebarAutoHide = sidebarAutoHide } }
     }
+    @Published var restoreSession: Bool {
+        didSet { if Settings.restoreSession != restoreSession { Settings.restoreSession = restoreSession } }
+    }
     @Published var linkTarget: LinkTarget {
         didSet { if Settings.linkTarget != linkTarget { Settings.linkTarget = linkTarget } }
     }
@@ -87,6 +90,7 @@ final class SettingsModel: ObservableObject {
         inactivePaneOpacity = Settings.inactivePaneOpacity
         searchEngine = Settings.searchEngine
         linkTarget = Settings.linkTarget
+        restoreSession = Settings.restoreSession
         sidebarAutoHide = Settings.sidebarAutoHide
         askWhereToSaveDownloads = Settings.askWhereToSaveDownloads
         linkHintsEnabled = Settings.linkHintsEnabled
@@ -134,6 +138,7 @@ final class SettingsModel: ObservableObject {
         inactivePaneOpacity = Settings.inactivePaneOpacity
         searchEngine = Settings.searchEngine
         linkTarget = Settings.linkTarget
+        restoreSession = Settings.restoreSession
         sidebarAutoHide = Settings.sidebarAutoHide
         askWhereToSaveDownloads = Settings.askWhereToSaveDownloads
         linkHintsEnabled = Settings.linkHintsEnabled
@@ -247,6 +252,10 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
                 Toggle("Auto-hide sidebar", isOn: $model.sidebarAutoHide)
                     .disabled(model.tabLayout != .vertical)
+                Toggle(isOn: $model.restoreSession) {
+                    Text("Reopen windows and tabs at launch")
+                    Text("Brings back your tabs and split panes, with their history, after quitting or updating.")
+                }
                 Picker("Open links in", selection: $model.linkTarget) {
                     Text("New tab").tag(LinkTarget.tab)
                     Text("New pane").tag(LinkTarget.pane)

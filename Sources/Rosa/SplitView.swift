@@ -38,7 +38,7 @@ final class PaneContainerView: NSView, PaneParent {
 
 /// Two children separated by a draggable divider. Nest these to build arbitrary layouts.
 final class SplitView: NSView, PaneParent {
-    enum Axis {
+    enum Axis: String, Codable {
         /// Children side by side (vertical divider). Created by ⌘D.
         case horizontal
         /// Children stacked (horizontal divider). Created by ⌘⇧D.
@@ -54,7 +54,12 @@ final class SplitView: NSView, PaneParent {
     private(set) var first: NSView
     private(set) var second: NSView
     /// Fraction of the available length given to `first`.
-    var ratio: CGFloat = 0.5 { didSet { needsLayout = true } }
+    var ratio: CGFloat = 0.5 {
+        didSet {
+            needsLayout = true
+            SessionStore.shared.setNeedsSave()
+        }
+    }
 
     private let divider = DividerView()
 

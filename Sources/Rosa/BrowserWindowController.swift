@@ -29,6 +29,9 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     /// ⌃⌘Z: only the pages, no browser chrome (for presenting). Per window, not saved. ⌘L still
     /// works: the shared address bar shows until the address is entered.
     private(set) var isZenMode = false
+    /// Whether this window's tabs go in the session file that brings them back after a restart.
+    /// A private (incognito) window returns false, so none of its pages are written to disk.
+    var savesSession: Bool { true }
 
     private var selectedTab: Tab? { tabs.indices.contains(selectedIndex) ? tabs[selectedIndex] : nil }
     var focusedPane: PaneView? { selectedTab?.focusedPane }
@@ -143,6 +146,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         if let previous = selectedTab, previous !== tab {
             Task { await previous.capturePreview() }
         }
+        tab.restorePanes()
         selectedIndex = index
         contentRoot.tabContent = tab.container
         contentRoot.layoutSubtreeIfNeeded()
@@ -176,6 +180,8 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         let items = tabs.map { TabItem(title: $0.title, paneCount: $0.panes.count, favicon: $0.favicon) }
         contentRoot.tabStrip.update(items: items, selectedIndex: selectedIndex)
         if tabOverview.isShown { tabOverview.update(tabs: tabs) }
+        // Nearly every change to tabs, panes and pages comes through here.
+        SessionStore.shared.setNeedsSave()
     }
 
     private func tab(containing pane: PaneView) -> Tab? {
@@ -227,27 +233,14 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
 
     // MARK: - Reopening closed tabs (⌘⇧T)
 
-    /// A closed tab's split layout, with each pane's back/forward history.
-    private indirect enum ClosedLayout {
-        case pane(url: URL?, state: Any?, focused: Bool)
-        case split(SplitView.Axis, ratio: CGFloat, ClosedLayout, ClosedLayout)
-    }
-
     /// Most recent last; shared by all windows so a tab can come back in any of them.
-    private static var closedTabs: [(layout: ClosedLayout, index: Int)] = []
+    private static var closedTabs: [(layout: SessionLayout, index: Int)] = []
     private static let closedTabsLimit = 25
 
     private func rememberClosedTab(_ tab: Tab, at index: Int) {
+        let layout = tab.sessionLayout
         // Nothing worth reopening in a single blank pane.
-        if tab.panes.count == 1, tab.panes.first?.webView.url == nil { return }
-        func capture(_ view: NSView) -> ClosedLayout? {
-            if let pane = view as? PaneView {
-                return .pane(url: pane.webView.url, state: pane.webView.interactionState, focused: pane === tab.focusedPane)
-            }
-            guard let split = view as? SplitView, let first = capture(split.first), let second = capture(split.second) else { return nil }
-            return .split(split.axis, ratio: split.ratio, first, second)
-        }
-        guard let layout = capture(tab.container.child) else { return }
+        if case .pane(let pane) = layout, pane.isBlank { return }
         Self.closedTabs.append((layout, index))
         if Self.closedTabs.count > Self.closedTabsLimit { Self.closedTabs.removeFirst() }
     }
@@ -261,29 +254,53 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
 
     private func restoreClosedTab() {
         guard let closed = Self.closedTabs.popLast() else { return NSSound.beep() }
-        var focused: PaneView?
-        func restore(_ layout: ClosedLayout) -> NSView {
-            switch layout {
-            case .pane(let url, let state, let isFocused):
-                let pane = makePane()
-                if let state {
-                    pane.webView.interactionState = state
-                } else if let url {
-                    pane.webView.load(URLRequest(url: url))
-                }
-                if isFocused { focused = pane }
-                return pane
-            case .split(let axis, let ratio, let first, let second):
-                let split = SplitView(axis: axis, first: restore(first), second: restore(second))
-                split.ratio = ratio
-                return split
-            }
-        }
-        let tab = Tab(root: restore(closed.layout), focusedPane: focused)
+        let tab = makeTab(from: closed.layout)
         let index = min(closed.index, tabs.count)
         tabs.insert(tab, at: index)
         tab.panes.forEach(Extensions.shared.didOpen)
-        selectTab(at: index)
+        selectTab(at: index)  // loads its pages
+    }
+
+    /// A tab rebuilt from a saved layout. Its pages load when it's first selected.
+    private func makeTab(from layout: SessionLayout) -> Tab {
+        var focused: PaneView?
+        func build(_ layout: SessionLayout) -> NSView {
+            switch layout {
+            case .pane(let saved):
+                let pane = makePane()
+                pane.deferRestore(saved)
+                if saved.focused { focused = pane }
+                return pane
+            case .split(let axis, let ratio, let first, let second):
+                let split = SplitView(axis: axis, first: build(first), second: build(second))
+                split.ratio = CGFloat(ratio)
+                return split
+            }
+        }
+        return Tab(root: build(layout), focusedPane: focused)
+    }
+
+    // MARK: - Session (restoring windows after a restart)
+
+    /// This window as the session file keeps it.
+    var sessionWindow: SessionWindow {
+        SessionWindow(frame: window?.frameDescriptor, selectedTab: selectedIndex, tabs: tabs.map(\.sessionLayout))
+    }
+
+    /// Brings back a window saved in the session file. Only the selected tab loads now; the
+    /// others load when they're first shown.
+    func restore(_ saved: SessionWindow) {
+        if let frame = saved.frame { window?.setFrame(from: frame) }
+        for layout in saved.tabs {
+            let tab = makeTab(from: layout)
+            tabs.append(tab)
+            tab.panes.forEach(Extensions.shared.didOpen)
+        }
+        guard !tabs.isEmpty else {
+            addTab()
+            return
+        }
+        selectTab(at: min(max(saved.selectedTab, 0), tabs.count - 1))
     }
 
     private func close(_ pane: PaneView) {
@@ -928,6 +945,9 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     }
 
     // MARK: - NSWindowDelegate
+
+    func windowDidMove(_ notification: Notification) { SessionStore.shared.setNeedsSave() }
+    func windowDidResize(_ notification: Notification) { SessionStore.shared.setNeedsSave() }
 
     func windowDidBecomeKey(_ notification: Notification) {
         Extensions.shared.controller.didFocusWindow(self)

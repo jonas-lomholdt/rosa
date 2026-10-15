@@ -448,6 +448,7 @@ final class TabOverviewView: NSView, NSTextFieldDelegate {
                 refreshCards()
             }
         }
+        target?.restorePanes()
         liveTab = target
         refreshCards()
     }

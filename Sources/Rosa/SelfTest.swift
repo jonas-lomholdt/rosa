@@ -67,6 +67,10 @@ enum SelfTest {
             await runTabOverview(controller, outputDir: outputDir)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "session" {
+            await runSession(controller)
+            return
+        }
         if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "history" {
             runHistorySearch()
             return
@@ -563,6 +567,102 @@ enum SelfTest {
         } else {
             NSApp.postEvent(event, atStart: false)
         }
+    }
+
+    /// Session restore, in two launches with the same `BROWSER_SESSION_FILE`. The first builds two
+    /// tabs (a split with back history and zoom, and one in the background), checks the file and a
+    /// restore into a second window, then quits, which saves the session. The second launch checks
+    /// what came back. No key events.
+    private static func runSession(_ controller: BrowserWindowController) async {
+        var failures = 0
+        func check(_ label: String, _ ok: Bool, _ detail: String = "") {
+            if !ok { failures += 1 }
+            print("\(ok ? "ok  " : "FAIL") \(label.padding(toLength: 44, withPad: " ", startingAt: 0)) \(detail)")
+        }
+        func page(_ name: String) -> URL {
+            URL(string: "data:text/html,<title>\(name)</title><h1>\(name)</h1>")!
+        }
+        func describePanes<Panes: Sequence<PaneView>>(_ panes: Panes) -> String {
+            panes.map {
+                "\($0.displayTitle)[\($0.pendingRestore != nil ? "pending" : $0.webView.url == nil ? "blank" : "loaded")"
+                    + " back=\($0.webView.canGoBack) zoom=\(Int(($0.webView.pageZoom * 100).rounded()))]"
+            }.joined(separator: " ")
+        }
+        guard let fileURL = SessionStore.fileURL else {
+            print("FAIL: set BROWSER_SESSION_FILE"); return
+        }
+        let expectedTree = "tabs=2 sel=0 | H0.60(B, *C)"
+        let expectedFrame = NSRect(x: 120, y: 140, width: 1000, height: 700)
+
+        if controller.tabCount == 2 {
+            // Second launch: the session from the first came back.
+            print("restored: \(controller.debugDescriptionOfState)")
+            check("same tabs and split", controller.debugDescriptionOfState == expectedTree, controller.debugDescriptionOfState)
+            check("window frame", controller.window?.frame == expectedFrame, "\(controller.window?.frame ?? .zero)")
+            await pause(1.5)
+            let panes = describePanes(controller.debugPanes)
+            check("pages, history and zoom", panes == "B[loaded back=true zoom=100] C[loaded back=false zoom=110]", panes)
+            check("pane C has focus", controller.focusedPane?.displayTitle == "C")
+            let waiting = describePanes(controller.allPanes.suffix(1))
+            check("background tab waits until shown", waiting == "D[pending back=false zoom=100]", waiting)
+            controller.selectTab(at: 1)
+            await pause(1)
+            check("…then loads", describePanes(controller.debugPanes) == "D[loaded back=false zoom=100]", describePanes(controller.debugPanes))
+            print(failures == 0 ? "session (restored): all ok" : "session (restored): \(failures) FAILED")
+            return
+        }
+
+        try? FileManager.default.removeItem(at: fileURL)
+        controller.window?.setFrame(expectedFrame, display: true)
+        controller.focusedPane?.webView.load(URLRequest(url: page("A")))
+        await pause(0.7)
+        controller.focusedPane?.webView.load(URLRequest(url: page("B")))
+        await pause(0.7)
+        controller.splitRight(nil)
+        controller.focusedPane?.webView.load(URLRequest(url: page("C")))
+        controller.focusedPane?.zoomIn()
+        (controller.focusedPane?.superview as? SplitView)?.ratio = 0.6
+        controller.addTab(request: URLRequest(url: page("D")), select: false)
+        await pause(1.5)
+        print("built:    \(controller.debugDescriptionOfState)  \(describePanes(controller.debugPanes))")
+        check("tree as expected", controller.debugDescriptionOfState == expectedTree, controller.debugDescriptionOfState)
+
+        // Written by itself (at most a second after a change).
+        let saved = (try? Data(contentsOf: fileURL)).flatMap { try? JSONDecoder().decode(SavedSession.self, from: $0) }
+        check("session file written", saved != nil, "\((try? Data(contentsOf: fileURL))?.count ?? 0) bytes")
+        guard let window = saved?.windows.first else {
+            print("session: \(failures) FAILED"); return
+        }
+        let titles = window.tabs.map { $0.panes.map(\.title).joined(separator: "+") }
+        check("one window, two tabs", saved?.windows.count == 1 && titles == ["B+C", "D"], "\(titles)")
+        check("panes keep their history", window.tabs[0].panes.allSatisfy { $0.state != nil })
+        check("zoom and focus", window.tabs[0].panes.map(\.zoom) == [nil, 1.1] && window.tabs[0].panes.map(\.focused) == [false, true])
+
+        // Restoring into another window gives the same tabs; the background one waits.
+        let copy = BrowserWindowController()
+        copy.restore(window)
+        copy.showWindow(nil)
+        check("restored copy matches", copy.debugDescriptionOfState == expectedTree, copy.debugDescriptionOfState)
+        await pause(1.5)
+        check("copy's pages, history and zoom",
+              describePanes(copy.debugPanes) == "B[loaded back=true zoom=100] C[loaded back=false zoom=110]", describePanes(copy.debugPanes))
+        let waiting = describePanes(copy.allPanes.suffix(1))
+        check("background tab pending until selected", waiting == "D[pending back=false zoom=100]", waiting)
+        copy.selectTab(at: 1)
+        await pause(1)
+        check("…then loaded", describePanes(copy.debugPanes) == "D[loaded back=false zoom=100]", describePanes(copy.debugPanes))
+        copy.window?.close()
+
+        // Turning it off removes the file; turning it back on writes it again.
+        Settings.restoreSession = false
+        check("off removes the file", !FileManager.default.fileExists(atPath: fileURL.path))
+        controller.selectTab(at: 1)
+        controller.selectTab(at: 0)
+        await pause(1.5)
+        check("…and nothing is written", !FileManager.default.fileExists(atPath: fileURL.path))
+        Settings.restoreSession = true
+        check("on writes it again", FileManager.default.fileExists(atPath: fileURL.path))
+        print(failures == 0 ? "session: all ok (quitting saves it; run again to check the restore)" : "session: \(failures) FAILED")
     }
 
     /// Every tab layout × address bar mode (× auto-hide sidebar, collapsed and revealed): the address

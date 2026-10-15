@@ -147,6 +147,7 @@ enum Settings {
             "findHighlightColor": findHighlightColor,
             "formatJSON": formatJSON,
             "showQuickLinks": showQuickLinks,
+            "restoreSession": restoreSession,
             "askWhereToSaveDownloads": askWhereToSaveDownloads,
             "checkForUpdatesOnLaunch": checkForUpdatesOnLaunch,
             "updateChannel": updateChannel.rawValue,
@@ -273,6 +274,12 @@ enum Settings {
     static var showQuickLinks: Bool {
         get { value("showQuickLinks") ?? true }
         set { set(newValue, "showQuickLinks") }
+    }
+
+    /// Reopen the windows, tabs and panes that were open when Rosa last quit (or updated).
+    static var restoreSession: Bool {
+        get { value("restoreSession") ?? true }
+        set { set(newValue, "restoreSession") }
     }
 
     /// Show a save panel for each download instead of saving straight to Downloads.

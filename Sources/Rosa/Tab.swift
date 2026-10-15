@@ -30,6 +30,24 @@ final class Tab {
 
     var displayURL: String { (focusedPane ?? panes.first)?.displayURL ?? "" }
 
+    /// The split tree as the session file (and ⌘⇧T) keeps it.
+    var sessionLayout: SessionLayout {
+        func layout(_ view: NSView) -> SessionLayout {
+            if let split = view as? SplitView {
+                return .split(split.axis, ratio: Double(split.ratio), layout(split.first), layout(split.second))
+            }
+            let pane = view as? PaneView
+            return .pane(pane?.sessionPane(focused: pane === focusedPane)
+                         ?? SessionPane(url: nil, title: "", focused: false))
+        }
+        return layout(container.child)
+    }
+
+    /// Loads the pages a restart left waiting (`PaneView.deferRestore`); called when the tab is shown.
+    func restorePanes() {
+        panes.forEach { $0.restoreIfNeeded() }
+    }
+
     /// Snapshots every pane at about `width` points across the whole tab and lays them out as
     /// they sit in the split, without the address bars. Blank panes are left out. WebKit paints
     /// snapshots in the page's process, so this works for tabs that aren't on screen.
@@ -43,7 +61,7 @@ final class Tab {
         let inWindow = container.window != nil
 
         var shots: [(rect: NSRect, image: NSImage)] = []
-        for pane in panes where !pane.isBlank {
+        for pane in panes where !pane.isBlank && pane.pendingRestore == nil {
             let webView = pane.webView
             guard webView.bounds.width > 1, webView.bounds.height > 1 else { continue }
             let configuration = WKSnapshotConfiguration()

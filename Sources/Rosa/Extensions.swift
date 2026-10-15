@@ -793,8 +793,8 @@ extension PaneView: WKWebExtensionTab {
     }
 
     func webView(for context: WKWebExtensionContext) -> WKWebView? { webView }
-    func title(for context: WKWebExtensionContext) -> String? { webView.title }
-    func url(for context: WKWebExtensionContext) -> URL? { webView.url }
+    func title(for context: WKWebExtensionContext) -> String? { pendingRestore?.title ?? webView.title }
+    func url(for context: WKWebExtensionContext) -> URL? { pendingRestore?.url ?? webView.url }
     func isLoadingComplete(for context: WKWebExtensionContext) -> Bool { !webView.isLoading }
     func size(for context: WKWebExtensionContext) -> CGSize { webView.bounds.size }
     func zoomFactor(for context: WKWebExtensionContext) -> Double { webView.pageZoom }

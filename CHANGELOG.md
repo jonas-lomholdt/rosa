@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🗂️ Tabs
+- Rosa reopens your windows, tabs and split panes, each with its back/forward history, after quitting or installing an update. Tabs you haven't looked at yet wait to load until you switch to them. Turn it off in Settings → Tabs & Links.
+
 ## v0.11.1
 
 ✨ The tab overview's live preview fades in smoothly.

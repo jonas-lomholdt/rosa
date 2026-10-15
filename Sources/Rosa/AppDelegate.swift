@@ -21,11 +21,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             MainActor.assumeIsolated { self?.applyAppearance() }
         }
         installKeyMonitor()
-        newWindow(nil)
-        controllers.first?.focusedPane?.showWelcome()
+        MainActor.assumeIsolated {
+            SessionStore.shared.currentSession = { [weak self] in self?.currentSession() ?? SavedSession(windows: []) }
+        }
+        if !restoreSession() {
+            newWindow(nil)
+            controllers.first?.focusedPane?.showWelcome()
+        }
         NSApp.activate()
         SelfTest.runIfRequested()
         Updater.shared.checkOnLaunch()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Windows are still open here (an update quits through this too).
+        MainActor.assumeIsolated { SessionStore.shared.saveNow() }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -50,12 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     @objc func newWindow(_ sender: Any?) {
-        let controller = BrowserWindowController()
-        controller.onClose = { [weak self] closed in
-            self?.controllers.removeAll { $0 === closed }
-        }
-        controllers.append(controller)
-
+        let controller = makeWindowController()
         if let current = NSApp.keyWindow, let window = controller.window {
             window.setFrameTopLeftPoint(window.cascadeTopLeft(from: NSPoint(x: current.frame.minX, y: current.frame.maxY)))
         } else {
@@ -63,6 +68,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         controller.addTab()
         controller.showWindow(nil)
+    }
+
+    private func makeWindowController() -> BrowserWindowController {
+        let controller = BrowserWindowController()
+        controller.onClose = { [weak self] closed in
+            self?.controllers.removeAll { $0 === closed }
+            MainActor.assumeIsolated { SessionStore.shared.setNeedsSave() }
+        }
+        controllers.append(controller)
+        return controller
+    }
+
+    // MARK: - Session
+
+    /// The windows that go in the session file, front to back.
+    private func currentSession() -> SavedSession {
+        let order = NSApp.orderedWindows
+        let saved = controllers.filter(\.savesSession).sorted { a, b in
+            (a.window.flatMap(order.firstIndex) ?? .max) < (b.window.flatMap(order.firstIndex) ?? .max)
+        }
+        return SavedSession(windows: saved.map(\.sessionWindow))
+    }
+
+    /// Reopens the windows saved when Rosa last quit. False when there were none (or it's off).
+    private func restoreSession() -> Bool {
+        guard let session = MainActor.assumeIsolated({ SessionStore.shared.load() }), !session.windows.isEmpty else { return false }
+        // Back to front, so the frontmost window ends up in front.
+        for saved in session.windows.reversed() {
+            let controller = makeWindowController()
+            controller.window?.center()
+            controller.restore(saved)
+            controller.showWindow(nil)
+        }
+        return true
     }
 
     /// Reached only when no browser window is key (the window controller handles it otherwise).
