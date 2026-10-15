@@ -8,7 +8,7 @@ release notes (`scripts/release-notes.sh`).
 
 ### 🪟 Panes
 - Drag a tab onto a pane to split it: the half you hover lights up, and dropping there shows that tab beside the page (its own split panes come along). The tab itself goes away.
-- Rearrange panes with `⌃⌘ ← ↑ ↓ →` or `⌃⌘H/J/K/L`: the focused pane swaps places with its neighbour (Pane → Move Pane).
+- Rearrange panes with `⌃⌘ ← ↑ ↓ →` or `⌃⌘H/J/K/L`: the focused pane swaps places with its neighbour (Pane → Move Pane). The welcome page lists it too.
 
 ### 🗂️ Tabs
 - Right-click the sidebar to pin or unpin it: Pin Sidebar is the same switch as Settings → Auto-hide sidebar, and has a checkmark while the sidebar stays open.

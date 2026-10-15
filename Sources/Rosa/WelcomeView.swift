@@ -8,6 +8,8 @@ final class WelcomeView: NSView {
         let title: String
         let symbol: String
         let action: Selector
+        /// Commands that differ only in their arrow key (Move Pane): their keys join the shortcut, "⌃⌘ ←→↑↓".
+        var siblings: [Selector] = []
     }
 
     struct Section {
@@ -25,6 +27,9 @@ final class WelcomeView: NSView {
         Section(title: "Panes & Tabs", commands: [
             Command(title: "Split Right", symbol: "rectangle.split.2x1", action: #selector(BrowserWindowController.splitRight(_:))),
             Command(title: "Split Down", symbol: "rectangle.split.1x2", action: #selector(BrowserWindowController.splitDown(_:))),
+            Command(title: "Move Pane", symbol: "rectangle.2.swap", action: #selector(BrowserWindowController.movePaneLeft(_:)),
+                    siblings: [#selector(BrowserWindowController.movePaneRight(_:)), #selector(BrowserWindowController.movePaneUp(_:)),
+                               #selector(BrowserWindowController.movePaneDown(_:))]),
             Command(title: "New Tab", symbol: "plus", action: #selector(BrowserWindowController.newTab(_:))),
             Command(title: "Reopen Closed Tab", symbol: "arrow.uturn.backward", action: #selector(BrowserWindowController.reopenClosedTab(_:))),
         ]),
@@ -139,6 +144,14 @@ final class WelcomeView: NSView {
         onCommand?(command.action)
     }
 
+    /// The command's shortcut; with siblings, the shared modifiers then every key ("⌃⌘ ←→↑↓").
+    static func shortcut(for command: Command) -> String? {
+        guard let main = shortcut(for: command.action) else { return nil }
+        let keys = command.siblings.compactMap { shortcut(for: $0)?.last }
+        guard !keys.isEmpty, let key = main.last else { return main }
+        return "\(main.dropLast()) \(String([key] + keys))"
+    }
+
     /// Menu-style shortcut text (⌃⌥⇧⌘ + key) for the main menu item with `action`.
     static func shortcut(for action: Selector) -> String? {
         func find(in menu: NSMenu) -> NSMenuItem? {
@@ -225,7 +238,7 @@ private final class WelcomeRow: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     func refreshShortcut() {
-        let shortcut = WelcomeView.shortcut(for: command.action) ?? ""
+        let shortcut = WelcomeView.shortcut(for: command) ?? ""
         guard shortcutLabel.stringValue != shortcut else { return }
         shortcutLabel.stringValue = shortcut
         needsLayout = true

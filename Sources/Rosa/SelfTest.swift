@@ -1659,7 +1659,7 @@ enum SelfTest {
             if !ok { failures += 1 }
             print("\(ok ? "ok  " : "FAIL") \(label.padding(toLength: 40, withPad: " ", startingAt: 0)) panes=\(shown()) \(controller.debugDescriptionOfState)")
         }
-        let shortcuts = WelcomeView.sections.flatMap(\.commands).map { "\($0.title)=\(WelcomeView.shortcut(for: $0.action) ?? "?")" }
+        let shortcuts = WelcomeView.sections.flatMap(\.commands).map { "\($0.title)=\(WelcomeView.shortcut(for: $0) ?? "?")" }
         print("shortcuts: \(shortcuts.joined(separator: ", "))")
         check("every command has a shortcut", !shortcuts.contains { $0.hasSuffix("=?") })
         check("launch pane shows welcome", shown() == "W")
