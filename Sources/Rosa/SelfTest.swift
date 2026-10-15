@@ -1379,14 +1379,19 @@ enum SelfTest {
         let pinned = describe(emptyMenu) == "✓Pin Sidebar" && describe(tabMenu) == "✓Pin Sidebar"
         print("\(pinned ? "ok  " : "FAIL") menu pinned                   empty=[\(describe(emptyMenu))] tab=[\(describe(tabMenu))]")
 
-        // A real right-click on empty sidebar space opens the menu; close it right away (timers
-        // and the main queue don't run while a context menu tracks, so it would wait for a click).
+        // A real right-click on empty sidebar space opens the menu; an Escape queued in the app
+        // closes it (timers, the main queue and cancelTracking don't get through while it tracks).
         var shown = "none"
         let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: nil) { note in
             guard let menu = note.object as? NSMenu else { return }
             MainActor.assumeIsolated {
                 shown = describe(menu)
-                menu.cancelTrackingWithoutAnimation()
+                let escape = NSEvent.keyEvent(
+                    with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window.windowNumber, context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+                    isARepeat: false, keyCode: 53
+                )
+                if let escape { NSApp.postEvent(escape, atStart: false) }
             }
         }
         if let event = rightClick(at: empty) { window.sendEvent(event) }
