@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.13.0
+
+✨ Drag a tab onto a pane to show it side by side, and rearrange panes with ⌃⌘ arrows.
+
 ### 🪟 Panes
 - Drag a tab onto a pane to split it: the half you hover lights up, and dropping there shows that tab beside the page (its own split panes come along). The tab itself goes away.
 - Rearrange panes with `⌃⌘ ← ↑ ↓ →` or `⌃⌘H/J/K/L`: the focused pane swaps places with its neighbour (Pane → Move Pane). The welcome page lists it too.
