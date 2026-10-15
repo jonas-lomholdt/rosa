@@ -69,8 +69,9 @@ struct SavedSession: Codable {
 }
 
 /// Keeps the open windows, tabs and panes in a file so they come back after a restart (an
-/// update relaunches Rosa). Saved at most once a second while browsing, and when quitting.
-/// `Settings.restoreSession` turns it off (and removes the file).
+/// update relaunches Rosa). Written when quitting, and while browsing at most every `saveDelay`
+/// (so a crash loses little), only when something changed. `Settings.restoreSession` turns it off
+/// (and removes the file).
 @MainActor
 final class SessionStore {
     static let shared = SessionStore()
@@ -86,10 +87,15 @@ final class SessionStore {
             .appendingPathComponent("Session.json")
     }()
 
+    /// How long a change waits before it's written; later changes join the same write.
+    static let saveDelay: TimeInterval = 5
+
     /// The windows to save, front to back (set by the app delegate).
     var currentSession: (() -> SavedSession)?
 
     private var pendingSave: DispatchWorkItem?
+    /// What the file holds, so a save that would write the same bytes is skipped.
+    private var lastWritten: Data?
     private var settingsObserver: NSObjectProtocol?
     private var wasEnabled: Bool
 
@@ -108,19 +114,21 @@ final class SessionStore {
     func load() -> SavedSession? {
         guard isEnabled, let url = Self.fileURL, let data = try? Data(contentsOf: url) else { return nil }
         do {
-            return try JSONDecoder().decode(SavedSession.self, from: data)
+            let session = try JSONDecoder().decode(SavedSession.self, from: data)
+            lastWritten = data
+            return session
         } catch {
             print("[session] couldn't read \(url.path): \(error)")
             return nil
         }
     }
 
-    /// Something worth saving changed; it's written within a second.
+    /// Something worth saving may have changed; it's written within `saveDelay`.
     func setNeedsSave() {
         guard isEnabled, pendingSave == nil else { return }
         let work = DispatchWorkItem { [weak self] in self?.saveNow() }
         pendingSave = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.saveDelay, execute: work)
     }
 
     func saveNow() {
@@ -128,9 +136,14 @@ final class SessionStore {
         pendingSave = nil
         guard isEnabled, let url = Self.fileURL, let session = currentSession?() else { return }
         do {
-            let data = try JSONEncoder().encode(session)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys  // the same session always gives the same bytes
+            let data = try encoder.encode(session)
+            // Focus changes, loading spinners and the like often leave nothing new to save.
+            guard data != lastWritten else { return }
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: url, options: .atomic)
+            lastWritten = data
         } catch {
             print("[session] couldn't write \(url.path): \(error.localizedDescription)")
         }
@@ -145,6 +158,7 @@ final class SessionStore {
             // Off means nothing is kept: a stale file mustn't come back if it's turned on again.
             pendingSave?.cancel()
             pendingSave = nil
+            lastWritten = nil
             if let url = Self.fileURL { try? FileManager.default.removeItem(at: url) }
         }
     }

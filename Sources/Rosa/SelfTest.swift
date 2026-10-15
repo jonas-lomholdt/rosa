@@ -623,11 +623,11 @@ enum SelfTest {
         controller.focusedPane?.zoomIn()
         (controller.focusedPane?.superview as? SplitView)?.ratio = 0.6
         controller.addTab(request: URLRequest(url: page("D")), select: false)
-        await pause(1.5)
+        await pause(SessionStore.saveDelay + 0.5)
         print("built:    \(controller.debugDescriptionOfState)  \(describePanes(controller.debugPanes))")
         check("tree as expected", controller.debugDescriptionOfState == expectedTree, controller.debugDescriptionOfState)
 
-        // Written by itself (at most a second after a change).
+        // Written by itself (within `saveDelay` of a change).
         let saved = (try? Data(contentsOf: fileURL)).flatMap { try? JSONDecoder().decode(SavedSession.self, from: $0) }
         check("session file written", saved != nil, "\((try? Data(contentsOf: fileURL))?.count ?? 0) bytes")
         guard let window = saved?.windows.first else {
@@ -653,12 +653,22 @@ enum SelfTest {
         check("…then loaded", describePanes(copy.debugPanes) == "D[loaded back=false zoom=100]", describePanes(copy.debugPanes))
         copy.window?.close()
 
+        // A change that leaves the session as it was doesn't touch the file.
+        func modified() -> Date? {
+            (try? FileManager.default.attributesOfItem(atPath: fileURL.path))?[.modificationDate] as? Date
+        }
+        await pause(SessionStore.saveDelay + 0.5)  // closing the copy's window queued a save
+        let before = modified()
+        controller.selectTab(at: 0)  // already selected: queues a save with nothing new
+        await pause(SessionStore.saveDelay + 0.5)
+        check("unchanged session isn't rewritten", before != nil && modified() == before)
+
         // Turning it off removes the file; turning it back on writes it again.
         Settings.restoreSession = false
         check("off removes the file", !FileManager.default.fileExists(atPath: fileURL.path))
         controller.selectTab(at: 1)
         controller.selectTab(at: 0)
-        await pause(1.5)
+        await pause(SessionStore.saveDelay + 0.5)
         check("…and nothing is written", !FileManager.default.fileExists(atPath: fileURL.path))
         Settings.restoreSession = true
         check("on writes it again", FileManager.default.fileExists(atPath: fileURL.path))
