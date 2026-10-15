@@ -2,7 +2,10 @@ name: Canary
 
 # Every push to main publishes a prerelease of the next minor version for the Canary update
 # channel: after v0.12.x it is v0.13.0-canary.N, N being the commits since v0.12.0 (so a patch
-# release in between doesn't restart the count). Stable releases stay on tags (release.yml).
+# release in between doesn't restart the count). To aim canaries at a major release instead, put
+# it in NEXT_VERSION, e.g. `1.0.0`; it only counts while it is above the next minor, so a leftover
+# file is harmless once that version is out.
+# Stable releases stay on tags (release.yml).
 on:
   push:
     branches: [main]
@@ -38,7 +41,15 @@ jobs:
           IFS=. read -r MAJOR MINOR _ <<< "${BASE#v}"
           LINE="v$MAJOR.$MINOR.0"
           git rev-parse -q --verify "refs/tags/$LINE" > /dev/null || LINE=$BASE
-          TAG="v$MAJOR.$((MINOR + 1)).0-canary.$(git rev-list --count "$LINE..HEAD")"
+          NEXT="$MAJOR.$((MINOR + 1)).0"
+          if [ -f NEXT_VERSION ]; then
+            WANTED=$(tr -d '[:space:]' < NEXT_VERSION); WANTED=${WANTED#v}
+            if ! [[ "$WANTED" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error file=NEXT_VERSION::'$WANTED' is not a version like 1.0.0"; exit 1
+            fi
+            NEXT=$(printf '%s\n' "$NEXT" "$WANTED" | sort -V | tail -1)
+          fi
+          TAG="v$NEXT-canary.$(git rev-list --count "$LINE..HEAD")"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${TAG#v}" Resources/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GITHUB_RUN_NUMBER" Resources/Info.plist
