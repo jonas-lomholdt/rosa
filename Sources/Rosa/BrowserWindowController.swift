@@ -705,9 +705,12 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         let open: (URL, Bool) -> Void = { [weak self] url, background in self?.openBookmark(url, background: background) }
         commandPalette.show(in: contentRoot, modes: [
             CommandPaletteMode(sources: [BookmarksPaletteSource(open: open)],
-                               placeholder: "Search bookmarks or enter an address (> for commands)",
+                               placeholder: Settings.semanticSearch
+                                   ? "Search bookmarks and history, or enter an address (> for commands)"
+                                   : "Search bookmarks or enter an address (> for commands)",
                                emptyText: "No bookmarks yet. Press ⌘B to bookmark the current page, or type > for commands.",
-                               queryItem: { BookmarksPaletteSource.queryItem($0, open: open) }),
+                               queryItem: { BookmarksPaletteSource.queryItem($0, open: open) },
+                               semanticItems: { await BookmarksPaletteSource.semanticItems($0, open: open) }),
             CommandPaletteMode(prefix: ">", sources: [MenuCommandsPaletteSource()], emptyText: "No commands", symbol: "command"),
         ], query: prefix)
     }

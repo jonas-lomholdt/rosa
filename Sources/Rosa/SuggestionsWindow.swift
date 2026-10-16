@@ -34,7 +34,9 @@ final class SuggestionsWindow {
         panel.contentView = glass
     }
 
-    func show(_ entries: [HistoryEntry], below anchor: NSView) {
+    /// Rows from `semanticFrom` on are smart-search matches (marked with a sparkle). The selection
+    /// is kept when `keepsSelection` (rows added below it).
+    func show(_ entries: [HistoryEntry], below anchor: NSView, semanticFrom: Int = .max, keepsSelection: Bool = false) {
         guard !entries.isEmpty, let parent = anchor.window else { return hide() }
 
         while rows.count < entries.count {
@@ -49,8 +51,8 @@ final class SuggestionsWindow {
         while rows.count > entries.count {
             rows.removeLast().removeFromSuperview()
         }
-        for (row, entry) in zip(rows, entries) { row.configure(entry) }
-        selectedIndex = -1
+        for (index, (row, entry)) in zip(rows, entries).enumerated() { row.configure(entry, semantic: index >= semanticFrom) }
+        selectedIndex = keepsSelection && selectedIndex < entries.count ? selectedIndex : -1
 
         let anchorRect = parent.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         let width = max(anchorRect.width, 360)
@@ -94,6 +96,7 @@ private final class SuggestionRowView: NSView {
 
     private let iconView = FaviconView()
     private let label = NSTextField(labelWithString: "")
+    private let sparkle = NSImageView(image: NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Found by meaning") ?? NSImage())
     private var title = ""
     private var urlText = ""
 
@@ -101,19 +104,24 @@ private final class SuggestionRowView: NSView {
         super.init(frame: .zero)
         label.lineBreakMode = .byTruncatingTail
         label.cell?.truncatesLastVisibleLine = true
+        sparkle.symbolConfiguration = .init(pointSize: 11, weight: .regular)
+        sparkle.toolTip = "Found by meaning (smart search)"
         addSubview(iconView)
         addSubview(label)
+        addSubview(sparkle)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override var isFlipped: Bool { true }
 
-    func configure(_ entry: HistoryEntry) {
+    func configure(_ entry: HistoryEntry, semantic: Bool) {
         title = entry.title.isEmpty ? entry.displayHost : entry.title
         urlText = entry.displayURL
         iconView.favicon = FaviconStore.shared.cachedIcon(forHost: entry.url.host())
+        sparkle.isHidden = !semantic
         updateText()
+        needsLayout = true
     }
 
     private func updateText() {
@@ -128,16 +136,19 @@ private final class SuggestionRowView: NSView {
             attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: secondary]
         ))
         label.attributedStringValue = text
+        sparkle.contentTintColor = secondary
     }
 
     override func layout() {
         super.layout()
         iconView.frame = NSRect(x: 10, y: ((bounds.height - 16) / 2).rounded(), width: 16, height: 16)
         let labelHeight = label.intrinsicContentSize.height
+        let trailing: CGFloat = sparkle.isHidden ? 10 : 30
         label.frame = NSRect(
             x: 34, y: ((bounds.height - labelHeight) / 2).rounded(),
-            width: max(0, bounds.width - 44), height: labelHeight
+            width: max(0, bounds.width - 34 - trailing), height: labelHeight
         )
+        sparkle.frame = NSRect(x: bounds.width - 26, y: ((bounds.height - 16) / 2).rounded(), width: 16, height: 16)
     }
 
     override func draw(_ dirtyRect: NSRect) {

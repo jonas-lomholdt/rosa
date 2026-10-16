@@ -79,6 +79,10 @@ enum SelfTest {
             runHistorySearch()
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "semantic" {
+            await runSemanticSearch(controller)
+            return
+        }
 
         func page(_ name: String, _ color: String) {
             controller.focusedPane?.load("data:text/html,<title>\(name)</title><body style='background:\(color)'><h1>\(name)</h1>")
@@ -1599,6 +1603,149 @@ enum SelfTest {
     /// while the pane is too small, gone once it loads a page. Posts no key events.
     /// Clicking into the address bar selects the whole address; a drag selects part of it, and a
     /// click while editing places the caret.
+    /// Smart search over seeded history: paraphrases find their page (by title, address or page
+    /// text, across languages), a bookmark is found too, an unrelated query finds nothing, and
+    /// clearing history or turning the feature off removes the vectors; ⌘P and the address bar
+    /// show the matches. Needs the model already downloaded (`BROWSER_MODEL_DIR`) and scratch
+    /// `BROWSER_SETTINGS_FILE`, `BROWSER_HISTORY_DB` and `BROWSER_SEMANTIC_DB`. Posts ⌘P.
+    private static func runSemanticSearch(_ controller: BrowserWindowController) async {
+        let environment = ProcessInfo.processInfo.environment
+        guard ["BROWSER_SETTINGS_FILE", "BROWSER_HISTORY_DB", "BROWSER_SEMANTIC_DB"].allSatisfy({ environment[$0] != nil }) else {
+            print("FAIL: semantic needs BROWSER_SETTINGS_FILE, BROWSER_HISTORY_DB and BROWSER_SEMANTIC_DB (it clears history)")
+            return
+        }
+        guard SemanticModel.shared.isDownloaded else {
+            print("SKIP: no model in \(SemanticModel.directory.path) (set BROWSER_MODEL_DIR to a downloaded copy)")
+            return
+        }
+        let search = SemanticSearch.shared
+        var failures = 0
+        func waitForIndex(_ what: String, until done: () -> Bool) async {
+            let start = Date()
+            while !done(), Date().timeIntervalSince(start) < 300 { await pause(0.25) }
+            let ok = done()
+            if !ok { failures += 1 }
+            print("\(ok ? "ok  " : "FAIL") \(what) in \(String(format: "%.1f", Date().timeIntervalSince(start)))s: \(search.statusDescription)")
+        }
+
+        Settings.semanticSearch = false
+        Settings.historyEnabled = true
+        HistoryStore.shared.clear(since: nil)
+        let pages = [
+            ("https://www.kingarthurbaking.com/blog/sourdough-hydration", "Sourdough hydration explained"),
+            ("https://kubernetes.io/docs/concepts/services-networking/", "Services, Load Balancing, and Networking | Kubernetes"),
+            ("https://skat.dk/borger/restskat", "Restskat | Skattestyrelsen"),
+            ("https://github.com/", "GitHub"),
+            ("https://news.ycombinator.com/", "Hacker News"),
+            ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "Rick Astley - Never Gonna Give You Up"),
+            ("https://developer.apple.com/documentation/swiftui", "SwiftUI | Apple Developer Documentation"),
+            ("https://en.wikipedia.org/wiki/Photosynthesis", "Photosynthesis - Wikipedia"),
+            ("https://www.seriouseats.com/the-best-chili-recipe", "The Best Chili Recipe"),
+            ("https://www.dmi.dk/", "DMI - Vejret"),
+            ("https://mail.google.com/mail/u/0/", "Inbox - Gmail"),
+            ("https://www.booking.com/hotel/jp/tokyo-station", "Tokyo Station Hotel"),
+            ("https://www.strava.com/activities/123", "Morning Run | Strava"),
+            ("https://docs.python.org/3/library/asyncio.html", "asyncio — Asynchronous I/O"),
+            ("https://www.ikea.com/dk/da/p/billy-reol", "BILLY Reol - IKEA"),
+            ("https://www.figma.com/", "Figma"),
+            ("https://react.dev/reference/react/useEffect", "useEffect – React"),
+            ("https://science.nasa.gov/mars/", "Mars - NASA Science"),
+            ("https://www.imdb.com/title/tt0111161/", "The Shawshank Redemption (1994) - IMDb"),
+            ("https://medium.com/p/3f2a9c", "Untitled"),
+            ("https://www.reddit.com/r/espresso/", "r/espresso"),
+            ("https://www.postgresql.org/docs/current/indexes.html", "PostgreSQL: Documentation: Indexes"),
+            ("https://www.vogue.com/fashion", "Fashion | Vogue"),
+            ("https://www.coursera.org/learn/machine-learning", "Machine Learning | Coursera"),
+            ("https://www.dr.dk/nyheder", "Nyheder | DR"),
+            ("https://open.spotify.com/", "Spotify"),
+            ("https://www.zillow.com/", "Zillow: Real Estate, Apartments, Mortgages & Home Values"),
+            ("https://www.healthline.com/nutrition/intermittent-fasting-guide", "Intermittent Fasting 101 — The Ultimate Beginner's Guide"),
+            ("https://www.lonelyplanet.com/iceland", "Iceland travel guide - Lonely Planet"),
+            ("https://www.chess.com/openings/Sicilian-Defense", "Sicilian Defense - Chess Openings"),
+        ]
+        for (url, title) in pages { HistoryStore.shared.recordVisit(url: URL(string: url)!, title: title) }
+        let bookmark = URL(string: "https://www.swingshoes-cph.dk/lindy-hop")!
+        let bookmarkPath = Bookmarks.add(Bookmark(title: "Lindy hop for beginners – Swing Shoes Copenhagen", kind: .link(bookmark)))
+
+        Settings.semanticSearch = true
+        await waitForIndex("model ready and \(pages.count + 1) pages indexed") {
+            SemanticModel.shared.state == .ready && search.pendingCount == 0 && search.indexedCount == pages.count + 1
+        }
+        // Page text, as `PaneView` captures it: the vague "Untitled" page is only findable by it.
+        search.update(url: URL(string: "https://medium.com/p/3f2a9c")!, title: "Untitled",
+                      text: "How we cut our AWS bill in half. Moving batch jobs to spot instances, rightsizing our EC2 fleet and deleting idle load balancers saved us $40k a month.")
+        // A Danish page that says little in its title ("DMI - Vejret": weather) is found by its text.
+        search.update(url: URL(string: "https://www.dmi.dk/")!, title: "DMI - Vejret",
+                      text: "Vejrudsigt for Danmark. I morgen: skyet med regnbyger, op til 14 grader og frisk vind fra vest. Se timeprognose og radar.")
+        await waitForIndex("page text indexed") { search.pendingCount == 0 }
+
+        func check(_ query: String, _ expected: String?) async {
+            let hits = await search.search(query)
+            let top = hits.first?.url.absoluteString
+            let ok = top == expected
+            if !ok { failures += 1 }
+            let shown = hits.prefix(3).map { "\($0.url.host() ?? "")\($0.url.path()) \(String(format: "%.2f z%.1f", $0.cosine, $0.z))" }
+            print("\(ok ? "ok  " : "FAIL") \(query.padding(toLength: 40, withPad: " ", startingAt: 0)) \(shown)"
+                  + (ok ? "" : "  (expected \(expected ?? "nothing"))"))
+            if !ok {
+                for score in await search.debugScores(query).prefix(4) {
+                    print("       \(String(format: "%.3f z%.2f", score.cosine, score.z)) \(score.url)")
+                }
+            }
+        }
+        await check("how do I make my bread rise more", "https://www.kingarthurbaking.com/blog/sourdough-hydration")
+        await check("container orchestration networking", "https://kubernetes.io/docs/concepts/services-networking/")
+        await check("when do I have to pay back taxes", "https://skat.dk/borger/restskat")
+        await check("cutting our cloud costs", "https://medium.com/p/3f2a9c")
+        await check("coffee machine tips", "https://www.reddit.com/r/espresso/")
+        await check("red planet rover", "https://science.nasa.gov/mars/")
+        await check("swing dancing lessons", bookmark.absoluteString)
+        await check("losing weight by skipping meals", "https://www.healthline.com/nutrition/intermittent-fasting-guide")
+        await check("weather forecast tomorrow", "https://www.dmi.dk/")
+        await check("quantum chromodynamics lattice gauge theory", nil)
+        await check("how to change a bicycle tire", nil)
+
+        // In the UI: ⌘P adds smart matches under its bookmarks, the address bar under its history rows.
+        if let pane = controller.focusedPane, let window = controller.window {
+            pane.focusWebView()
+            await ensureActive(window)
+            post("p", keyCode: 35, modifiers: [.command], window: window)
+            await pause(0.5)
+            let palette = controller.debugCommandPalette
+            for (query, title) in [("swing dancing lessons", "Lindy hop for beginners – Swing Shoes Copenhagen"),
+                                   ("red planet rover", "Mars - NASA Science")] {
+                palette.debugSetQuery(query)
+                await pause(1.5)
+                let found = palette.debugResults.contains(title)
+                if !found { failures += 1 }
+                print("\(found ? "ok  " : "FAIL") ⌘P \(query): \(palette.debugResults)")
+            }
+            palette.close(restoringFocus: true)
+            await pause(0.5)
+            let field = [pane.addressField, controller.debugContentRoot.header.addressField].first { !$0.isHiddenOrHasHiddenAncestor }
+                ?? pane.addressField
+            window.makeFirstResponder(field)
+            await pause(0.3)
+            (field.currentEditor() as? NSTextView)?.insertText("coffee machine tips", replacementRange: NSRange(location: 0, length: (field.currentEditor()?.string as NSString?)?.length ?? 0))
+            await pause(1.5)
+            let suggestions = field.debugSuggestions
+            let inBar = suggestions.contains("reddit.com/r/espresso")
+            if !inBar { failures += 1 }
+            print("\(inBar ? "ok  " : "FAIL") address bar shows smart matches: \(suggestions)")
+            pane.focusWebView()
+            await pause(0.8)
+        }
+
+        Bookmarks.remove(at: bookmarkPath)
+        HistoryStore.shared.clear(since: nil)
+        await waitForIndex("history and bookmark cleared from the index") { search.indexedCount == 0 }
+        Settings.semanticSearch = false
+        let deleted = !FileManager.default.fileExists(atPath: environment["BROWSER_SEMANTIC_DB"]!)
+        if !deleted { failures += 1 }
+        print("\(deleted ? "ok  " : "FAIL") turning it off deletes the index")
+        print(failures == 0 ? "PASS semantic" : "FAIL semantic: \(failures) failed")
+    }
+
     private static func runAddressClick(_ controller: BrowserWindowController) async {
         var failures = 0
         guard let pane = controller.focusedPane, let window = controller.window else { return print("FAIL: no pane") }

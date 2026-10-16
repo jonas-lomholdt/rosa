@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🔎 Smart search
+- New, off by default: Settings → History → Smart Search finds pages by what they're about, not just the words you type. "how do I make my bread rise" finds the sourdough guide you read last week, even across languages. Matches show up with a ✨ under the usual suggestions in the address bar, and in ⌘P, which then searches your history as well as your bookmarks.
+- It runs entirely on your Mac with Google's EmbeddingGemma model, which is downloaded (585 MB) only when you turn it on. The first start takes about a minute while macOS prepares the model; after that it's ready in seconds. Remove Model deletes it again.
+
 ## v0.13.0
 
 ✨ Drag a tab onto a pane to show it side by side, and rearrange panes with ⌃⌘ arrows.

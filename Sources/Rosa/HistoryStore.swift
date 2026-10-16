@@ -31,6 +31,8 @@ struct HistoryEntry {
 final class HistoryStore {
     static let shared = HistoryStore()
     static let didChange = Notification.Name("HistoryDidChange")
+    /// Posted after `clear(since:)`, so indexes built from history drop what's gone.
+    static let didClear = Notification.Name("HistoryDidClear")
 
     struct InlineCompletion {
         /// The full field text: what the user typed plus the completed remainder.
@@ -185,6 +187,7 @@ final class HistoryStore {
         candidatesByURL = [:]
         picks = nil
         notify()
+        NotificationCenter.default.post(name: Self.didClear, object: nil)
     }
 
     var pageCount: Int {
@@ -207,6 +210,22 @@ final class HistoryStore {
         .filter { hosts.insert($0.displayHost).inserted }
         .prefix(limit)
         .map { $0 }
+    }
+
+    /// The pages the address bar searches (most recent first), for smart search's index.
+    func indexablePages() -> [(url: String, title: String)] {
+        rows("SELECT url, title FROM pages ORDER BY last_visit DESC LIMIT ?1", [.integer(Self.searchablePages)]) {
+            (Self.text($0, 0), Self.text($0, 1))
+        }
+    }
+
+    /// The history entry for `url`, if it was visited.
+    func entry(for url: URL) -> HistoryEntry? {
+        if let candidate = candidatesByURL[url.absoluteString] { return candidate.entry }
+        return rows("SELECT title, visit_count, last_visit FROM pages WHERE url = ?1", [.text(url.absoluteString)]) {
+            HistoryEntry(url: url, title: Self.text($0, 0), visitCount: Int(sqlite3_column_int64($0, 1)),
+                         lastVisit: Date(timeIntervalSince1970: sqlite3_column_double($0, 2)))
+        }.first
     }
 
     // MARK: - Suggestions

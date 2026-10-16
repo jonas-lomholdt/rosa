@@ -136,6 +136,7 @@ enum Settings {
             "inactivePaneOpacity": inactivePaneOpacity,
             "appearance": appearance.rawValue,
             "historyEnabled": historyEnabled,
+            "semanticSearch": semanticSearch,
             "adBlockEnabled": adBlockEnabled,
             "enabledFilterLists": enabledFilterLists.sorted(),
             "adBlockAllowlist": adBlockAllowlist,
@@ -209,6 +210,13 @@ enum Settings {
     static var historyEnabled: Bool {
         get { value("historyEnabled") ?? true }
         set { set(newValue, "historyEnabled") }
+    }
+
+    /// Smart search: history and bookmarks found by meaning too (`SemanticSearch`). Turning it on
+    /// downloads the model.
+    static var semanticSearch: Bool {
+        get { value("semanticSearch") ?? false }
+        set { set(newValue, "semanticSearch") }
     }
 
     static var adBlockEnabled: Bool {

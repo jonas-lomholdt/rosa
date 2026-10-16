@@ -17,6 +17,10 @@ final class AddressField: NSTextField, NSTextFieldDelegate {
     /// What the user actually typed, excluding any inline completion.
     private var typedText = ""
     private var inlineCompletion: HistoryStore.InlineCompletion?
+    /// Smart search for the current text, which adds its matches below the history ones.
+    private var semanticSearch: Task<Void, Never>?
+    /// Most smart-search rows added under the history suggestions.
+    private static let semanticRows = 4
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -111,6 +115,7 @@ final class AddressField: NSTextField, NSTextFieldDelegate {
 
         entries = HistoryStore.shared.search(query)
         suggestions.show(entries, below: anchorView)
+        searchByMeaning(query)
 
         let match = HistoryStore.shared.defaultMatch(for: text, in: entries, completes: !isDeleting)
         if let completion = match.completion {
@@ -120,6 +125,29 @@ final class AddressField: NSTextField, NSTextFieldDelegate {
             inlineCompletion = completion
         }
         if match.selectsTop { suggestions.selectedIndex = 0 }
+    }
+
+    /// After a pause in typing, asks smart search and adds what history matching missed, below
+    /// it: the rows above don't move, so ↩ and a selection stay put.
+    private func searchByMeaning(_ query: String) {
+        semanticSearch?.cancel()
+        guard SemanticSearch.shared.isAvailable, SemanticSearch.isSearchable(query) else { return }
+        semanticSearch = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            let hits = await SemanticSearch.shared.search(query, limit: Self.semanticRows + 4)
+            guard let self, !Task.isCancelled,
+                  typedText.trimmingCharacters(in: .whitespaces) == query else { return }
+            let shown = Set(entries.map(\.url.absoluteString))
+            let added = hits.lazy.filter { !shown.contains($0.url.absoluteString) }.prefix(Self.semanticRows).map { hit in
+                HistoryStore.shared.entry(for: hit.url)
+                    ?? HistoryEntry(url: hit.url, title: hit.title, visitCount: 0, lastVisit: .distantPast)
+            }
+            guard !added.isEmpty else { return }
+            let firstAdded = entries.count
+            entries += added
+            suggestions.show(entries, below: anchorView, semanticFrom: firstAdded, keepsSelection: true)
+        }
     }
 
     private func moveSelection(by delta: Int) -> Bool {
@@ -148,6 +176,8 @@ final class AddressField: NSTextField, NSTextFieldDelegate {
     }
 
     private func hideSuggestions() {
+        semanticSearch?.cancel()
+        semanticSearch = nil
         suggestions.hide()
         entries = []
         inlineCompletion = nil

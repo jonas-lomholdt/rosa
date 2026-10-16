@@ -649,6 +649,27 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         needsLayout = true
     }
 
+    /// The start of the page's readable text (its article or main content when it marks one),
+    /// whitespace collapsed. Runs in the link-hints world, out of the page's reach.
+    private static let pageTextScript = """
+        (() => {
+            const root = document.querySelector('article, main, [role=main]') || document.body;
+            return root ? (root.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, \(SemanticSearch.pageTextLength)) : '';
+        })()
+        """
+
+    /// Hands the loaded page's title and text to smart search, which embeds it. Only for pages
+    /// that go into history.
+    private func capturePageText() {
+        guard Settings.semanticSearch, recordsHistory, let url = webView.url,
+              ["http", "https"].contains(url.scheme?.lowercased()) else { return }
+        Task {
+            let text = (try? await webView.evaluateJavaScript(Self.pageTextScript, contentWorld: LinkHints.contentWorld)) as? String
+            guard webView.url == url else { return }
+            SemanticSearch.shared.update(url: url, title: webView.title ?? "", text: text ?? "")
+        }
+    }
+
     /// Whether a redirect from `source` to `destination` left the site ("www." aside).
     private static func isOtherSite(_ source: URL, _ destination: URL) -> Bool {
         func site(_ url: URL) -> String? {
@@ -683,6 +704,7 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         // New page: refresh the match count if the find bar is open.
         if !findBar.isHidden { find(findBar.field.stringValue, fresh: true) }
+        capturePageText()
         let generation = faviconGeneration
         Task {
             let icon = await FaviconStore.shared.icon(for: webView)

@@ -81,6 +81,35 @@ Every other blank pane gets a `QuickLinksView` (`PaneView.updateQuickLinks`, rem
 
 A click that focuses an `AddressField` selects the whole address, like ⌘L (`mouseDown`: the field only gets clicks before its field editor covers it; a drag keeps its own selection). `BROWSER_SELFTEST_ONLY=addressclick` clicks and drags in the field (mouse events sent to the window, no key events).
 
+## Smart search
+
+Opt-in (`Settings.semanticSearch`, Settings → History → Smart Search): the address bar and ⌘P also find history and bookmarks by meaning, using Google's EmbeddingGemma 2 text encoder.
+
+- **Model** (`SemanticModel.swift`): turning the setting on downloads the Core ML conversion `FluidInference/embeddinggemma-2-coreml`, pinned to a revision, into `models/embeddinggemma-2/` beside the settings file (`BROWSER_MODEL_DIR` points at another copy). That's the text `.mlpackage`, the bf16 token table and `tokenizer.json`, ~585 MB. Each file is SHA-256-checked (hashes are in the source), downloaded to `*.partial`, and resumed with a Range request after a relaunch. `MLModel.compileModel` puts `EmbeddingGemma2Text.mlmodelc` beside the package. The first load compiles all six functions for the Neural Engine (~70 s on an M5 Pro; Core ML caches it, ~4 s after that). Loading runs off the main thread, and if the Neural Engine refuses the model it falls back to the CPU. Turning the setting off unloads the model; Remove Model deletes the folder.
+- **Running it** (`EmbeddingGemma.swift`, an actor; Foundation and Core ML only, so a scratch harness can compile it alone):
+  - Tokenize with `GemmaTokenizer`: BPE over the whole text, spaces written as `▁`, UTF-8 byte fallback. It matches Hugging Face `tokenizers` on ASCII, CJK, emoji, URLs and combining marks. Lookups use NSString keys, because Swift `String` equality would merge canonically-equivalent tokens like `;` and U+037E. The parsed tables are cached as `tokenizer.json.bin` (10 ms to load instead of 2 s).
+  - Look up each token's row in the memory-mapped bf16 table and scale by √512.
+  - Call the smallest `embed_S` function that fits (S = 32…512).
+  - Prefix queries with `task: search result | query: ` and pages with `title: … | text: `.
+  - Vectors matched the ONNX fp32 export to cosine ≥ 0.9994. A query embeds in ~3 ms on the Neural Engine.
+- **Index** (`SemanticSearch.swift`):
+  - Storage: `Semantic.sqlite` in Application Support (`BROWSER_SEMANTIC_DB`), one row per URL with title, page text and vector. Vectors are Matryoshka-truncated to 256 dimensions and stored as Float16.
+  - `sync()` mirrors history (the 50,000 most recent pages) and bookmarks: it runs at start, after `HistoryStore.didClear` and on bookmark changes, and takes ~60 ms for 50k pages.
+  - A background loop embeds rows without a vector, newest first, at ~400 pages/s.
+  - `PaneView.capturePageText` reads the first 1,500 characters of a loaded page's `<article>`/`<main>`/body text (link-hints world, only when the page goes into history) and re-embeds it.
+  - Turning the setting off deletes the index.
+- **Searching:**
+  - Search is a brute-force cosine scan (`vDSP_mmul`), ~2 ms for 50k pages; no vector index is needed at this size.
+  - Each score is turned into a z-score against all pages for that query (as DigUp does). A hit needs z ≥ 2.5 and cosine ≥ 0.45, so an unrelated query finds nothing.
+  - `AddressField` and `CommandPaletteView` (`CommandPaletteMode.semanticItems`) ask 150 ms after typing stops. They add up to 4 / 6 matches that weren't already listed, marked with `sparkles`, below the rows already shown, so ↩, inline completion and the selection never move.
+  - `SemanticSearch.isSearchable` skips queries shorter than 4 characters and addresses.
+- `BROWSER_SELFTEST_ONLY=semantic` needs a downloaded model (`BROWSER_MODEL_DIR`) and scratch `BROWSER_SETTINGS_FILE` / `BROWSER_HISTORY_DB` / `BROWSER_SEMANTIC_DB`. It seeds 30 pages and a bookmark, then checks:
+  - paraphrases find their page by title, page text, or across languages;
+  - unrelated queries find nothing;
+  - ⌘P and the address bar show the matches;
+  - clearing history empties the index, and turning the setting off deletes it.
+  It posts ⌘P.
+
 ## Content blocking
 
 On by default (Settings → Content Blocking). EasyList + EasyPrivacy (and optionally the EasyList Cookie List) are downloaded on first launch, refreshed weekly, converted by `FilterListConverter` (a subset of Adblock Plus syntax) and compiled into WebKit `WKContentRuleList`s, which WebKit caches. The shield in the address bar turns blocking off for one site.

@@ -56,6 +56,11 @@ final class SettingsModel: ObservableObject {
         didSet { if Settings.historyEnabled != historyEnabled { Settings.historyEnabled = historyEnabled } }
     }
     @Published private(set) var historyPageCount = 0
+    @Published var semanticSearch: Bool {
+        didSet { if Settings.semanticSearch != semanticSearch { Settings.semanticSearch = semanticSearch } }
+    }
+    @Published private(set) var semanticStatus = ""
+    @Published private(set) var modelDownloaded = false
     @Published var confirmingClear = false
     @Published var adBlockEnabled: Bool {
         didSet { if Settings.adBlockEnabled != adBlockEnabled { Settings.adBlockEnabled = adBlockEnabled } }
@@ -80,6 +85,7 @@ final class SettingsModel: ObservableObject {
 
     private var observer: NSObjectProtocol?
     private var historyObserver: NSObjectProtocol?
+    private var semanticObservers: [NSObjectProtocol] = []
     private var blockerObserver: NSObjectProtocol?
     private var updaterObserver: NSObjectProtocol?
 
@@ -102,6 +108,7 @@ final class SettingsModel: ObservableObject {
         linkHintsAllPanes = Settings.linkHintsAllPanes
         historyEnabled = Settings.historyEnabled
         historyPageCount = HistoryStore.shared.pageCount
+        semanticSearch = Settings.semanticSearch
         adBlockEnabled = Settings.adBlockEnabled
         enabledFilterLists = Settings.enabledFilterLists
         allowlist = Settings.adBlockAllowlist
@@ -109,6 +116,12 @@ final class SettingsModel: ObservableObject {
         updateChannel = Settings.updateChannel
         refreshBlockerStatus()
         refreshUpdateStatus()
+        refreshSemanticStatus()
+        semanticObservers = [SemanticSearch.didChange, SemanticModel.didChange].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshSemanticStatus() }
+            }
+        }
         updaterObserver = NotificationCenter.default.addObserver(
             forName: Updater.didChange, object: nil, queue: .main
         ) { [weak self] _ in
@@ -149,11 +162,24 @@ final class SettingsModel: ObservableObject {
         showQuickLinks = Settings.showQuickLinks
         linkHintsAllPanes = Settings.linkHintsAllPanes
         historyEnabled = Settings.historyEnabled
+        semanticSearch = Settings.semanticSearch
         adBlockEnabled = Settings.adBlockEnabled
         enabledFilterLists = Settings.enabledFilterLists
         allowlist = Settings.adBlockAllowlist
         checkForUpdatesOnLaunch = Settings.checkForUpdatesOnLaunch
         updateChannel = Settings.updateChannel
+    }
+
+    private func refreshSemanticStatus() {
+        semanticStatus = SemanticSearch.shared.statusDescription
+        let state = SemanticModel.shared.state
+        modelDownloaded = state == .downloaded || state == .ready || (state == .preparing)
+    }
+
+    /// Deletes the downloaded model, turning smart search off.
+    func removeModel() {
+        Settings.semanticSearch = false
+        SemanticModel.shared.remove()
     }
 
     private func refreshUpdateStatus() {
@@ -318,6 +344,26 @@ struct SettingsView: View {
                 Button("Today", role: .destructive) { model.clearHistory(since: Calendar.current.startOfDay(for: Date())) }
                 Button("All History", role: .destructive) { model.clearHistory(since: nil) }
                 Button("Cancel", role: .cancel) {}
+            }
+
+            Section {
+                Toggle("Find pages by meaning", isOn: $model.semanticSearch)
+                if !model.semanticStatus.isEmpty || model.modelDownloaded {
+                    LabeledContent {
+                        if model.modelDownloaded {
+                            Button("Remove Model") { model.removeModel() }
+                        }
+                    } label: {
+                        Text(model.semanticStatus)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Smart Search")
+            } footer: {
+                Text("The address bar and ⌘P also find history and bookmarks by what they're about, not just the words you type, using Google's EmbeddingGemma model. Turning this on downloads the model (\(ByteCountFormatter.string(fromByteCount: SemanticModel.downloadSize, countStyle: .file))) to ~/.rosa/models and reads the start of each page you visit. Everything stays on this Mac.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section {

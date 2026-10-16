@@ -13,6 +13,10 @@ struct CommandPaletteItem {
     var shortcut = ""
     /// Hand focus back to where it was before running (menu commands act on the focused pane).
     var restoresFocus = false
+    /// The page it opens, so smart-search matches already listed aren't added twice.
+    var url: URL?
+    /// Found by smart search (marked with a sparkle).
+    var isSemantic = false
     /// Runs the item; `inBackground` is ⌘↩ (e.g. open a bookmark where ⌘-clicked links go).
     var perform: (_ inBackground: Bool) -> Void
 }
@@ -38,6 +42,8 @@ struct CommandPaletteMode {
     /// An extra row made from the query itself (open it as an address, search for it): first
     /// when `first`, else after the matches.
     var queryItem: ((String) -> (item: CommandPaletteItem, first: Bool)?)?
+    /// Smart-search matches for the query, added below the others after a pause in typing.
+    var semanticItems: ((String) async -> [CommandPaletteItem])?
 }
 
 // MARK: - Matching
@@ -173,6 +179,9 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
     private var modeIndex = 0
     private var candidates: [CommandPaletteMatcher.Candidate] { modes.indices.contains(modeIndex) ? modes[modeIndex].candidates : [] }
     private var results: [CommandPaletteMatcher.Match] = []
+    /// Whether the last result is the query row ("Search … for"), which stays last.
+    private var endsWithQueryItem = false
+    private var semanticSearch: Task<Void, Never>?
     /// Whoever had focus before opening, to give it back on Esc.
     private weak var previousResponder: NSResponder?
     private var isClosing = false
@@ -284,6 +293,8 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
     func close(restoringFocus: Bool) {
         guard isShown, !isClosing else { return }
         isClosing = true
+        semanticSearch?.cancel()
+        semanticSearch = nil
         let window = self.window
         removeFromSuperview()
         modes = []
@@ -349,18 +360,50 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
             query.removeFirst(min(prefix.count, query.count))
         }
         results = CommandPaletteMatcher.matches(query, in: candidates)
+        endsWithQueryItem = false
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty, let make = modes.indices.contains(modeIndex) ? modes[modeIndex].mode.queryItem : nil,
            let (item, first) = make(trimmed) {
             let match = CommandPaletteMatcher.Match(candidate: .init(item, order: -1), score: 0, highlights: [])
             results.insert(match, at: first ? 0 : results.count)
+            endsWithQueryItem = !first
         }
+        searchByMeaning(trimmed)
+        showResults()
+    }
+
+    /// After a pause in typing, adds the mode's smart-search matches that aren't listed yet,
+    /// below the others (above "Search … for"), keeping the selection.
+    private func searchByMeaning(_ query: String) {
+        semanticSearch?.cancel()
+        semanticSearch = nil
+        guard let search = modes.indices.contains(modeIndex) ? modes[modeIndex].mode.semanticItems : nil,
+              SemanticSearch.isSearchable(query) else { return }
+        let fieldText = field.stringValue
+        semanticSearch = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            let items = await search(query)
+            guard let self, !Task.isCancelled, isShown, field.stringValue == fieldText else { return }
+            let listed = Set(results.compactMap { $0.candidate.item.url?.absoluteString })
+            let added = items.filter { item in item.url.map { !listed.contains($0.absoluteString) } ?? true }
+            guard !added.isEmpty else { return }
+            let selected = table.selectedRow
+            let index = results.count - (endsWithQueryItem ? 1 : 0)
+            results.insert(contentsOf: added.map {
+                CommandPaletteMatcher.Match(candidate: .init($0, order: .max), score: 0, highlights: [])
+            }, at: index)
+            showResults(selecting: selected >= index ? selected + added.count : max(selected, 0))
+        }
+    }
+
+    private func showResults(selecting row: Int = 0) {
         table.reloadData()
         let hasList = !results.isEmpty
         scrollView.isHidden = !hasList
         emptyLabel.isHidden = hasList
         emptyLabel.stringValue = candidates.isEmpty ? (modes.indices.contains(modeIndex) ? modes[modeIndex].mode.emptyText : "") : "No matches"
-        if hasList { select(0) }
+        if hasList { select(row) }
         updateFrame()
     }
 
@@ -488,6 +531,7 @@ private final class PaletteCellView: NSTableCellView {
     private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
     private let shortcutLabel = NSTextField(labelWithString: "")
+    private let sparkle = NSImageView(image: NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Found by meaning") ?? NSImage())
     private var title = ""
     private var highlights = Set<Int>()
 
@@ -501,7 +545,9 @@ private final class PaletteCellView: NSTableCellView {
         subtitleLabel.font = .systemFont(ofSize: 11)
         shortcutLabel.font = .systemFont(ofSize: 13)
         shortcutLabel.alignment = .right
-        for view in [iconView, titleLabel, subtitleLabel, shortcutLabel] { addSubview(view) }
+        sparkle.symbolConfiguration = .init(pointSize: 12, weight: .regular)
+        sparkle.toolTip = "Found by meaning (smart search)"
+        for view in [iconView, titleLabel, subtitleLabel, shortcutLabel, sparkle] { addSubview(view) }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -515,6 +561,7 @@ private final class PaletteCellView: NSTableCellView {
         subtitleLabel.isHidden = item.subtitle.isEmpty
         shortcutLabel.stringValue = item.shortcut
         shortcutLabel.isHidden = item.shortcut.isEmpty
+        sparkle.isHidden = !item.isSemantic
         iconView.image = icon
         applyColors()
         needsLayout = true
@@ -538,6 +585,7 @@ private final class PaletteCellView: NSTableCellView {
         titleLabel.attributedStringValue = attributed
         subtitleLabel.textColor = selected ? .alternateSelectedControlTextColor.withAlphaComponent(0.8) : .secondaryLabelColor
         shortcutLabel.textColor = subtitleLabel.textColor
+        sparkle.contentTintColor = subtitleLabel.textColor
         iconView.contentTintColor = selected ? .alternateSelectedControlTextColor : .secondaryLabelColor
     }
 
@@ -552,6 +600,10 @@ private final class PaletteCellView: NSTableCellView {
             shortcutLabel.frame = NSRect(x: bounds.width - insetX - size.width, y: ((bounds.height - size.height) / 2).rounded(),
                                          width: size.width, height: size.height)
             textWidth = max(0, shortcutLabel.frame.minX - 12 - textX)
+        }
+        if !sparkle.isHidden {
+            sparkle.frame = NSRect(x: bounds.width - insetX - 16, y: ((bounds.height - 16) / 2).rounded(), width: 16, height: 16)
+            textWidth = max(0, sparkle.frame.minX - 12 - textX)
         }
         let titleHeight = titleLabel.intrinsicContentSize.height
         if subtitleLabel.isHidden {
@@ -586,6 +638,7 @@ struct BookmarksPaletteSource: CommandPaletteSource {
                         icon: FaviconStore.shared.cachedIcon(forHost: url.host()),
                         loadIcon: { await FaviconStore.shared.icon(forSite: url) },
                         keywords: "\(folderPath) \(url.absoluteString)",
+                        url: url,
                         perform: { [open] background in open(url, background) }
                     ))
                 case .folder(let children):
@@ -618,6 +671,21 @@ struct BookmarksPaletteSource: CommandPaletteSource {
             perform: { background in open(url, background) }
         )
         return (item, false)
+    }
+
+    /// Smart-search matches among bookmarks and history (`SemanticSearch`).
+    static func semanticItems(_ query: String, open: @escaping (URL, Bool) -> Void) async -> [CommandPaletteItem] {
+        await SemanticSearch.shared.search(query).map { hit in
+            CommandPaletteItem(
+                title: hit.title.isEmpty ? (hit.url.host() ?? displayAddress(hit.url)) : hit.title,
+                subtitle: displayAddress(hit.url),
+                icon: FaviconStore.shared.cachedIcon(forHost: hit.url.host()),
+                loadIcon: { await FaviconStore.shared.icon(forSite: hit.url) },
+                url: hit.url,
+                isSemantic: true,
+                perform: { background in open(hit.url, background) }
+            )
+        }
     }
 
     /// `https://www.example.com/path/` → `example.com/path`.

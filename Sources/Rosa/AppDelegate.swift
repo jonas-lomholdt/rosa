@@ -14,7 +14,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         NSApp.mainMenu = buildMainMenu()
         applyAppearance()
         ContentBlocker.shared.start()
-        MainActor.assumeIsolated { Extensions.shared.loadInstalled() }
+        MainActor.assumeIsolated {
+            Extensions.shared.loadInstalled()
+            SemanticSearch.shared.start()
+        }
         settingsObserver = NotificationCenter.default.addObserver(
             forName: Settings.didChange, object: nil, queue: .main
         ) { [weak self] _ in
