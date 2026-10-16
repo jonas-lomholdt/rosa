@@ -127,7 +127,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         let index = nextToCurrent && !tabs.isEmpty ? selectedIndex + 1 : tabs.count
         tabs.insert(Tab(pane: pane), at: index)
         Extensions.shared.didOpen(pane)
-        if let request { pane.webView.load(request) }
+        if let request { pane.load(request) }
 
         if select || tabs.count == 1 {
             selectTab(at: index, editAddress: request == nil && configuration == nil)

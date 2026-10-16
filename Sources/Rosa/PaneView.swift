@@ -365,6 +365,15 @@ final class PaneView: NSView, WKNavigationDelegate, WKUIDelegate {
         webView.load(URLRequest(url: url))
     }
 
+    /// A local file (opened from Finder) can also read the files beside it: its pictures and styles.
+    func load(_ request: URLRequest) {
+        if let url = request.url, url.isFileURL {
+            webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        } else {
+            webView.load(request)
+        }
+    }
+
     /// Loads what was entered in an address bar: the visit counts as typed (ranks higher in
     /// suggestions), and when it was a suggestion picked after typing `pickedFor`, the address
     /// bar learns that pick.

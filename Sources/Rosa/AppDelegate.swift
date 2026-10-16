@@ -9,6 +9,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var settingsWindow: NSWindow?
     private var bookmarksManager: BookmarksManagerController?
     private var settingsObserver: NSObjectProtocol?
+    /// Links and files macOS asked Rosa to open before launch finished (a link clicked while
+    /// Rosa wasn't running), opened once the session is back.
+    private var pendingOpenURLs: [URL] = []
+    private var didFinishLaunching = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = buildMainMenu()
@@ -27,9 +31,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         MainActor.assumeIsolated {
             SessionStore.shared.currentSession = { [weak self] in self?.currentSession() ?? SavedSession(windows: []) }
         }
-        if !restoreSession() {
+        if !restoreSession(), pendingOpenURLs.isEmpty {
             newWindow(nil)
             controllers.first?.focusedPane?.showWelcome()
+        }
+        didFinishLaunching = true
+        if !pendingOpenURLs.isEmpty {
+            openExternal(pendingOpenURLs)
+            pendingOpenURLs = []
         }
         NSApp.activate()
         SelfTest.runIfRequested()
@@ -44,6 +53,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag { newWindow(nil) }
         return true
+    }
+
+    /// Links from other apps (Rosa as the default browser) and files opened with Rosa.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard didFinishLaunching else { pendingOpenURLs += urls; return }
+        openExternal(urls)
     }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
@@ -71,6 +86,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         controller.addTab()
         controller.showWindow(nil)
+    }
+
+    /// Opens each URL in a new tab of the frontmost window (a new window if there is none).
+    /// A blank tab, like the one ⌘T just made, takes the first instead.
+    private func openExternal(_ urls: [URL]) {
+        // Not a private window: a link from another app shouldn't vanish when it closes.
+        let front = NSApp.orderedWindows.lazy
+            .compactMap { $0.isVisible ? $0.windowController as? BrowserWindowController : nil }
+            .first { $0.savesSession }
+        let controller = front ?? makeWindowController()
+        if front == nil { controller.window?.center() }
+        var urls = urls[...]
+        if let pane = controller.focusedPane, pane.isBlank, let first = urls.popFirst() {
+            pane.load(URLRequest(url: first))
+            pane.focusWebView()
+        }
+        for url in urls { controller.addTab(request: URLRequest(url: url)) }
+        controller.showWindow(nil)
+        NSApp.activate()
     }
 
     private func makeWindowController() -> BrowserWindowController {

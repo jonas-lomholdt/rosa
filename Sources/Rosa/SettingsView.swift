@@ -82,6 +82,7 @@ final class SettingsModel: ObservableObject {
             Updater.shared.channelDidChange()
         }
     }
+    @Published private(set) var isDefaultBrowser = DefaultBrowser.isRosa
     @Published private(set) var updateStatus = ""
     @Published private(set) var updaterBusy = false
     @Published private(set) var availableUpdate: Updater.Release?
@@ -91,6 +92,7 @@ final class SettingsModel: ObservableObject {
     private var semanticObservers: [NSObjectProtocol] = []
     private var blockerObserver: NSObjectProtocol?
     private var updaterObserver: NSObjectProtocol?
+    private var activeObserver: NSObjectProtocol?
 
     init() {
         tabLayout = Settings.tabLayout
@@ -141,6 +143,12 @@ final class SettingsModel: ObservableObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.historyPageCount = HistoryStore.shared.pageCount }
         }
+        // The default browser can be changed in System Settings while this window is open.
+        activeObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.isDefaultBrowser = DefaultBrowser.isRosa }
+        }
         observer = NotificationCenter.default.addObserver(
             forName: Settings.didChange, object: nil, queue: .main
         ) { [weak self] _ in
@@ -185,6 +193,14 @@ final class SettingsModel: ObservableObject {
     func removeModel() {
         Settings.semanticSearch = false
         SemanticModel.shared.remove()
+    }
+
+    func makeDefaultBrowser() {
+        Task {
+            // Throws when the user keeps their current browser; nothing to report then.
+            try? await DefaultBrowser.makeRosaDefault()
+            isDefaultBrowser = DefaultBrowser.isRosa
+        }
     }
 
     private func refreshUpdateStatus() {
@@ -252,6 +268,15 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("Default Browser") {
+                LabeledContent(model.isDefaultBrowser ? "Rosa is your default browser" : "Rosa is not your default browser") {
+                    if !model.isDefaultBrowser {
+                        Button("Make Default") { model.makeDefaultBrowser() }
+                            .disabled(!DefaultBrowser.canBecomeDefault)
+                    }
+                }
+            }
+
             Section("Appearance") {
                 Picker("Theme", selection: $model.appearance) {
                     Text("System").tag(AppearanceMode.system)

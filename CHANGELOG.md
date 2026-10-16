@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🌐 Default browser
+- Rosa can be your default browser: Settings → Default Browser → Make Default (or pick Rosa in System Settings → Desktop & Dock). Links from other apps open in a new tab of your front window, or in a blank tab if you're on one.
+- Open web pages, PDFs and SVGs from Finder with Rosa (Open With → Rosa). Pictures and styles beside an HTML file load too.
+
 ### 🧘 Zen mode
 - Move the window in Zen mode: hold `⌃` and drag anywhere on the page (the cursor turns into a hand). A `⌃`-click that doesn't drag still opens the page's context menu. Turn it off in Settings → Keyboard.
 
