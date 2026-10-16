@@ -6,6 +6,10 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.14.0
+
+✨ Smart search: find pages in your history and bookmarks by what they're about, right on your Mac.
+
 ### 🔎 Smart search
 - New, off by default: Settings → History → Smart Search finds pages by what they're about, not just the words you type. "how do I make my bread rise" finds the sourdough guide you read last week, even across languages. Matches show up with a ✨ under the usual suggestions in the address bar, and in ⌘P, which then searches your history as well as your bookmarks.
 - It runs entirely on your Mac with Google's EmbeddingGemma model, which is downloaded (585 MB) only when you turn it on. The first start takes about a minute while macOS prepares the model; after that it's ready in seconds. Remove Model deletes it again.
