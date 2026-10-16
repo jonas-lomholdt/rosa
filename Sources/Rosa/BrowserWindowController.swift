@@ -505,6 +505,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         contentRoot.showsSharedAddressBar = !perPane
         contentRoot.showsBookmarksBar = Settings.showBookmarksBar
         contentRoot.isZenMode = isZenMode
+        contentRoot.allowsControlDrag = Settings.zenControlDrag
         syncSharedAddressField()
         refreshPaneHighlights()
     }

@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🧘 Zen mode
+- Move the window in Zen mode: hold `⌃` and drag anywhere on the page (the cursor turns into a hand). A `⌃`-click that doesn't drag still opens the page's context menu. Turn it off in Settings → Keyboard.
+
 ## v0.14.0
 
 ✨ Smart search: find pages in your history and bookmarks by what they're about, right on your Mac.

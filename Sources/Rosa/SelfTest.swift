@@ -1083,6 +1083,19 @@ enum SelfTest {
             return content.frame == root.bounds && union == root.bounds.insetBy(dx: margin, dy: margin)
         }
         func toggle() async { await key("z", 6, [.command, .control]) }
+        func control(_ held: Bool) async {
+            guard let event = NSEvent.keyEvent(
+                with: .flagsChanged, location: .zero, modifierFlags: held ? .control : [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window?.windowNumber ?? 0, context: nil,
+                characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 59
+            ) else { return }
+            NSApp.postEvent(event, atStart: false)
+            await pause(0.3)
+        }
+        func overlayTakesClicks() -> Bool {
+            let center = NSPoint(x: root.bounds.midX, y: root.bounds.midY)
+            return root.debugDragOverlayShown && root.hitTest(root.convert(center, to: root.superview)).map { "\(type(of: $0))" } == "WindowDragOverlay"
+        }
 
         controller.focusedPane?.load("data:text/html,<title>Zen</title><body style='background:%23fde'><h1>Zen</h1>")
         Settings.tabLayout = .horizontal
@@ -1096,6 +1109,39 @@ enum SelfTest {
         check("⌃⌘Z: zen on, chrome hidden", controller.isZenMode && chromeHidden())
         check("page fills the window", fillsWindow())
         snapshot(controller, to: outputDir.appendingPathComponent("zen-single.png"))
+
+        // ⌃ alone covers the page with a drag handle; a ⌃-click that doesn't drag still reaches the page.
+        controller.focusedPane?.load("data:text/html,<title>Zen</title><body style='background:%23fde' "
+            + "oncontextmenu='event.preventDefault();document.title=\"menu\"'><h1>Zen</h1>")
+        await pause(1)
+        await control(true)
+        check("⌃ in zen: drag overlay over the page", overlayTakesClicks())
+        if let window {
+            let center = root.convert(NSPoint(x: root.bounds.midX, y: root.bounds.midY), to: nil)
+            func mouse(_ type: NSEvent.EventType) -> NSEvent? {
+                NSEvent.mouseEvent(
+                    with: type, location: center, modifierFlags: .control, timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                    pressure: type == .leftMouseUp ? 0 : 1
+                )
+            }
+            let origin = window.frame.origin
+            // The overlay's tracking loop pulls the mouse-up from the queue.
+            if let up = mouse(.leftMouseUp) { NSApp.postEvent(up, atStart: false) }
+            if let down = mouse(.leftMouseDown) { window.sendEvent(down) }
+            await pause(0.8)
+            check("⌃-click without a drag goes to the page", controller.focusedPane?.displayTitle == "menu"
+                  && window.frame.origin == origin && overlayTakesClicks())
+        }
+        await control(false)
+        check("⌃ released: overlay gone", !root.debugDragOverlayShown)
+        Settings.zenControlDrag = false
+        await pause(0.3)
+        await control(true)
+        check("setting off: ⌃ does nothing", !root.debugDragOverlayShown)
+        await control(false)
+        Settings.zenControlDrag = true
+        await pause(0.3)
 
         let field = root.header.addressField
         func zenBarShown() -> Bool { !root.header.isHidden && !field.isHiddenOrHasHiddenAncestor }
@@ -1137,6 +1183,9 @@ enum SelfTest {
             && !root.bookmarksBar.isHidden && window?.standardWindowButton(.closeButton)?.isHidden == false
             && controller.debugPanes.allSatisfy { !$0.addressBarView.isHidden }
         check("⌃⌘Z again: chrome back", restored)
+        await control(true)
+        check("⌃ outside zen: no overlay", !root.debugDragOverlayShown)
+        await control(false)
         check("panes inset again", root.tabContent.map { $0.subviews.first?.frame.minX == PaneContainerView.margin } ?? false)
         snapshot(controller, to: outputDir.appendingPathComponent("zen-off.png"))
 

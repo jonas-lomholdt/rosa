@@ -96,6 +96,12 @@ final class BrowserContentView: NSView {
     private let edgeHotZone = HoverZoneView()
     private let sidebarHoverZone = HoverZoneView()
     private var hideWorkItem: DispatchWorkItem?
+    private let dragOverlay = WindowDragOverlay()
+    private var flagsMonitor: Any?
+    private var resignKeyObserver: NSObjectProtocol?
+    private var isControlHeld = false {
+        didSet { if isControlHeld != oldValue { updateDragOverlay() } }
+    }
 
     var tabLayout: TabLayout = .horizontal {
         didSet { tabStrip.tabLayout = tabLayout; needsLayout = true }
@@ -130,8 +136,14 @@ final class BrowserContentView: NSView {
             }
             if isZenMode { hideWorkItem?.cancel(); isSidebarRevealed = false }
             showsZenAddressBar = false
+            updateDragOverlay()
             needsLayout = true
         }
+    }
+
+    /// Zen mode: holding ⌃ (alone) lets you drag the window from anywhere, since there's no title bar.
+    var allowsControlDrag = true {
+        didSet { updateDragOverlay() }
     }
 
     /// Zen mode only: the shared address bar across the top while an address is being typed.
@@ -178,6 +190,10 @@ final class BrowserContentView: NSView {
         for view in [background, header, bookmarksBar, sidebarGlass, tabStrip, navigationButtons, resizeHandle, edgeHotZone, sidebarHoverZone] {
             addSubview(view)
         }
+        // Above everything, the page included, while it's shown.
+        dragOverlay.isHidden = true
+        dragOverlay.onClick = { [weak self] event in self?.passClickThrough(event) }
+        addSubview(dragOverlay)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -219,11 +235,64 @@ final class BrowserContentView: NSView {
         layoutSubtreeIfNeeded()
     }
 
+    // MARK: - Zen window drag
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let flagsMonitor { NSEvent.removeMonitor(flagsMonitor) }
+        if let resignKeyObserver { NotificationCenter.default.removeObserver(resignKeyObserver) }
+        flagsMonitor = nil
+        resignKeyObserver = nil
+        isControlHeld = false
+        guard let window else { return }
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            if let self, event.window === self.window { controlFlagsChanged(event.modifierFlags) }
+            return event
+        }
+        // ⌃ released in another app never reaches us.
+        resignKeyObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.isControlHeld = false }
+        }
+    }
+
+    func controlFlagsChanged(_ flags: NSEvent.ModifierFlags) {
+        isControlHeld = flags.intersection([.control, .command, .option, .shift]) == .control
+    }
+
+    private func updateDragOverlay() {
+        let show = isZenMode && allowsControlDrag && isControlHeld
+        guard show == dragOverlay.isHidden else { return }
+        dragOverlay.isHidden = !show
+        window?.invalidateCursorRects(for: dragOverlay)
+        // Cursor rects only apply once the mouse moves; switch the cursor now.
+        guard let window, window.isKeyWindow,
+              bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) else { return }
+        (show ? NSCursor.openHand : NSCursor.arrow).set()
+    }
+
+    /// A ⌃-click that didn't move the window goes to the page (a context menu, usually).
+    private func passClickThrough(_ mouseDown: NSEvent) {
+        guard let window else { return }
+        dragOverlay.isHidden = true
+        window.sendEvent(mouseDown)
+        let mouseUp = NSEvent.mouseEvent(
+            with: .leftMouseUp, location: mouseDown.locationInWindow, modifierFlags: mouseDown.modifierFlags,
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: mouseDown.windowNumber, context: nil,
+            eventNumber: mouseDown.eventNumber, clickCount: mouseDown.clickCount, pressure: 0
+        )
+        mouseUp.map(window.sendEvent)
+        dragOverlay.isHidden = false
+        updateDragOverlay()
+    }
+
     // MARK: - Layout
 
     override func layout() {
         super.layout()
         background.frame = bounds
+        dragOverlay.frame = bounds
         let chrome: [NSView] = [tabStrip, header, bookmarksBar, sidebarGlass, navigationButtons, resizeHandle, edgeHotZone, sidebarHoverZone]
         if isZenMode {
             // The panes keep their margin, so the page sits just inside the window's edge.
@@ -377,6 +446,36 @@ final class BrowserContentView: NSView {
     // MARK: - Testing
 
     var debugSidebarFrame: NSRect { sidebarGlass.frame }
+    var debugDragOverlayShown: Bool { !dragOverlay.isHidden }
+}
+
+/// Covers the window in zen mode while ⌃ is held: drag anywhere to move the window.
+private final class WindowDragOverlay: NSView {
+    /// A click that didn't drag, with its mouse-down event.
+    var onClick: ((NSEvent) -> Void)?
+
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .openHand)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard let window else { return }
+        // Screen coordinates: the events' window coordinates shift as the window moves under them.
+        let start = NSEvent.mouseLocation
+        let startOrigin = window.frame.origin
+        var moved = false
+        NSCursor.closedHand.set()
+        while let next = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]), next.type == .leftMouseDragged {
+            let point = NSEvent.mouseLocation
+            let dx = point.x - start.x, dy = point.y - start.y
+            if !moved, hypot(dx, dy) < 3 { continue }
+            moved = true
+            window.setFrameOrigin(NSPoint(x: startOrigin.x + dx, y: startOrigin.y + dy))
+        }
+        if moved { NSCursor.openHand.set() } else { onClick?(event) }
+    }
 }
 
 /// Invisible strip on the sidebar's right edge: drag to resize, double-click to reset.
