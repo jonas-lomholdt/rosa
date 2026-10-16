@@ -12,6 +12,7 @@ release notes (`scripts/release-notes.sh`).
 
 ### 🎛️ Command palette
 - ⌘P's placeholder is shorter (the hint below already mentions `>` for commands), and it and the hint end in “…” instead of being cut off in narrow windows.
+- ⌘P is dark when Rosa is set to Dark while macOS is in Light mode (it showed a light palette over a dark window).
 
 ## v0.13.0
 

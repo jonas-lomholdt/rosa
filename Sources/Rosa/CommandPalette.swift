@@ -199,7 +199,6 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
         }()
 
         glass.cornerRadius = 18
-        glass.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.55)
         glass.autoresizingMask = [.width, .height]
         let content = FlippedView()
         glass.contentView = content
@@ -247,6 +246,25 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override var isFlipped: Bool { true }
+
+    /// Tinted with the window colour of Rosa's appearance, resolved for this view: set once at
+    /// init, the tint followed the system's appearance instead (a light palette in a dark Rosa).
+    private func updateTint() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            glass.tintColor = (NSColor.windowBackgroundColor.usingColorSpace(.sRGB) ?? .windowBackgroundColor)
+                .withAlphaComponent(0.55)
+        }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateTint()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateTint()
+    }
 
     // MARK: Showing
 
