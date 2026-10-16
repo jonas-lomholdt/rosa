@@ -239,6 +239,7 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
         emptyLabel.font = .systemFont(ofSize: 13)
         emptyLabel.textColor = .secondaryLabelColor
         emptyLabel.alignment = .center
+        emptyLabel.lineBreakMode = .byTruncatingTail
 
         for view in [searchIcon, field, separator, scrollView, emptyLabel] { content.addSubview(view) }
     }
@@ -260,7 +261,14 @@ final class CommandPaletteView: NSView, NSTextFieldDelegate, NSTableViewDataSour
         }
         modeIndex = 0
         setSymbol(modes.first?.symbol)
-        field.placeholderString = modes.first?.placeholder
+        // Ends in "…" when the window is too narrow for it (the field itself scrolls, so it wouldn't).
+        let truncating = NSMutableParagraphStyle()
+        truncating.lineBreakMode = .byTruncatingTail
+        field.placeholderAttributedString = NSAttributedString(string: modes.first?.placeholder ?? "", attributes: [
+            .font: field.font ?? .systemFont(ofSize: 20),
+            .foregroundColor: NSColor.placeholderTextColor,
+            .paragraphStyle: truncating,
+        ])
         field.stringValue = query
 
         let window = container.window
