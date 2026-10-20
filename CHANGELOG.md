@@ -6,6 +6,12 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.15.1
+
+🪟 Unfocused panes at 100% opacity are no longer dimmed.
+
+- Unfocused pane opacity at 100% leaves split panes untouched (they were still slightly dimmed). The dim now fades with the setting.
+
 ## v0.15.0
 
 🌐 Make Rosa your default browser, and drag the window around in Zen mode.

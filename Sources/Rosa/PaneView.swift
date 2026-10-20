@@ -835,7 +835,11 @@ private final class FocusOverlayView: NSView {
             path.lineWidth = 2
             path.stroke()
         case .unfocused:
-            NSColor.black.withAlphaComponent(0.12).setFill()
+            // The dim fades out with the opacity setting, so 100% leaves the pane untouched.
+            let range = Settings.inactivePaneOpacityRange
+            let dim = 0.12 * (range.upperBound - Settings.inactivePaneOpacity) / (range.upperBound - range.lowerBound)
+            guard dim > 0 else { return }
+            NSColor.black.withAlphaComponent(dim).setFill()
             let radius = PaneView.cornerRadius
             NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).fill()
         }
