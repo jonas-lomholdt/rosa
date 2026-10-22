@@ -95,7 +95,6 @@ final class BrowserContentView: NSView {
     private let resizeHandle = SidebarResizeHandle()
     private let edgeHotZone = HoverZoneView()
     private let sidebarHoverZone = HoverZoneView()
-    private var hideWorkItem: DispatchWorkItem?
     private let dragOverlay = WindowDragOverlay()
     private var keyMonitor: Any?
     private var resignKeyObserver: NSObjectProtocol?
@@ -142,7 +141,7 @@ final class BrowserContentView: NSView {
             for kind: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
                 window?.standardWindowButton(kind)?.isHidden = isZenMode
             }
-            if isZenMode { hideWorkItem?.cancel(); isSidebarRevealed = false }
+            if isZenMode { isSidebarRevealed = false }
             showsZenAddressBar = false
             needsLayout = true
         }
@@ -189,8 +188,7 @@ final class BrowserContentView: NSView {
             self?.onSidebarResized?(BrowserContentView.defaultSidebarWidth)
         }
         edgeHotZone.onEnter = { [weak self] in self?.setSidebarRevealed(true) }
-        sidebarHoverZone.onEnter = { [weak self] in self?.hideWorkItem?.cancel() }
-        sidebarHoverZone.onExit = { [weak self] in self?.scheduleHide() }
+        sidebarHoverZone.onExit = { [weak self] in self?.setSidebarRevealed(false) }
 
         // Back to front: page content, header, then the sidebar (it floats over both when auto-hiding).
         bookmarksBar.isHidden = true
@@ -215,7 +213,6 @@ final class BrowserContentView: NSView {
     }
 
     private func setSidebarRevealed(_ revealed: Bool) {
-        hideWorkItem?.cancel()
         guard isVerticalAutoHide, !isZenMode || !revealed, revealed != isSidebarRevealed else { return }
         isSidebarRevealed = revealed
         NSAnimationContext.runAnimationGroup { context in
@@ -226,13 +223,6 @@ final class BrowserContentView: NSView {
             needsLayout = true
             layoutSubtreeIfNeeded()
         }
-    }
-
-    private func scheduleHide() {
-        hideWorkItem?.cancel()
-        let item = DispatchWorkItem { [weak self] in self?.setSidebarRevealed(false) }
-        hideWorkItem = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: item)
     }
 
     private func resizeSidebar(toWindowX x: CGFloat) {

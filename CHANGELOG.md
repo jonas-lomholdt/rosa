@@ -9,6 +9,9 @@ release notes (`scripts/release-notes.sh`).
 ### 🪟 Windows
 - Hold `⌃` and drag anywhere to move the window, now in every mode, not just Zen mode. The hand only shows once `⌃` has been held a moment on its own, so shortcuts like `⌃Tab` or `⌃A` in a text field don't trigger it. Turn it off in Settings → Keyboard.
 
+### 🗂️ Tabs
+- The auto-hiding tab sidebar now hides the moment the mouse leaves it, instead of lingering for a beat.
+
 ## v0.15.1
 
 🪟 Unfocused panes at 100% opacity are no longer dimmed.
