@@ -6,6 +6,9 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+### 🪟 Windows
+- Hold `⌃` and drag anywhere to move the window, now in every mode, not just Zen mode. The hand only shows once `⌃` has been held a moment on its own, so shortcuts like `⌃Tab` or `⌃A` in a text field don't trigger it. Turn it off in Settings → Keyboard.
+
 ## v0.15.1
 
 🪟 Unfocused panes at 100% opacity are no longer dimmed.

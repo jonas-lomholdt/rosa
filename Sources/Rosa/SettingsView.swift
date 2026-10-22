@@ -37,8 +37,8 @@ final class SettingsModel: ObservableObject {
     @Published var vimKeysEnabled: Bool {
         didSet { if Settings.vimKeysEnabled != vimKeysEnabled { Settings.vimKeysEnabled = vimKeysEnabled } }
     }
-    @Published var zenControlDrag: Bool {
-        didSet { if Settings.zenControlDrag != zenControlDrag { Settings.zenControlDrag = zenControlDrag } }
+    @Published var controlDragMovesWindow: Bool {
+        didSet { if Settings.controlDragMovesWindow != controlDragMovesWindow { Settings.controlDragMovesWindow = controlDragMovesWindow } }
     }
     @Published var askWhereToSaveDownloads: Bool {
         didSet { if Settings.askWhereToSaveDownloads != askWhereToSaveDownloads { Settings.askWhereToSaveDownloads = askWhereToSaveDownloads } }
@@ -107,7 +107,7 @@ final class SettingsModel: ObservableObject {
         linkHintsEnabled = Settings.linkHintsEnabled
         linkHintColor = Settings.linkHintColor
         vimKeysEnabled = Settings.vimKeysEnabled
-        zenControlDrag = Settings.zenControlDrag
+        controlDragMovesWindow = Settings.controlDragMovesWindow
         findHighlightColor = Settings.findHighlightColor
         formatJSON = Settings.formatJSON
         showQuickLinks = Settings.showQuickLinks
@@ -169,7 +169,7 @@ final class SettingsModel: ObservableObject {
         linkHintsEnabled = Settings.linkHintsEnabled
         linkHintColor = Settings.linkHintColor
         vimKeysEnabled = Settings.vimKeysEnabled
-        zenControlDrag = Settings.zenControlDrag
+        controlDragMovesWindow = Settings.controlDragMovesWindow
         findHighlightColor = Settings.findHighlightColor
         formatJSON = Settings.formatJSON
         showQuickLinks = Settings.showQuickLinks
@@ -348,11 +348,11 @@ struct SettingsView: View {
                 ColorPicker("Hint colour", selection: model.linkHintColorBinding, supportsOpacity: false)
                     .disabled(!model.linkHintsEnabled)
                 Toggle("Vim-style scrolling", isOn: $model.vimKeysEnabled)
-                Toggle("Hold ⌃ to move the window in Zen mode", isOn: $model.zenControlDrag)
+                Toggle("Hold ⌃ and drag to move the window", isOn: $model.controlDragMovesWindow)
             } header: {
                 Text("Keyboard")
             } footer: {
-                Text("Link hints: press F on a page, then type a label to click it (Shift-F opens in the background, Esc cancels). Vim-style scrolling: J/K scroll, H/L scroll sideways, GG jumps to the top, Shift-G to the bottom. Keys are ignored while typing in a field. Zen mode has no title bar: hold Control and drag anywhere to move the window.")
+                Text("Link hints: press F on a page, then type a label to click it (Shift-F opens in the background, Esc cancels). Vim-style scrolling: J/K scroll, H/L scroll sideways, GG jumps to the top, Shift-G to the bottom. Keys are ignored while typing in a field. Hold Control and drag anywhere, the page included, to move the window; a Control-click that doesn't drag still opens the context menu.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

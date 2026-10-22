@@ -97,10 +97,18 @@ final class BrowserContentView: NSView {
     private let sidebarHoverZone = HoverZoneView()
     private var hideWorkItem: DispatchWorkItem?
     private let dragOverlay = WindowDragOverlay()
-    private var flagsMonitor: Any?
+    private var keyMonitor: Any?
     private var resignKeyObserver: NSObjectProtocol?
+    private var showOverlayWorkItem: DispatchWorkItem?
+    /// ⌃ went into a shortcut (a key, or another modifier, joined it); stays set until ⌃ is released.
+    private var isControlChord = false
+    /// ⌃ is held on its own, with no key pressed since it went down.
     private var isControlHeld = false {
-        didSet { if isControlHeld != oldValue { updateDragOverlay() } }
+        didSet { if isControlHeld != oldValue { controlHeldChanged() } }
+    }
+    /// ⌃ has been held long enough to show the hand: a quick ⌃Tab or ⌃A never flashes it.
+    private var isControlSettled = false {
+        didSet { if isControlSettled != oldValue { updateDragOverlay() } }
     }
 
     var tabLayout: TabLayout = .horizontal {
@@ -136,12 +144,11 @@ final class BrowserContentView: NSView {
             }
             if isZenMode { hideWorkItem?.cancel(); isSidebarRevealed = false }
             showsZenAddressBar = false
-            updateDragOverlay()
             needsLayout = true
         }
     }
 
-    /// Zen mode: holding ⌃ (alone) lets you drag the window from anywhere, since there's no title bar.
+    /// Holding ⌃ (alone) lets you drag the window from anywhere, the page included.
     var allowsControlDrag = true {
         didSet { updateDragOverlay() }
     }
@@ -235,34 +242,56 @@ final class BrowserContentView: NSView {
         layoutSubtreeIfNeeded()
     }
 
-    // MARK: - Zen window drag
+    // MARK: - ⌃-drag to move the window
+
+    /// How long ⌃ must be held alone before the hand cursor shows.
+    nonisolated static let controlSettleDelay: TimeInterval = 0.25
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if let flagsMonitor { NSEvent.removeMonitor(flagsMonitor) }
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         if let resignKeyObserver { NotificationCenter.default.removeObserver(resignKeyObserver) }
-        flagsMonitor = nil
+        keyMonitor = nil
         resignKeyObserver = nil
+        isControlChord = false
         isControlHeld = false
         guard let window else { return }
-        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            if let self, event.window === self.window { controlFlagsChanged(event.modifierFlags) }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown, .leftMouseDown]) { [weak self] event in
+            guard let self, event.window === self.window else { return event }
+            switch event.type {
+            case .flagsChanged: controlFlagsChanged(event.modifierFlags)
+            // ⌃ is part of a shortcut (⌃Tab, ⌃A in a field…): leave the mouse alone until it's released.
+            case .keyDown: if isControlHeld { isControlChord = true; isControlHeld = false }
+            // Clicked before the hand showed: show the overlay now so this mouse-down lands on it.
+            default: if isControlHeld && !isControlSettled { isControlSettled = true }
+            }
             return event
         }
         // ⌃ released in another app never reaches us.
         resignKeyObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didResignKeyNotification, object: window, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.isControlHeld = false }
+            MainActor.assumeIsolated { self?.isControlChord = false; self?.isControlHeld = false }
         }
     }
 
     func controlFlagsChanged(_ flags: NSEvent.ModifierFlags) {
-        isControlHeld = flags.intersection([.control, .command, .option, .shift]) == .control
+        let modifiers = flags.intersection([.control, .command, .option, .shift])
+        if !modifiers.contains(.control) { isControlChord = false } else if modifiers != .control { isControlChord = true }
+        isControlHeld = modifiers == .control && !isControlChord
+    }
+
+    private func controlHeldChanged() {
+        showOverlayWorkItem?.cancel()
+        showOverlayWorkItem = nil
+        guard isControlHeld else { isControlSettled = false; return }
+        let item = DispatchWorkItem { [weak self] in self?.isControlSettled = true }
+        showOverlayWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.controlSettleDelay, execute: item)
     }
 
     private func updateDragOverlay() {
-        let show = isZenMode && allowsControlDrag && isControlHeld
+        let show = allowsControlDrag && isControlHeld && isControlSettled
         guard show == dragOverlay.isHidden else { return }
         dragOverlay.isHidden = !show
         window?.invalidateCursorRects(for: dragOverlay)
@@ -449,7 +478,7 @@ final class BrowserContentView: NSView {
     var debugDragOverlayShown: Bool { !dragOverlay.isHidden }
 }
 
-/// Covers the window in zen mode while ⌃ is held: drag anywhere to move the window.
+/// Covers the window while ⌃ is held: drag anywhere to move the window.
 private final class WindowDragOverlay: NSView {
     /// A click that didn't drag, with its mouse-down event.
     var onClick: ((NSEvent) -> Void)?

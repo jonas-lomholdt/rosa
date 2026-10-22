@@ -1083,14 +1083,14 @@ enum SelfTest {
             return content.frame == root.bounds && union == root.bounds.insetBy(dx: margin, dy: margin)
         }
         func toggle() async { await key("z", 6, [.command, .control]) }
-        func control(_ held: Bool) async {
+        func control(_ held: Bool, wait: TimeInterval = BrowserContentView.controlSettleDelay + 0.15) async {
             guard let event = NSEvent.keyEvent(
                 with: .flagsChanged, location: .zero, modifierFlags: held ? .control : [],
                 timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window?.windowNumber ?? 0, context: nil,
                 characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 59
             ) else { return }
             NSApp.postEvent(event, atStart: false)
-            await pause(0.3)
+            await pause(wait)
         }
         func overlayTakesClicks() -> Bool {
             let center = NSPoint(x: root.bounds.midX, y: root.bounds.midY)
@@ -1135,12 +1135,18 @@ enum SelfTest {
         }
         await control(false)
         check("⌃ released: overlay gone", !root.debugDragOverlayShown)
-        Settings.zenControlDrag = false
+        await control(true, wait: 0.05)
+        check("not before ⌃ has been held a moment", !root.debugDragOverlayShown)
+        await key("a", 0, [.control])
+        await pause(BrowserContentView.controlSettleDelay + 0.15)
+        check("a key with ⌃ (a shortcut): no overlay", !root.debugDragOverlayShown)
+        await control(false)
+        Settings.controlDragMovesWindow = false
         await pause(0.3)
         await control(true)
         check("setting off: ⌃ does nothing", !root.debugDragOverlayShown)
         await control(false)
-        Settings.zenControlDrag = true
+        Settings.controlDragMovesWindow = true
         await pause(0.3)
 
         let field = root.header.addressField
@@ -1184,7 +1190,7 @@ enum SelfTest {
             && controller.debugPanes.allSatisfy { !$0.addressBarView.isHidden }
         check("⌃⌘Z again: chrome back", restored)
         await control(true)
-        check("⌃ outside zen: no overlay", !root.debugDragOverlayShown)
+        check("⌃ outside zen: overlay too", overlayTakesClicks())
         await control(false)
         check("panes inset again", root.tabContent.map { $0.subviews.first?.frame.minX == PaneContainerView.margin } ?? false)
         snapshot(controller, to: outputDir.appendingPathComponent("zen-off.png"))

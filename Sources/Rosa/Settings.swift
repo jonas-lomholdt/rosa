@@ -145,7 +145,7 @@ enum Settings {
             "linkHintsAllPanes": linkHintsAllPanes,
             "linkHintColor": linkHintColor,
             "vimKeysEnabled": vimKeysEnabled,
-            "zenControlDrag": zenControlDrag,
+            "zenControlDrag": controlDragMovesWindow,
             "findHighlightColor": findHighlightColor,
             "formatJSON": formatJSON,
             "showQuickLinks": showQuickLinks,
@@ -273,13 +273,14 @@ enum Settings {
         set { set(newValue, "findHighlightColor") }
     }
 
-    /// Pretty-print and colour JSON responses (`JSONViewer`).
-    /// Zen mode: hold ⌃ and drag anywhere to move the window (there's no title bar to grab).
-    static var zenControlDrag: Bool {
+    /// Hold ⌃ and drag anywhere to move the window (zen mode has no title bar to grab).
+    /// Stored as `zenControlDrag`, from when it only worked in zen mode.
+    static var controlDragMovesWindow: Bool {
         get { value("zenControlDrag") ?? true }
         set { set(newValue, "zenControlDrag") }
     }
 
+    /// Pretty-print and colour JSON responses (`JSONViewer`).
     static var formatJSON: Bool {
         get { value("formatJSON") ?? true }
         set { set(newValue, "formatJSON") }

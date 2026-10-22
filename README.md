@@ -55,7 +55,7 @@
 | `⌘⇧P` | Command palette: run any menu command (delete the `>` to search bookmarks) |
 | `⌃⌘S` | Show sidebar (when auto-hiding) |
 | `⌃⌘Z` | Zen mode: hide tabs, address bar and bookmarks bar (press again to bring them back) |
-| `⌃` + drag | In Zen mode, move the window from anywhere |
+| `⌃` + drag | Move the window from anywhere, the page included |
 | `⌥⌘L` | Downloads |
 | `⌘,` | Settings |
 | `F12` / `⌘⌥I` | Web Inspector |
