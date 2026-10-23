@@ -184,7 +184,8 @@ final class TabStripView: ChromeView {
             }
             documentView.frame = NSRect(x: 0, y: 0, width: max(available, (slots.last?.maxX ?? 0)), height: height)
 
-        case .vertical:
+        case .vertical, .statusBar:
+            // (Hidden in the status bar layout.)
             let top = Self.horizontalHeight
             newTabButton.isHidden = true
             // Downloads: pinned to the bottom of the sidebar, once there are any.

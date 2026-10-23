@@ -238,6 +238,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         Settings.tabLayout = Settings.tabLayout == .vertical ? .horizontal : .vertical
     }
 
+    @objc func toggleStatusBarTabs(_ sender: Any?) {
+        Settings.tabLayout = Settings.tabLayout == .statusBar ? .horizontal : .statusBar
+    }
+
     @objc func toggleBookmarksBar(_ sender: Any?) {
         Settings.showBookmarksBar.toggle()
     }
@@ -250,6 +254,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         switch menuItem.action {
         case #selector(toggleVerticalTabs(_:)):
             menuItem.state = Settings.tabLayout == .vertical ? .on : .off
+        case #selector(toggleStatusBarTabs(_:)):
+            menuItem.state = Settings.tabLayout == .statusBar ? .on : .off
         case #selector(toggleBookmarksBar(_:)):
             menuItem.state = Settings.showBookmarksBar ? .on : .off
         case #selector(toggleSharedAddressBar(_:)):
@@ -348,6 +354,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         view.addItem(item("Command Palette…", #selector(BrowserWindowController.showCommandPalette(_:)), "P", [.command, .shift]))
         view.addItem(.separator())
         view.addItem(item("Vertical Tabs", #selector(toggleVerticalTabs(_:))))
+        view.addItem(item("Status Bar Tabs", #selector(toggleStatusBarTabs(_:))))
         view.addItem(item("Shared Address Bar", #selector(toggleSharedAddressBar(_:))))
         view.addItem(item("Bookmarks Bar", #selector(toggleBookmarksBar(_:)), "B", [.command, .shift]))
         view.addItem(item("Show Sidebar", #selector(BrowserWindowController.toggleSidebar(_:)), "s", [.command, .control]))

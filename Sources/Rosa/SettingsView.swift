@@ -7,6 +7,12 @@ final class SettingsModel: ObservableObject {
     @Published var tabLayout: TabLayout {
         didSet { if Settings.tabLayout != tabLayout { Settings.tabLayout = tabLayout } }
     }
+    @Published var statusBarSize: StatusBarSize {
+        didSet { if Settings.statusBarSize != statusBarSize { Settings.statusBarSize = statusBarSize } }
+    }
+    @Published var statusBarPosition: StatusBarPosition {
+        didSet { if Settings.statusBarPosition != statusBarPosition { Settings.statusBarPosition = statusBarPosition } }
+    }
     @Published var addressBarMode: AddressBarMode {
         didSet { if Settings.addressBarMode != addressBarMode { Settings.addressBarMode = addressBarMode } }
     }
@@ -96,6 +102,8 @@ final class SettingsModel: ObservableObject {
 
     init() {
         tabLayout = Settings.tabLayout
+        statusBarSize = Settings.statusBarSize
+        statusBarPosition = Settings.statusBarPosition
         addressBarMode = Settings.addressBarMode
         appearance = Settings.appearance
         inactivePaneOpacity = Settings.inactivePaneOpacity
@@ -158,6 +166,8 @@ final class SettingsModel: ObservableObject {
 
     private func reload() {
         tabLayout = Settings.tabLayout
+        statusBarSize = Settings.statusBarSize
+        statusBarPosition = Settings.statusBarPosition
         addressBarMode = Settings.addressBarMode
         appearance = Settings.appearance
         inactivePaneOpacity = Settings.inactivePaneOpacity
@@ -304,10 +314,23 @@ struct SettingsView: View {
                 Picker("Tab layout", selection: $model.tabLayout) {
                     Text("Horizontal").tag(TabLayout.horizontal)
                     Text("Vertical sidebar").tag(TabLayout.vertical)
+                    Text("Status bar").tag(TabLayout.statusBar)
                 }
                 .pickerStyle(.segmented)
-                Toggle("Auto-hide sidebar", isOn: $model.sidebarAutoHide)
-                    .disabled(model.tabLayout != .vertical)
+                if model.tabLayout == .statusBar {
+                    Picker("Status bar size", selection: $model.statusBarSize) {
+                        ForEach(StatusBarSize.allCases, id: \.self) { Text($0.rawValue.uppercased()).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    Picker("Status bar position", selection: $model.statusBarPosition) {
+                        Text("Bottom").tag(StatusBarPosition.bottom)
+                        Text("Top").tag(StatusBarPosition.top)
+                    }
+                    .pickerStyle(.segmented)
+                } else {
+                    Toggle("Auto-hide sidebar", isOn: $model.sidebarAutoHide)
+                        .disabled(model.tabLayout != .vertical)
+                }
                 Toggle(isOn: $model.restoreSession) {
                     Text("Reopen windows and tabs at launch")
                     Text("Brings back your tabs and split panes, with their history, after quitting or updating.")
@@ -320,7 +343,7 @@ struct SettingsView: View {
             } header: {
                 Text("Tabs & Links")
             } footer: {
-                Text("Drag the sidebar's edge to resize it. When auto-hiding, it shrinks to a column of favicons; hover it (or press ⌃⌘S) to expand it. Open links in: applies to links that open a new window, and to ⌘-click (which opens in the background).")
+                Text("The status bar replaces the tabs with numbered boxes (⌘1–9) and the page title; choose what it shows with statusBarItems in settings.json (tabs, title, spacer, downloads). Drag the sidebar's edge to resize it. When auto-hiding, it shrinks to a column of favicons; hover it (or press ⌃⌘S) to expand it. Open links in: applies to links that open a new window, and to ⌘-click (which opens in the background).")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

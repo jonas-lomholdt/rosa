@@ -35,6 +35,10 @@ enum SelfTest {
             await runLayout(controller, outputDir: outputDir)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "statusbar" {
+            await runStatusBar(controller, outputDir: outputDir)
+            return
+        }
         if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "quicklinks" {
             await runQuickLinks(controller, outputDir: outputDir)
             return
@@ -683,6 +687,81 @@ enum SelfTest {
         print(failures == 0 ? "session: all ok (quitting saves it; run again to check the restore)" : "session: \(failures) FAILED")
     }
 
+    /// The status bar layout: every size × position keeps the bar clear of the panes, clicking a
+    /// number selects its tab, `statusBarItems` orders the bar, and zen mode hides it (mouse events only).
+    private static func runStatusBar(_ controller: BrowserWindowController, outputDir: URL) async {
+        let root = controller.debugContentRoot
+        let bar = root.statusBar
+        var failures = 0
+        func check(_ label: String, _ ok: Bool) {
+            if !ok { failures += 1 }
+            print("\(ok ? "ok  " : "FAIL") \(label)")
+        }
+        controller.focusedPane?.load("data:text/html,<title>One</title><h1>One</h1>")
+        for title in ["Two", "Three"] {
+            controller.addTab(request: URLRequest(url: URL(string: "data:text/html,<title>\(title)</title><h1>\(title)</h1>")!))
+        }
+        Settings.tabLayout = .statusBar
+        Settings.addressBarMode = .perPane
+        await pause(1)
+
+        for position in StatusBarPosition.allCases {
+            for size in StatusBarSize.allCases {
+                Settings.statusBarPosition = position
+                Settings.statusBarSize = size
+                await pause(0.3)
+                let name = "\(position) \(size)"
+                let content = root.tabContent?.frame ?? .zero
+                // The panes sit inside their container's margin.
+                let panes = content.insetBy(dx: PaneContainerView.margin, dy: PaneContainerView.margin)
+                check("\(name): bar shown, strip hidden", !bar.isHidden && root.tabStrip.isHidden)
+                check("\(name): bar height \(Int(bar.frame.height)) inside the window",
+                      bar.frame.height == size.height && root.bounds.contains(bar.frame))
+                check("\(name): panes clear of the bar", !panes.intersects(bar.frame))
+                check("\(name): one box per tab", bar.debugTabRects.count == 3)
+                check("\(name): title after the tabs", bar.debugTitleRect.minX > (bar.debugTabRects.last?.maxX ?? .infinity)
+                      && bar.debugTitleRect.width > 0)
+                snapshot(controller, to: outputDir.appendingPathComponent("statusbar-\(position)-\(size).png"))
+            }
+        }
+        Settings.statusBarPosition = .bottom
+        Settings.statusBarSize = .m
+        await pause(0.3)
+        check("title is the selected tab's", bar.title == "Three")
+
+        let first = bar.debugTabRects[0]
+        await click(at: bar.convert(NSPoint(x: first.midX, y: first.midY), to: nil), in: controller.window)
+        await pause(0.3)
+        check("clicking 1 selects the first tab", controller.selectedTabIndex == 0 && bar.title == "One")
+
+        Settings.addressBarMode = .shared
+        await pause(0.3)
+        let address = root.header.addressBarView.convert(root.header.addressBarView.bounds, to: root)
+        check("shared address bar clears the navigation buttons", !address.intersects(root.navigationButtons.frame))
+        snapshot(controller, to: outputDir.appendingPathComponent("statusbar-shared.png"))
+        Settings.addressBarMode = .perPane
+
+        Settings.statusBarItems = [.title, .spacer, .tabs]
+        await pause(0.3)
+        check("items reorder: title, then tabs at the right end",
+              bar.debugTitleRect.maxX <= (bar.debugTabRects.first?.minX ?? 0)
+              && abs((bar.debugTabRects.last?.maxX ?? 0) - (bar.bounds.width - 10)) < 1)
+        snapshot(controller, to: outputDir.appendingPathComponent("statusbar-reordered.png"))
+        Settings.statusBarItems = Settings.defaultStatusBarItems
+
+        controller.toggleZenMode(nil)
+        await pause(0.3)
+        check("zen mode hides the bar", bar.isHidden)
+        controller.toggleZenMode(nil)
+        await pause(0.3)
+        check("leaving zen brings it back", !bar.isHidden)
+
+        Settings.tabLayout = .horizontal
+        await pause(0.3)
+        check("horizontal layout hides it", bar.isHidden && !root.tabStrip.isHidden)
+        print(failures == 0 ? "statusbar: all ok" : "statusbar: \(failures) FAILED")
+    }
+
     /// Every tab layout × address bar mode (× auto-hide sidebar, collapsed and revealed): the address
     /// bar must clear the navigation buttons, and revealing the sidebar must not move it.
     private static func runLayout(_ controller: BrowserWindowController, outputDir: URL) async {
@@ -702,7 +781,7 @@ enum SelfTest {
             print("\(overlaps ? "FAIL" : "ok  ") \(label.padding(toLength: 40, withPad: " ", startingAt: 0)) bar=\(bar.map { "\(Int($0.minX))…\(Int($0.maxX))" } ?? "-") buttons=\(Int(buttons.minX))…\(Int(buttons.maxX))")
             return bar
         }
-        for layout in [TabLayout.horizontal, .vertical] {
+        for layout in [TabLayout.horizontal, .vertical, .statusBar] {
             for mode in [AddressBarMode.shared, .perPane] {
                 Settings.tabLayout = layout
                 Settings.addressBarMode = mode
@@ -1167,7 +1246,7 @@ enum SelfTest {
         })
         snapshot(controller, to: outputDir.appendingPathComponent("zen-split.png"))
 
-        for (layout, mode) in [(TabLayout.vertical, AddressBarMode.perPane), (.vertical, .shared), (.horizontal, .shared)] {
+        for (layout, mode) in [(TabLayout.vertical, AddressBarMode.perPane), (.vertical, .shared), (.horizontal, .shared), (.statusBar, .perPane)] {
             Settings.tabLayout = layout
             Settings.addressBarMode = mode
             await pause(0.5)

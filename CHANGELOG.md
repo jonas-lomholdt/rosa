@@ -10,6 +10,7 @@ release notes (`scripts/release-notes.sh`).
 - Hold `⌃` and drag anywhere to move the window, now in every mode, not just Zen mode. The hand only shows once `⌃` has been held a moment on its own, so shortcuts like `⌃Tab` or `⌃A` in a text field don't trigger it. Turn it off in Settings → Keyboard.
 
 ### 🗂️ Tabs
+- New **Status bar** tab layout (Settings → Tabs & Links, or View → Status Bar Tabs): the tab strip and sidebar give way to a slim, i3-style bar at the bottom of the window with a numbered box per tab (`⌘1`–`⌘9`) and the page title. Pick its size (S, M, L, XL) and whether it sits at the bottom or top; reorder or trim what it shows with `statusBarItems` in settings.json (`tabs`, `title`, `spacer`, `downloads`).
 - The auto-hiding tab sidebar now hides the moment the mouse leaves it, instead of lingering for a beat.
 
 ## v0.15.1

@@ -29,10 +29,17 @@ final class HeaderView: ChromeView {
     }
 
     var showsAddressField = false {
-        didSet {
-            addressBar.isHidden = !showsAddressField
-            titleLabel.isHidden = showsAddressField
-        }
+        didSet { updateVisibility() }
+    }
+
+    /// The page title when there's no address bar (the status bar layout shows it in the bar instead).
+    var showsTitle = true {
+        didSet { updateVisibility() }
+    }
+
+    private func updateVisibility() {
+        addressBar.isHidden = !showsAddressField
+        titleLabel.isHidden = showsAddressField || !showsTitle
     }
 
     /// Extra space on the left (traffic lights when the sidebar is hidden).
@@ -87,6 +94,8 @@ final class BrowserContentView: NSView {
     let header = HeaderView()
     let navigationButtons = NavigationButtonsView()
     let bookmarksBar = BookmarksBarView()
+    /// The status bar layout's tab bar.
+    let statusBar = StatusBarView()
     /// Called when a sidebar resize finishes, with the new width.
     var onSidebarResized: ((CGFloat) -> Void)?
 
@@ -112,6 +121,10 @@ final class BrowserContentView: NSView {
 
     var tabLayout: TabLayout = .horizontal {
         didSet { tabStrip.tabLayout = tabLayout; needsLayout = true }
+    }
+
+    var statusBarPosition: StatusBarPosition = .bottom {
+        didSet { needsLayout = true }
     }
 
     var showsSharedAddressBar = false {
@@ -192,7 +205,7 @@ final class BrowserContentView: NSView {
 
         // Back to front: page content, header, then the sidebar (it floats over both when auto-hiding).
         bookmarksBar.isHidden = true
-        for view in [background, header, bookmarksBar, sidebarGlass, tabStrip, navigationButtons, resizeHandle, edgeHotZone, sidebarHoverZone] {
+        for view in [background, header, bookmarksBar, statusBar, sidebarGlass, tabStrip, navigationButtons, resizeHandle, edgeHotZone, sidebarHoverZone] {
             addSubview(view)
         }
         // Above everything, the page included, while it's shown.
@@ -312,7 +325,7 @@ final class BrowserContentView: NSView {
         super.layout()
         background.frame = bounds
         dragOverlay.frame = bounds
-        let chrome: [NSView] = [tabStrip, header, bookmarksBar, sidebarGlass, navigationButtons, resizeHandle, edgeHotZone, sidebarHoverZone]
+        let chrome: [NSView] = [tabStrip, header, bookmarksBar, statusBar, sidebarGlass, navigationButtons, resizeHandle, edgeHotZone, sidebarHoverZone]
         if isZenMode {
             // The panes keep their margin, so the page sits just inside the window's edge.
             chrome.forEach { $0.isHidden = true }
@@ -329,7 +342,9 @@ final class BrowserContentView: NSView {
             return
         }
         header.showsAddressField = showsSharedAddressBar
-        tabStrip.isHidden = false
+        header.showsTitle = tabLayout != .statusBar
+        tabStrip.isHidden = tabLayout == .statusBar
+        statusBar.isHidden = tabLayout != .statusBar
         navigationButtons.isHidden = false
         bookmarksBar.isHidden = !showsBookmarksBar
         let margin = PaneContainerView.margin
@@ -392,6 +407,28 @@ final class BrowserContentView: NSView {
             header.frame = NSRect(x: contentX, y: 0, width: bounds.width - contentX, height: HeaderView.height)
             let top = layoutBookmarksBar(x: contentX, top: HeaderView.height - margin)
             contentRect = NSRect(x: contentX, y: top, width: bounds.width - contentX, height: max(0, bounds.height - top))
+
+        case .statusBar:
+            // The header row stays for the traffic lights and navigation buttons (and the shared address bar).
+            for view in [sidebarGlass, resizeHandle, edgeHotZone, sidebarHoverZone] { view.isHidden = true }
+            tabStrip.isCollapsed = false
+            header.isHidden = false
+            header.leadingInset = 0
+            header.frame = NSRect(x: 0, y: 0, width: bounds.width, height: HeaderView.height)
+            let barHeight = statusBar.size.height
+            var top = HeaderView.height - margin
+            var bottom = bounds.height
+            switch statusBarPosition {
+            case .top:
+                statusBar.frame = NSRect(x: 0, y: top + margin / 2, width: bounds.width, height: barHeight)
+                top = statusBar.frame.maxY - margin / 2
+            case .bottom:
+                // Its own margin below, so it doesn't sit in the window's rounded corners' curve.
+                statusBar.frame = NSRect(x: 0, y: bounds.height - barHeight - margin / 2, width: bounds.width, height: barHeight)
+                bottom = statusBar.frame.minY + margin / 2
+            }
+            top = layoutBookmarksBar(x: 0, top: top)
+            contentRect = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bottom - top))
         }
 
         placeTabContent(contentRect)
@@ -429,6 +466,9 @@ final class BrowserContentView: NSView {
         case .horizontal:
             navigationButtons.frame = NSRect(x: minX, y: y, width: size.width, height: size.height)
             tabStrip.trafficLightInset = navigationButtons.frame.maxX + 4
+        case .statusBar:
+            navigationButtons.frame = NSRect(x: minX, y: y, width: size.width, height: size.height)
+            header.leadingInset = navigationButtons.frame.maxX + 4 - header.frame.minX
         case .vertical:
             let sidebarButtons = tabStrip.frame.minX + tabStrip.topRowButtonsMinX
             // Auto-hide keeps them in the header either way, so revealing the sidebar doesn't move the address bar.

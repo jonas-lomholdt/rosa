@@ -10,6 +10,47 @@ enum AddressBarMode: String, CaseIterable {
 enum TabLayout: String, CaseIterable {
     case horizontal
     case vertical
+    /// No tab strip or sidebar: a slim i3-style bar of numbered tabs (`StatusBarView`).
+    case statusBar
+}
+
+/// Height and font size of the status bar layout's bar.
+enum StatusBarSize: String, CaseIterable {
+    case s, m, l, xl
+
+    var height: CGFloat {
+        switch self {
+        case .s: 18
+        case .m: 22
+        case .l: 26
+        case .xl: 32
+        }
+    }
+
+    var fontSize: CGFloat {
+        switch self {
+        case .s: 10
+        case .m: 11
+        case .l: 12
+        case .xl: 14
+        }
+    }
+}
+
+enum StatusBarPosition: String, CaseIterable {
+    case bottom, top
+}
+
+/// What the status bar shows, left to right (`Settings.statusBarItems`).
+enum StatusBarItem: String, CaseIterable {
+    /// A numbered box per tab (⌘1–9), the selected one highlighted.
+    case tabs
+    /// The focused pane's title.
+    case title
+    /// Pushes what follows to the right end.
+    case spacer
+    /// Downloads button, once there are downloads.
+    case downloads
 }
 
 enum AppearanceMode: String, CaseIterable {
@@ -132,6 +173,9 @@ enum Settings {
             "tabLayout": tabLayout.rawValue,
             "sidebarWidth": Double(sidebarWidth),
             "sidebarAutoHide": sidebarAutoHide,
+            "statusBarSize": statusBarSize.rawValue,
+            "statusBarPosition": statusBarPosition.rawValue,
+            "statusBarItems": statusBarItems.map(\.rawValue),
             "showBookmarksBar": showBookmarksBar,
             "inactivePaneOpacity": inactivePaneOpacity,
             "appearance": appearance.rawValue,
@@ -187,6 +231,24 @@ enum Settings {
     static var sidebarAutoHide: Bool {
         get { value("sidebarAutoHide") ?? false }
         set { set(newValue, "sidebarAutoHide") }
+    }
+
+    static var statusBarSize: StatusBarSize {
+        get { value("statusBarSize").flatMap(StatusBarSize.init) ?? .m }
+        set { set(newValue.rawValue, "statusBarSize") }
+    }
+
+    static var statusBarPosition: StatusBarPosition {
+        get { value("statusBarPosition").flatMap(StatusBarPosition.init) ?? .bottom }
+        set { set(newValue.rawValue, "statusBarPosition") }
+    }
+
+    static let defaultStatusBarItems: [StatusBarItem] = [.tabs, .title, .spacer, .downloads]
+
+    /// Status bar contents, left to right. Only set in settings.json; unknown names are skipped.
+    static var statusBarItems: [StatusBarItem] {
+        get { (value("statusBarItems") as [String]?)?.compactMap(StatusBarItem.init) ?? defaultStatusBarItems }
+        set { set(newValue.map(\.rawValue), "statusBarItems") }
     }
 
     /// Bookmarks bar under the tab strip / address bar (⌘⇧B).

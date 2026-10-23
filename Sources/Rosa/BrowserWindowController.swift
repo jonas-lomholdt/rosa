@@ -61,6 +61,9 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         contentRoot.tabStrip.delegate = self
         contentRoot.onSidebarResized = { width in Settings.sidebarWidth = width }
         contentRoot.tabStrip.onDownloadsClick = { [weak self] in self?.toggleDownloads(nil) }
+        contentRoot.statusBar.onDownloadsClick = { [weak self] in self?.toggleDownloads(nil) }
+        contentRoot.statusBar.onSelectTab = { [weak self] index in self?.selectTab(at: index) }
+        contentRoot.statusBar.onCloseTab = { [weak self] index in self?.closeTab(at: index) }
         downloadsObserver = NotificationCenter.default.addObserver(
             forName: DownloadManager.didChange, object: nil, queue: .main
         ) { [weak self] _ in
@@ -179,6 +182,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     private func reloadTabStrip() {
         let items = tabs.map { TabItem(title: $0.title, paneCount: $0.panes.count, favicon: $0.favicon) }
         contentRoot.tabStrip.update(items: items, selectedIndex: selectedIndex)
+        contentRoot.statusBar.update(tabs: items, selectedIndex: selectedIndex)
         if tabOverview.isShown { tabOverview.update(tabs: tabs) }
         // Nearly every change to tabs, panes and pages comes through here.
         SessionStore.shared.setNeedsSave()
@@ -492,6 +496,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         let title = focusedPane?.displayTitle ?? "New Tab"
         window?.title = title
         contentRoot.header.title = title
+        contentRoot.statusBar.title = title
     }
 
     private func applySettings() {
@@ -502,6 +507,9 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         contentRoot.tabLayout = Settings.tabLayout
         contentRoot.sidebarWidth = Settings.sidebarWidth
         contentRoot.sidebarAutoHide = Settings.sidebarAutoHide
+        contentRoot.statusBar.size = Settings.statusBarSize
+        contentRoot.statusBar.items = Settings.statusBarItems
+        contentRoot.statusBarPosition = Settings.statusBarPosition
         contentRoot.showsSharedAddressBar = !perPane
         contentRoot.showsBookmarksBar = Settings.showBookmarksBar
         contentRoot.isZenMode = isZenMode
@@ -741,6 +749,15 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     }
 
     private func showDownloads() {
+        if Settings.tabLayout == .statusBar {
+            let bar = contentRoot.statusBar
+            bar.showsDownloadsButton = true
+            bar.layoutSubtreeIfNeeded()
+            let anchor = bar.downloadsAnchor
+            downloadsPopover.show(relativeTo: anchor.rect, of: anchor.view,
+                                  preferredEdge: Settings.statusBarPosition == .bottom ? .minY : .maxY)
+            return
+        }
         let strip = contentRoot.tabStrip
         strip.showsDownloadsButton = true
         strip.layoutSubtreeIfNeeded()
@@ -752,6 +769,8 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         let manager = DownloadManager.shared
         contentRoot.tabStrip.showsDownloadsButton = !manager.items.isEmpty
         contentRoot.tabStrip.downloadsActive = manager.activeCount > 0
+        contentRoot.statusBar.showsDownloadsButton = !manager.items.isEmpty
+        contentRoot.statusBar.downloadsActive = manager.activeCount > 0
     }
 
     var isDownloadsPopoverShown: Bool { downloadsPopover.isShown }
