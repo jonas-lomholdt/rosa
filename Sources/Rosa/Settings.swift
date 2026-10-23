@@ -37,6 +37,11 @@ enum StatusBarSize: String, CaseIterable {
     }
 }
 
+/// What each tab's box in the status bar shows.
+enum StatusBarTabStyle: String, CaseIterable {
+    case numbers, favicons, both
+}
+
 enum StatusBarPosition: String, CaseIterable {
     case bottom, top
 }
@@ -176,6 +181,8 @@ enum Settings {
             "statusBarSize": statusBarSize.rawValue,
             "statusBarPosition": statusBarPosition.rawValue,
             "statusBarItems": statusBarItems.map(\.rawValue),
+            "statusBarTabStyle": statusBarTabStyle.rawValue,
+            "statusBarInZen": statusBarInZen,
             "showBookmarksBar": showBookmarksBar,
             "inactivePaneOpacity": inactivePaneOpacity,
             "appearance": appearance.rawValue,
@@ -241,6 +248,17 @@ enum Settings {
     static var statusBarPosition: StatusBarPosition {
         get { value("statusBarPosition").flatMap(StatusBarPosition.init) ?? .bottom }
         set { set(newValue.rawValue, "statusBarPosition") }
+    }
+
+    static var statusBarTabStyle: StatusBarTabStyle {
+        get { value("statusBarTabStyle").flatMap(StatusBarTabStyle.init) ?? .numbers }
+        set { set(newValue.rawValue, "statusBarTabStyle") }
+    }
+
+    /// Keep the status bar in zen mode (the status bar layout only).
+    static var statusBarInZen: Bool {
+        get { value("statusBarInZen") ?? false }
+        set { set(newValue, "statusBarInZen") }
     }
 
     static let defaultStatusBarItems: [StatusBarItem] = [.tabs, .title, .spacer, .downloads]

@@ -1,8 +1,8 @@
 import AppKit
 
 /// The status bar tab layout: a slim, i3bar-style row that replaces the tab strip and sidebar.
-/// Shows `Settings.statusBarItems` left to right: numbered tab boxes (⌘1–9, the selected one in
-/// the accent colour), the focused pane's title, spacers and a downloads button. Drawn rather
+/// Shows `Settings.statusBarItems` left to right: a box per tab (its number for ⌘1–9, its favicon,
+/// or both; the selected one in the accent colour), the focused pane's title, spacers and a downloads button. Drawn rather
 /// than built from subviews, except the downloads button (popovers anchor to it).
 final class StatusBarView: ChromeView, NSViewToolTipOwner {
     var onSelectTab: ((Int) -> Void)?
@@ -20,6 +20,10 @@ final class StatusBarView: ChromeView, NSViewToolTipOwner {
 
     var items: [StatusBarItem] = Settings.defaultStatusBarItems {
         didSet { if items != oldValue { needsLayout = true } }
+    }
+
+    var tabStyle: StatusBarTabStyle = .numbers {
+        didSet { if tabStyle != oldValue { needsLayout = true } }
     }
 
     var title = "" {
@@ -81,10 +85,17 @@ final class StatusBarView: ChromeView, NSViewToolTipOwner {
     /// Tab boxes and the downloads button are this tall, centred in the bar.
     private var boxHeight: CGFloat { bounds.height - 4 }
 
+    private var iconSize: CGFloat { min(16, boxHeight - 4) }
+
     private func tabWidths() -> [CGFloat] {
         tabs.indices.map { index in
             let text = NSAttributedString(string: "\(index + 1)", attributes: [.font: font])
-            return max((boxHeight * 1.25).rounded(), (text.size().width + size.fontSize).rounded())
+            let content: CGFloat = switch tabStyle {
+            case .numbers: text.size().width
+            case .favicons: iconSize
+            case .both: iconSize + 4 + text.size().width
+            }
+            return max((boxHeight * 1.25).rounded(), (content + size.fontSize).rounded())
         }
     }
 
@@ -146,19 +157,46 @@ final class StatusBarView: ChromeView, NSViewToolTipOwner {
 
     override func draw(_ dirtyRect: NSRect) {
         let radius = min(5, boxHeight / 4)
-        for (index, rect) in tabRects.enumerated() {
+        for (index, rect) in tabRects.enumerated() where tabs.indices.contains(index) {
             let selected = index == selectedIndex
-            let fill: NSColor = selected ? .controlAccentColor
-                : NSColor.labelColor.withAlphaComponent(index == hoveredIndex ? 0.14 : 0.07)
-            fill.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            let shape = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
+            // A solid accent box with white text for numbers; favicons keep their colours on a tint and an accent border.
+            if selected, tabStyle == .numbers {
+                NSColor.controlAccentColor.setFill()
+                shape.fill()
+            } else if selected {
+                NSColor.controlAccentColor.withAlphaComponent(0.3).setFill()
+                shape.fill()
+                let border = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: radius, yRadius: radius)
+                border.lineWidth = 1
+                NSColor.controlAccentColor.setStroke()
+                border.stroke()
+            } else {
+                NSColor.labelColor.withAlphaComponent(index == hoveredIndex ? 0.14 : 0.07).setFill()
+                shape.fill()
+            }
+
             let text = NSAttributedString(string: "\(index + 1)", attributes: [
                 .font: font,
-                .foregroundColor: selected ? NSColor.white : NSColor.secondaryLabelColor,
+                .foregroundColor: selected ? (tabStyle == .numbers ? NSColor.white : NSColor.labelColor) : NSColor.secondaryLabelColor,
             ])
             let textSize = text.size()
-            text.draw(at: NSPoint(x: (rect.midX - textSize.width / 2).rounded(),
-                                  y: (rect.midY - textSize.height / 2).rounded()))
+            let contentWidth: CGFloat = switch tabStyle {
+            case .numbers: textSize.width
+            case .favicons: iconSize
+            case .both: iconSize + 4 + textSize.width
+            }
+            var x = (rect.midX - contentWidth / 2).rounded()
+            if tabStyle != .numbers {
+                let iconRect = NSRect(x: x, y: (rect.midY - iconSize / 2).rounded(), width: iconSize, height: iconSize)
+                Self.icon(for: tabs[index]).draw(in: iconRect, from: .zero, operation: .sourceOver,
+                                                 fraction: selected || tabs[index].favicon == nil ? 1 : 0.85,
+                                                 respectFlipped: true, hints: nil)
+                x += iconSize + 4
+            }
+            if tabStyle != .favicons {
+                text.draw(at: NSPoint(x: x, y: (rect.midY - textSize.height / 2).rounded()))
+            }
         }
 
         if titleRect.width > 0 {
@@ -171,6 +209,18 @@ final class StatusBarView: ChromeView, NSViewToolTipOwner {
             text.draw(with: NSRect(x: titleRect.minX, y: (titleRect.midY - height / 2).rounded(),
                                    width: titleRect.width, height: height),
                       options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        }
+    }
+
+    /// The tab's favicon, else the placeholder globe tinted like secondary text (it's a template image).
+    private static func icon(for tab: TabItem) -> NSImage {
+        if let favicon = tab.favicon { return favicon }
+        let placeholder = FaviconStore.placeholder
+        return NSImage(size: placeholder.size, flipped: false) { rect in
+            placeholder.draw(in: rect)
+            NSColor.secondaryLabelColor.set()
+            rect.fill(using: .sourceAtop)
+            return true
         }
     }
 

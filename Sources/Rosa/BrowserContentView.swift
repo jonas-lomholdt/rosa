@@ -127,6 +127,11 @@ final class BrowserContentView: NSView {
         didSet { needsLayout = true }
     }
 
+    /// Status bar layout: keep the bar in zen mode.
+    var showsStatusBarInZen = false {
+        didSet { needsLayout = true }
+    }
+
     var showsSharedAddressBar = false {
         didSet { header.showsAddressField = showsSharedAddressBar; needsLayout = true }
     }
@@ -330,6 +335,7 @@ final class BrowserContentView: NSView {
             // The panes keep their margin, so the page sits just inside the window's edge.
             chrome.forEach { $0.isHidden = true }
             var top: CGFloat = 0
+            var bottom = bounds.height
             if showsZenAddressBar {
                 // The shared bar, whatever the address bar setting, where it usually sits.
                 header.isHidden = false
@@ -338,7 +344,11 @@ final class BrowserContentView: NSView {
                 header.frame = NSRect(x: 0, y: 0, width: bounds.width, height: HeaderView.height)
                 top = HeaderView.height - PaneContainerView.margin
             }
-            placeTabContent(NSRect(x: 0, y: top, width: bounds.width, height: max(0, bounds.height - top)))
+            if tabLayout == .statusBar, showsStatusBarInZen {
+                statusBar.isHidden = false
+                (top, bottom) = layoutStatusBar(top: top, bottom: bottom)
+            }
+            placeTabContent(NSRect(x: 0, y: top, width: bounds.width, height: max(0, bottom - top)))
             return
         }
         header.showsAddressField = showsSharedAddressBar
@@ -415,18 +425,7 @@ final class BrowserContentView: NSView {
             header.isHidden = false
             header.leadingInset = 0
             header.frame = NSRect(x: 0, y: 0, width: bounds.width, height: HeaderView.height)
-            let barHeight = statusBar.size.height
-            var top = HeaderView.height - margin
-            var bottom = bounds.height
-            switch statusBarPosition {
-            case .top:
-                statusBar.frame = NSRect(x: 0, y: top + margin / 2, width: bounds.width, height: barHeight)
-                top = statusBar.frame.maxY - margin / 2
-            case .bottom:
-                // Its own margin below, so it doesn't sit in the window's rounded corners' curve.
-                statusBar.frame = NSRect(x: 0, y: bounds.height - barHeight - margin / 2, width: bounds.width, height: barHeight)
-                bottom = statusBar.frame.minY + margin / 2
-            }
+            var (top, bottom) = layoutStatusBar(top: HeaderView.height - margin, bottom: bounds.height)
             top = layoutBookmarksBar(x: 0, top: top)
             contentRect = NSRect(x: 0, y: top, width: bounds.width, height: max(0, bottom - top))
         }
@@ -481,6 +480,22 @@ final class BrowserContentView: NSView {
                 navigationButtons.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
                 header.leadingInset = max(header.leadingInset, navigationButtons.frame.maxX + 4 - header.frame.minX)
             }
+        }
+    }
+
+    /// Places the status bar at the top or bottom of the space between `top` and `bottom` (both
+    /// including the panes' margin); returns what's left for the panes.
+    private func layoutStatusBar(top: CGFloat, bottom: CGFloat) -> (top: CGFloat, bottom: CGFloat) {
+        let margin = PaneContainerView.margin
+        let height = statusBar.size.height
+        switch statusBarPosition {
+        case .top:
+            statusBar.frame = NSRect(x: 0, y: top + margin / 2, width: bounds.width, height: height)
+            return (statusBar.frame.maxY - margin / 2, bottom)
+        case .bottom:
+            // Its own margin below, so it doesn't sit in the window's rounded corners' curve.
+            statusBar.frame = NSRect(x: 0, y: bottom - height - margin / 2, width: bounds.width, height: height)
+            return (top, statusBar.frame.minY + margin / 2)
         }
     }
 

@@ -749,9 +749,32 @@ enum SelfTest {
         snapshot(controller, to: outputDir.appendingPathComponent("statusbar-reordered.png"))
         Settings.statusBarItems = Settings.defaultStatusBarItems
 
+        for style in StatusBarTabStyle.allCases {
+            Settings.statusBarTabStyle = style
+            await pause(0.3)
+            check("\(style): one box per tab, title after them", bar.debugTabRects.count == 3
+                  && bar.debugTitleRect.minX > (bar.debugTabRects.last?.maxX ?? .infinity))
+            snapshot(controller, to: outputDir.appendingPathComponent("statusbar-style-\(style).png"))
+        }
+        Settings.statusBarTabStyle = .numbers
+
         controller.toggleZenMode(nil)
         await pause(0.3)
         check("zen mode hides the bar", bar.isHidden)
+        Settings.statusBarInZen = true
+        for position in StatusBarPosition.allCases {
+            Settings.statusBarPosition = position
+            await pause(0.3)
+            let panes = (root.tabContent?.frame ?? .zero).insetBy(dx: PaneContainerView.margin, dy: PaneContainerView.margin)
+            check("zen \(position): bar shown, rest of the chrome hidden",
+                  !bar.isHidden && root.header.isHidden && root.navigationButtons.isHidden && root.bounds.contains(bar.frame))
+            check("zen \(position): panes clear of the bar", !panes.intersects(bar.frame))
+            snapshot(controller, to: outputDir.appendingPathComponent("statusbar-zen-\(position).png"))
+        }
+        Settings.statusBarPosition = .bottom
+        Settings.statusBarInZen = false
+        await pause(0.3)
+        check("turning it off hides it in zen", bar.isHidden)
         controller.toggleZenMode(nil)
         await pause(0.3)
         check("leaving zen brings it back", !bar.isHidden)

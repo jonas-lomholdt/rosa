@@ -10,6 +10,12 @@ final class SettingsModel: ObservableObject {
     @Published var statusBarSize: StatusBarSize {
         didSet { if Settings.statusBarSize != statusBarSize { Settings.statusBarSize = statusBarSize } }
     }
+    @Published var statusBarTabStyle: StatusBarTabStyle {
+        didSet { if Settings.statusBarTabStyle != statusBarTabStyle { Settings.statusBarTabStyle = statusBarTabStyle } }
+    }
+    @Published var statusBarInZen: Bool {
+        didSet { if Settings.statusBarInZen != statusBarInZen { Settings.statusBarInZen = statusBarInZen } }
+    }
     @Published var statusBarPosition: StatusBarPosition {
         didSet { if Settings.statusBarPosition != statusBarPosition { Settings.statusBarPosition = statusBarPosition } }
     }
@@ -102,6 +108,8 @@ final class SettingsModel: ObservableObject {
 
     init() {
         tabLayout = Settings.tabLayout
+        statusBarTabStyle = Settings.statusBarTabStyle
+        statusBarInZen = Settings.statusBarInZen
         statusBarSize = Settings.statusBarSize
         statusBarPosition = Settings.statusBarPosition
         addressBarMode = Settings.addressBarMode
@@ -166,6 +174,8 @@ final class SettingsModel: ObservableObject {
 
     private func reload() {
         tabLayout = Settings.tabLayout
+        statusBarTabStyle = Settings.statusBarTabStyle
+        statusBarInZen = Settings.statusBarInZen
         statusBarSize = Settings.statusBarSize
         statusBarPosition = Settings.statusBarPosition
         addressBarMode = Settings.addressBarMode
@@ -327,6 +337,13 @@ struct SettingsView: View {
                         Text("Top").tag(StatusBarPosition.top)
                     }
                     .pickerStyle(.segmented)
+                    Picker("Status bar tabs", selection: $model.statusBarTabStyle) {
+                        Text("Numbers").tag(StatusBarTabStyle.numbers)
+                        Text("Favicons").tag(StatusBarTabStyle.favicons)
+                        Text("Both").tag(StatusBarTabStyle.both)
+                    }
+                    .pickerStyle(.segmented)
+                    Toggle("Show status bar in Zen mode", isOn: $model.statusBarInZen)
                 } else {
                     Toggle("Auto-hide sidebar", isOn: $model.sidebarAutoHide)
                         .disabled(model.tabLayout != .vertical)

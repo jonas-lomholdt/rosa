@@ -509,6 +509,8 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
         contentRoot.sidebarAutoHide = Settings.sidebarAutoHide
         contentRoot.statusBar.size = Settings.statusBarSize
         contentRoot.statusBar.items = Settings.statusBarItems
+        contentRoot.statusBar.tabStyle = Settings.statusBarTabStyle
+        contentRoot.showsStatusBarInZen = Settings.statusBarInZen
         contentRoot.statusBarPosition = Settings.statusBarPosition
         contentRoot.showsSharedAddressBar = !perPane
         contentRoot.showsBookmarksBar = Settings.showBookmarksBar
