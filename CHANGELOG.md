@@ -6,11 +6,20 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.16.0
+
+📟 A new status bar tab layout: your tabs as a slim, i3-style bar of numbers or favicons.
+
+### 📟 Status bar tabs
+- New tab layout (Settings → Tabs & Links → Status bar, or View → Status Bar Tabs): the tab strip and sidebar give way to a slim bar at the bottom of the window, with a box per tab (`⌘1`–`⌘9`) and the page title beside them. Click a box to switch tabs, middle-click to close one.
+- Tabs can show their number, their favicon, or both. A tab split into panes stacks its favicons like cards: the focused pane's in front, the others peeking out to the right.
+- Four sizes (S, M, L, XL), at the bottom or the top of the window, and it can stay visible in Zen mode.
+- Choose what the bar shows, and in what order, with `statusBarItems` in `~/.rosa/settings.json`: `tabs`, `title`, `spacer` (pushes what follows to the right) and `downloads`.
+
 ### 🪟 Windows
 - Hold `⌃` and drag anywhere to move the window, now in every mode, not just Zen mode. The hand only shows once `⌃` has been held a moment on its own, so shortcuts like `⌃Tab` or `⌃A` in a text field don't trigger it. Turn it off in Settings → Keyboard.
 
 ### 🗂️ Tabs
-- New **Status bar** tab layout (Settings → Tabs & Links, or View → Status Bar Tabs): the tab strip and sidebar give way to a slim, i3-style bar at the bottom of the window with a numbered box per tab (`⌘1`–`⌘9`) and the page title. Pick its size (S, M, L, XL) and whether it sits at the bottom or top; reorder or trim what it shows with `statusBarItems` in settings.json (`tabs`, `title`, `spacer`, `downloads`). Tabs can show their number, favicon or both, and the bar can stay visible in Zen mode. A split tab stacks its panes' favicons like cards: the focused pane's in front, the others peeking out to the right.
 - The auto-hiding tab sidebar now hides the moment the mouse leaves it, instead of lingering for a beat.
 
 ## v0.15.1

@@ -20,7 +20,7 @@
 - 🔍 **Find in page** — with a live match count
 - 🔎 **Zoom per pane** — `⌘+` / `⌘-` / `⌘0`, each pane keeps its own level
 - 🧾 **JSON viewer** — JSON responses are pretty-printed and colour-coded, with a Raw / Pretty switch
-- 🗂️ **Tabs** — horizontal, or a resizable vertical sidebar that can auto-hide
+- 🗂️ **Tabs** — horizontal, a resizable vertical sidebar that can auto-hide, or a slim i3-style status bar of numbered tabs (or favicons)
 - 🛡️ **Ad & tracker blocking** — on by default, one click to allow a site
 - 🧩 **Extensions (preview)** — run Chrome extensions like 1Password; import them from Chrome, Edge, Brave, Arc or Vivaldi
 - 🧠 **Smart address bar** — autocompletes from your history as you type
@@ -54,6 +54,7 @@
 | `⌘P` | Find a bookmark, or enter an address or search |
 | `⌘⇧P` | Command palette: run any menu command (delete the `>` to search bookmarks) |
 | `⌃⌘S` | Show sidebar (when auto-hiding) |
+| `⌘1`–`⌘9` | Switch to tab 1–9 (the numbers in the status bar layout) |
 | `⌃⌘Z` | Zen mode: hide tabs, address bar and bookmarks bar (press again to bring them back) |
 | `⌃` + drag | Move the window from anywhere, the page included |
 | `⌥⌘L` | Downloads |
