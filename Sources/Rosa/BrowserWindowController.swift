@@ -180,7 +180,11 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, NSMen
     }
 
     private func reloadTabStrip() {
-        let items = tabs.map { TabItem(title: $0.title, paneCount: $0.panes.count, favicon: $0.favicon) }
+        let items = tabs.map { tab in
+            let focused = tab.focusedPane ?? tab.panes.first
+            return TabItem(title: tab.title, paneCount: tab.panes.count, favicon: tab.favicon,
+                           otherPaneFavicons: tab.panes.filter { $0 !== focused }.map(\.favicon))
+        }
         contentRoot.tabStrip.update(items: items, selectedIndex: selectedIndex)
         contentRoot.statusBar.update(tabs: items, selectedIndex: selectedIndex)
         if tabOverview.isShown { tabOverview.update(tabs: tabs) }

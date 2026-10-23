@@ -756,6 +756,19 @@ enum SelfTest {
                   && bar.debugTitleRect.minX > (bar.debugTabRects.last?.maxX ?? .infinity))
             snapshot(controller, to: outputDir.appendingPathComponent("statusbar-style-\(style).png"))
         }
+        // A split tab: its favicon gets cards stacked behind it, so its box widens (two panes behind at most).
+        Settings.statusBarTabStyle = .favicons
+        await pause(0.3)
+        let single = bar.debugTabRects[0].width
+        controller.splitRight(nil)
+        await pause(0.5)
+        let two = bar.debugTabRects[0].width
+        controller.splitRight(nil)
+        controller.splitRight(nil)
+        await pause(0.5)
+        let four = bar.debugTabRects[0].width
+        check("split tab's box widens for its stack (\(Int(single)) → \(Int(two)) → \(Int(four)))", two > single && four > two)
+        snapshot(controller, to: outputDir.appendingPathComponent("statusbar-stack.png"))
         Settings.statusBarTabStyle = .numbers
 
         controller.toggleZenMode(nil)

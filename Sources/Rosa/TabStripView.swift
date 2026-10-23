@@ -17,6 +17,8 @@ struct TabItem {
     var title: String
     var paneCount: Int
     var favicon: NSImage?
+    /// The other panes' favicons, in tree order (the status bar stacks them behind `favicon`).
+    var otherPaneFavicons: [NSImage?] = []
 }
 
 /// The tab list. Lays out as a row in the title bar (horizontal) or as a sidebar (vertical).

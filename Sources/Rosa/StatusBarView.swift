@@ -86,14 +86,23 @@ final class StatusBarView: ChromeView, NSViewToolTipOwner {
     private var boxHeight: CGFloat { bounds.height - 4 }
 
     private var iconSize: CGFloat { min(16, boxHeight - 4) }
+    /// How far each card behind a split tab's favicon peeks out to the right.
+    private var stackOffset: CGFloat { (iconSize * 0.45).rounded() }
+    /// Cards drawn behind the focused pane's favicon (at most two, however many panes).
+    private static let maxStackedCards = 2
+
+    private func stackedCount(_ tab: TabItem) -> Int { min(tab.otherPaneFavicons.count, Self.maxStackedCards) }
+
+    /// The favicon with its stack of cards.
+    private func iconsWidth(_ tab: TabItem) -> CGFloat { iconSize + CGFloat(stackedCount(tab)) * stackOffset }
 
     private func tabWidths() -> [CGFloat] {
         tabs.indices.map { index in
             let text = NSAttributedString(string: "\(index + 1)", attributes: [.font: font])
             let content: CGFloat = switch tabStyle {
             case .numbers: text.size().width
-            case .favicons: iconSize
-            case .both: iconSize + 4 + text.size().width
+            case .favicons: iconsWidth(tabs[index])
+            case .both: iconsWidth(tabs[index]) + 4 + text.size().width
             }
             return max((boxHeight * 1.25).rounded(), (content + size.fontSize).rounded())
         }
@@ -183,16 +192,13 @@ final class StatusBarView: ChromeView, NSViewToolTipOwner {
             let textSize = text.size()
             let contentWidth: CGFloat = switch tabStyle {
             case .numbers: textSize.width
-            case .favicons: iconSize
-            case .both: iconSize + 4 + textSize.width
+            case .favicons: iconsWidth(tabs[index])
+            case .both: iconsWidth(tabs[index]) + 4 + textSize.width
             }
             var x = (rect.midX - contentWidth / 2).rounded()
             if tabStyle != .numbers {
-                let iconRect = NSRect(x: x, y: (rect.midY - iconSize / 2).rounded(), width: iconSize, height: iconSize)
-                Self.icon(for: tabs[index]).draw(in: iconRect, from: .zero, operation: .sourceOver,
-                                                 fraction: selected || tabs[index].favicon == nil ? 1 : 0.85,
-                                                 respectFlipped: true, hints: nil)
-                x += iconSize + 4
+                drawIconStack(tabs[index], at: NSPoint(x: x, y: (rect.midY - iconSize / 2).rounded()), selected: selected)
+                x += iconsWidth(tabs[index]) + 4
             }
             if tabStyle != .favicons {
                 text.draw(at: NSPoint(x: x, y: (rect.midY - textSize.height / 2).rounded()))
@@ -212,9 +218,36 @@ final class StatusBarView: ChromeView, NSViewToolTipOwner {
         }
     }
 
-    /// The tab's favicon, else the placeholder globe tinted like secondary text (it's a template image).
-    private static func icon(for tab: TabItem) -> NSImage {
-        if let favicon = tab.favicon { return favicon }
+    /// A split tab's favicons as a stack of cards: the focused pane's in front, the others behind it,
+    /// each smaller, fainter and further right, showing only where they peek out past the cards in front.
+    private func drawIconStack(_ tab: TabItem, at origin: NSPoint, selected: Bool) {
+        var cards = [NSRect(origin: origin, size: NSSize(width: iconSize, height: iconSize))]
+        for depth in stride(from: 1, through: stackedCount(tab), by: 1) {
+            let side = (iconSize * (1 - 0.15 * CGFloat(depth))).rounded()
+            cards.append(NSRect(x: origin.x + CGFloat(depth) * stackOffset + iconSize - side,
+                                y: (origin.y + (iconSize - side) / 2).rounded(), width: side, height: side))
+        }
+        let favicons = [tab.favicon] + tab.otherPaneFavicons
+        // Back to front, each clipped to stay out of the cards in front of it (with a hairline gap).
+        for depth in cards.indices.reversed() {
+            NSGraphicsContext.saveGraphicsState()
+            // One clip per card in front: they overlap, so a single even-odd path would let the overlap through.
+            for front in cards[..<depth] {
+                let clip = NSBezierPath(rect: bounds)
+                clip.append(NSBezierPath(roundedRect: front.insetBy(dx: -1, dy: -1), xRadius: 3, yRadius: 3))
+                clip.windingRule = .evenOdd
+                clip.addClip()
+            }
+            let fraction: CGFloat = depth > 0 ? (depth == 1 ? 0.7 : 0.45) : (selected || tab.favicon == nil ? 1 : 0.85)
+            Self.icon(favicons[depth]).draw(in: cards[depth], from: .zero, operation: .sourceOver,
+                                            fraction: fraction, respectFlipped: true, hints: nil)
+            NSGraphicsContext.restoreGraphicsState()
+        }
+    }
+
+    /// The favicon, else the placeholder globe tinted like secondary text (it's a template image).
+    private static func icon(_ favicon: NSImage?) -> NSImage {
+        if let favicon { return favicon }
         let placeholder = FaviconStore.placeholder
         return NSImage(size: placeholder.size, flipped: false) { rect in
             placeholder.draw(in: rect)
