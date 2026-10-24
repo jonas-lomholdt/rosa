@@ -77,6 +77,31 @@ final class BrowserWebView: WKWebView {
             item.representedObject = url
         }
         addBookmarkItems(to: menu)
+        addSaveImageItem(to: menu)
+    }
+
+    /// "Save Image As…" beside WebKit's "Download Image" (which saves straight to the
+    /// Downloads folder), asking where to save it.
+    private func addSaveImageItem(to menu: NSMenu) {
+        guard let image = contextTarget.image, image.scheme?.lowercased() != "blob" else { return }
+        let item = NSMenuItem(title: "Save Image As…", action: #selector(saveImageContextItem(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = image
+        if let index = menu.items.firstIndex(where: { downloadURL(for: $0) == image }) {
+            menu.insertItem(item, at: index + 1)
+        } else {
+            // No WebKit image group (e.g. an image inside a link): lead the menu with it.
+            menu.insertItem(item, at: 0)
+            if menu.items.count > 1 { menu.insertItem(.separator(), at: 1) }
+        }
+    }
+
+    @objc func saveImageContextItem(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        startDownload(using: URLRequest(url: url)) { [weak self] download in
+            DownloadManager.shared.askWhereToSave(download)
+            self?.onDownload?(download)
+        }
     }
 
     private func addBookmarkItems(to menu: NSMenu) {

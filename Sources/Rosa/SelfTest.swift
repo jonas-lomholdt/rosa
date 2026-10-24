@@ -47,6 +47,10 @@ enum SelfTest {
             await runPaletteCommands(controller, outputDir: outputDir)
             return
         }
+        if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "contextmenu" {
+            await runContextMenu(controller)
+            return
+        }
         if ProcessInfo.processInfo.environment["BROWSER_SELFTEST_ONLY"] == "zen" {
             await runZen(controller, outputDir: outputDir)
             return
@@ -1169,6 +1173,41 @@ enum SelfTest {
             "s": 1, "a": 0, "d": 2, "f": 3, "j": 38, "k": 40, "l": 37, "e": 14, "w": 13, "c": 8, "m": 46, "p": 35, "g": 5, "h": 4,
         ]
         return codes[character] ?? 0
+    }
+
+    /// Image context menu: "Save Image As…" lands after WebKit's "Download Image", or leads
+    /// the menu when WebKit has no image group; nothing for a plain link.
+    private static func runContextMenu(_ controller: BrowserWindowController) async {
+        guard let pane = controller.focusedPane else { print("FAIL: no pane"); return }
+        pane.webView.loadHTMLString(
+            ##"<title>img</title><img id="i" src="https://github.com/favicon.ico" width="64" height="64"><a id="a" href="https://example.org/">link</a>"##,
+            baseURL: URL(string: "https://example.com/")
+        )
+        await pause(2)
+        func titles(rightClicking id: String, webKitItems: [(String, String)]) async -> String {
+            _ = try? await pane.webView.evaluateJavaScript(
+                "document.getElementById('\(id)').dispatchEvent(new MouseEvent('contextmenu', {bubbles: true}))"
+            )
+            await pause(0.5)
+            let menu = NSMenu()
+            for (title, identifier) in webKitItems {
+                let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                item.identifier = NSUserInterfaceItemIdentifier(identifier)
+                menu.addItem(item)
+            }
+            if let event = NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                              windowNumber: controller.window?.windowNumber ?? 0, context: nil,
+                                              eventNumber: 0, clickCount: 1, pressure: 1) {
+                pane.webView.willOpenMenu(menu, with: event)
+            }
+            return menu.items.map { $0.isSeparatorItem ? "|" : $0.title }.joined(separator: ", ")
+        }
+        let imageItems = [("Open Image in New Window", "WKMenuItemIdentifierOpenImageInNewWindow"),
+                          ("Download Image", "WKMenuItemIdentifierDownloadImage"),
+                          ("Copy Image", "WKMenuItemIdentifierCopyImage")]
+        print("image menu                         \(await titles(rightClicking: "i", webKitItems: imageItems))")
+        print("image menu without WebKit group    \(await titles(rightClicking: "i", webKitItems: [("Reload", "WKMenuItemIdentifierReload")]))")
+        print("link menu                          \(await titles(rightClicking: "a", webKitItems: [("Open Link", "WKMenuItemIdentifierOpenLink")]))")
     }
 
     private static func runZen(_ controller: BrowserWindowController, outputDir: URL) async {

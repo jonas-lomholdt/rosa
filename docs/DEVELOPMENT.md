@@ -41,6 +41,8 @@ The status bar layout (`TabLayout.statusBar`) drops the tab strip and sidebar fo
 
 `BROWSER_SELFTEST_ONLY=sidebar` drags the vertical sidebar's edge, pinned and expanded from auto-hide, then checks the sidebar's Pin Sidebar context menu (`TabStripView.menu(for:)`, vertical layout only; it flips `Settings.sidebarAutoHide`, and tabs have no menu of their own, so right-clicking one shows it too) (mouse events sent to the window, no key events; use a scratch `BROWSER_SETTINGS_FILE`, it changes layouts).
 
+The page context menu is WebKit's, adjusted in `BrowserWebView.willOpenMenu`: its Download Image / Linked File / Video items are re-pointed at a regular `WKDownload` (WebKit's own need a private delegate), using what the page script reported under the pointer (`contextTarget`). "Save Image As…" goes after Download Image, or first when WebKit shows no image items (an image inside a link); its download gets a save panel whatever `askWhereToSaveDownloads` says (`DownloadManager.askWhereToSave`). Add Page / Link to Bookmarks go above Inspect Element. `BROWSER_SELFTEST_ONLY=contextmenu` checks where the items land, on stand-in WebKit menus (no key events).
+
 ## Settings file
 
 `Settings` reads and writes `~/.rosa/settings.json` (`SettingsStore`). On first launch it is created with every setting, carrying over values from UserDefaults. Hand edits apply live (the file and its folder are watched); invalid JSON is ignored and the previous values kept, and if Rosa later has to write over an invalid file it moves it to `settings.json.invalid` first. Unknown keys are preserved. Set `BROWSER_SETTINGS_FILE` to use a different file (e.g. for self-tests). Ad-block compile caches stay in UserDefaults.

@@ -43,6 +43,14 @@ final class DownloadManager: NSObject, ObservableObject, WKDownloadDelegate {
     var activeCount: Int { items.filter { $0.state == .downloading }.count }
 
     private var itemsByDownload: [ObjectIdentifier: Item] = [:]
+    /// Downloads that always get a save panel, whatever `askWhereToSaveDownloads` says
+    /// (context menu → Save Image As…).
+    private var alwaysAsk: Set<ObjectIdentifier> = []
+
+    /// Shows a save panel for this download even when downloads normally go straight to the folder.
+    func askWhereToSave(_ download: WKDownload) {
+        alwaysAsk.insert(ObjectIdentifier(download))
+    }
 
     /// Downloads folder; `BROWSER_DOWNLOADS_DIR` overrides it (self-test).
     var downloadsFolder: URL {
@@ -98,7 +106,7 @@ final class DownloadManager: NSObject, ObservableObject, WKDownloadDelegate {
         let item = itemsByDownload[ObjectIdentifier(download)]
         let filename = Self.sanitized(suggestedFilename)
         let destination: URL?
-        if Settings.askWhereToSaveDownloads {
+        if alwaysAsk.remove(ObjectIdentifier(download)) != nil || Settings.askWhereToSaveDownloads {
             let panel = NSSavePanel()
             panel.nameFieldStringValue = filename
             panel.directoryURL = downloadsFolder
@@ -121,6 +129,7 @@ final class DownloadManager: NSObject, ObservableObject, WKDownloadDelegate {
     }
 
     func downloadDidFinish(_ download: WKDownload) {
+        alwaysAsk.remove(ObjectIdentifier(download))
         guard let item = itemsByDownload.removeValue(forKey: ObjectIdentifier(download)) else { return }
         item.state = .finished
         if item.totalBytes == 0 { item.totalBytes = item.receivedBytes }
@@ -134,6 +143,7 @@ final class DownloadManager: NSObject, ObservableObject, WKDownloadDelegate {
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        alwaysAsk.remove(ObjectIdentifier(download))
         guard let item = itemsByDownload.removeValue(forKey: ObjectIdentifier(download)) else { return }
         item.observation = nil
         let cancelled = (error as NSError).code == NSURLErrorCancelled

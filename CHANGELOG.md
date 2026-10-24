@@ -6,6 +6,8 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+- Right-click an image → **Save Image As…** to choose where it goes. Download Image still saves straight to your Downloads folder.
+
 ## v0.16.0
 
 📟 A new status bar tab layout: your tabs as a slim, i3-style bar of numbers or favicons.
