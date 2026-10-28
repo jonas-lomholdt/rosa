@@ -96,6 +96,14 @@ enum LinkHints {
             return !['button', 'submit', 'reset', 'checkbox', 'radio', 'image', 'file', 'range', 'color'].includes(type);
           }
 
+          // Focus and event targets are retargeted to shadow hosts, so web-component fields
+          // (e.g. <w-textfield>) look like plain elements; look inside the shadow roots.
+          function deepActiveElement() {
+            let el = document.activeElement;
+            while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
+            return el;
+          }
+
           // Visible, unobscured clickable elements in the viewport (outermost one wins when nested).
           function targets() {
             const vw = innerWidth, vh = innerHeight, chosen = new Set(), out = [];
@@ -290,7 +298,7 @@ enum LinkHints {
               return;
             }
             if (event.metaKey || event.ctrlKey || event.altKey) return;
-            if (isEditable(document.activeElement) || isEditable(event.target)) return;
+            if (isEditable(deepActiveElement()) || isEditable(event.composedPath()[0])) return;
             if (config.vim && vimKey(event)) { swallow(event); return; }
             if (!config.enabled || event.repeat) return;
             if (event.key !== 'f' && event.key !== 'F') return;

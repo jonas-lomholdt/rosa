@@ -6,6 +6,11 @@ release notes (`scripts/release-notes.sh`).
 
 ## Unreleased
 
+## v0.16.1
+
+⌨️ Typing `f` in a search box built from web components (like dba.dk's) no longer pops up link hints.
+
+- Typing in text fields inside web components no longer triggers link hints or vim scrolling keys.
 - Right-click an image → **Save Image As…** to choose where it goes. Download Image still saves straight to your Downloads folder.
 
 ## v0.16.0
