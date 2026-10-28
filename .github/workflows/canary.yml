@@ -35,12 +35,13 @@ jobs:
         id: version
         run: |
           BASE=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')
-          COMMITS=$(git rev-list --count "$BASE..HEAD")
-          # A push that is itself a stable release is published by release.yml.
-          if [ "$COMMITS" = 0 ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           IFS=. read -r MAJOR MINOR _ <<< "${BASE#v}"
           LINE="v$MAJOR.$MINOR.0"
           git rev-parse -q --verify "refs/tags/$LINE" > /dev/null || LINE=$BASE
+          COMMITS=$(git rev-list --count "$LINE..HEAD")
+          # A push that is itself a minor release is published by release.yml. A patch release
+          # still gets a canary: canary users are already past it, so it's their only way to get it.
+          if [ "$COMMITS" = 0 ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           NEXT="$MAJOR.$((MINOR + 1)).0"
           if [ -f NEXT_VERSION ]; then
             WANTED=$(tr -d '[:space:]' < NEXT_VERSION); WANTED=${WANTED#v}
@@ -49,7 +50,7 @@ jobs:
             fi
             NEXT=$(printf '%s\n' "$NEXT" "$WANTED" | sort -V | tail -1)
           fi
-          TAG="v$NEXT-canary.$(git rev-list --count "$LINE..HEAD")"
+          TAG="v$NEXT-canary.$COMMITS"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${TAG#v}" Resources/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GITHUB_RUN_NUMBER" Resources/Info.plist
